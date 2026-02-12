@@ -94,7 +94,7 @@
 ```yml
 services:
   icetv-core:
-    image: ghcr.io/moontechlab/icetv:latest
+    image: ghcr.io/naseaoi/lunatv:latest
     container_name: icetv-core
     restart: on-failure
     ports:
