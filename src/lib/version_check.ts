@@ -11,30 +11,29 @@ export enum UpdateStatus {
   FETCH_FAILED = 'fetch_failed', // 获取失败
 }
 
-// 远程版本检查URL配置
-const VERSION_CHECK_URLS = [
-  'https://raw.githubusercontent.com/MoonTechLab/IceTV/main/VERSION.txt',
-  'https://raw.githubusercontent.com/MoonTechLab/IceTV/main/VERSION',
-  'https://raw.githubusercontent.com/MoonTechLab/MoonTV/main/VERSION.txt',
-  'https://raw.githubusercontent.com/MoonTechLab/MoonTV/main/VERSION',
-];
+let cachedCheckPromise: Promise<UpdateStatus> | null = null;
 
 /**
  * 检查是否有新版本可用
  * @returns Promise<UpdateStatus> - 返回版本检查状态
  */
 export async function checkForUpdates(): Promise<UpdateStatus> {
+  if (cachedCheckPromise) {
+    return cachedCheckPromise;
+  }
+
+  cachedCheckPromise = checkForUpdatesInternal();
+  return cachedCheckPromise;
+}
+
+async function checkForUpdatesInternal(): Promise<UpdateStatus> {
   try {
-    // 依次尝试多个 URL，兼容仓库和文件名变更
-    for (const url of VERSION_CHECK_URLS) {
-      const remoteVersion = await fetchVersionFromUrl(url);
-      if (remoteVersion) {
-        return compareVersions(remoteVersion);
-      }
+    const remoteVersion = await fetchLatestVersion();
+    if (!remoteVersion) {
+      return UpdateStatus.FETCH_FAILED;
     }
 
-    // 所有 URL 都失败，返回获取失败状态
-    return UpdateStatus.FETCH_FAILED;
+    return compareVersions(remoteVersion);
   } catch (error) {
     console.error('版本检查失败:', error);
     return UpdateStatus.FETCH_FAILED;
@@ -42,44 +41,36 @@ export async function checkForUpdates(): Promise<UpdateStatus> {
 }
 
 /**
- * 从指定URL获取版本信息
- * @param url - 版本信息URL
+ * 从后端统一接口获取最新版本号
  * @returns Promise<string | null> - 版本字符串或null
  */
-async function fetchVersionFromUrl(url?: string): Promise<string | null> {
+async function fetchLatestVersion(): Promise<string | null> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
   try {
-    if (!url) {
+    const controller = new AbortController();
+    timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
+
+    const response = await fetch('/api/version/latest', {
+      method: 'GET',
+      signal: controller.signal,
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
       return null;
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
-
-    // 添加时间戳参数以避免缓存
-    const timestamp = Date.now();
-    const urlWithTimestamp = url.includes('?')
-      ? `${url}&_t=${timestamp}`
-      : `${url}?_t=${timestamp}`;
-
-    const response = await fetch(urlWithTimestamp, {
-      method: 'GET',
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'text/plain',
-      },
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const version = await response.text();
-    return version.trim();
+    const data = await response.json();
+    const version =
+      typeof data?.latestVersion === 'string' ? data.latestVersion : '';
+    return version.trim() || null;
   } catch (error) {
-    console.warn(`从 ${url} 获取版本信息失败:`, error);
     return null;
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
   }
 }
 

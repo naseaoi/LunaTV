@@ -8,6 +8,7 @@ import { Suspense, useEffect, useState } from 'react';
 
 import { CURRENT_VERSION } from '@/lib/version';
 import { checkForUpdates, UpdateStatus } from '@/lib/version_check';
+import { getPrimaryRepoUrl } from '@/lib/update_source';
 
 import { useSite } from '@/components/SiteProvider';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -16,6 +17,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 function VersionDisplay() {
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [isChecking, setIsChecking] = useState(true);
+  const repoUrl = getPrimaryRepoUrl();
 
   useEffect(() => {
     const checkUpdate = async () => {
@@ -34,9 +36,7 @@ function VersionDisplay() {
 
   return (
     <button
-      onClick={() =>
-        window.open('https://github.com/MoonTechLab/IceTV', '_blank')
-      }
+      onClick={() => window.open(repoUrl, '_blank')}
       className='absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 transition-colors cursor-pointer'
     >
       <span className='font-mono'>v{CURRENT_VERSION}</span>

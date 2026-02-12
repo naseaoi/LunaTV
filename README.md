@@ -8,9 +8,9 @@
 
 <div align="center">
 
-![Next.js](https://img.shields.io/badge/Next.js-14-000?logo=nextdotjs)
+![Next.js](https://img.shields.io/badge/Next.js-16-000?logo=nextdotjs)
 ![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3-38bdf8?logo=tailwindcss)
-![TypeScript](https://img.shields.io/badge/TypeScript-4.x-3178c6?logo=typescript)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6?logo=typescript)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Docker Ready](https://img.shields.io/badge/Docker-ready-blue?logo=docker)
 
@@ -119,7 +119,7 @@ volumes:
 
 ## 配置文件
 
-完成部署后为空壳应用，无播放源，需要站长在管理后台的配置文件设置中填写配置文件（后续会支持订阅）
+完成部署后为空壳应用，无播放源，需要站长在管理后台的配置文件设置中填写配置文件。
 
 配置文件示例如下：
 
@@ -176,45 +176,19 @@ dockge/komodo 等 docker compose UI 也有自动更新功能
 
 ## 环境变量
 
-| 变量                                | 说明                                | 可选值                   | 默认值                                                                                                                     |
-| ----------------------------------- | ----------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| ICETV_USERNAME                      | 站长账号（推荐，避免 Win 环境冲突） | 任意字符串               | 无默认，必填字段                                                                                                           |
-| ICETV_PASSWORD                      | 站长密码（推荐，避免 Win 环境冲突） | 任意字符串               | 无默认，必填字段                                                                                                           |
-| MOONTV_USERNAME                     | 站长账号（兼容旧变量）              | 任意字符串               | 无默认，必填字段                                                                                                           |
-| MOONTV_PASSWORD                     | 站长密码（兼容旧变量）              | 任意字符串               | 无默认，必填字段                                                                                                           |
-| USERNAME                            | 站长账号（兼容旧变量）              | 任意字符串               | 无默认，必填字段                                                                                                           |
-| PASSWORD                            | 站长密码（兼容旧变量）              | 任意字符串               | 无默认，必填字段                                                                                                           |
-| SITE_BASE                           | 站点 url                            | 形如 https://example.com | 空                                                                                                                         |
-| NEXT_PUBLIC_SITE_NAME               | 站点名称                            | 任意字符串               | IceTV                                                                                                                      |
-| ANNOUNCEMENT                        | 站点公告                            | 任意字符串               | 本网站仅提供影视信息搜索服务，所有内容均来自第三方网站。本站不存储任何视频资源，不对任何内容的准确性、合法性、完整性负责。 |
-| NEXT_PUBLIC_STORAGE_TYPE            | 播放记录/收藏的存储方式             | localdb                  | 无默认，必填字段                                                                                                           |
-| LOCAL_DB_PATH                       | 本地文件存储路径（`localdb` 模式）  | 绝对路径                 | `/data/icetv-data.json`（Docker）                                                                                          |
-| NEXT_PUBLIC_SEARCH_MAX_PAGE         | 搜索接口可拉取的最大页数            | 1-50                     | 5                                                                                                                          |
-| NEXT_PUBLIC_DOUBAN_PROXY_TYPE       | 豆瓣数据源请求方式                  | 见下方                   | direct                                                                                                                     |
-| NEXT_PUBLIC_DOUBAN_PROXY            | 自定义豆瓣数据代理 URL              | url prefix               | (空)                                                                                                                       |
-| NEXT_PUBLIC_DOUBAN_IMAGE_PROXY_TYPE | 豆瓣图片代理类型                    | 见下方                   | direct                                                                                                                     |
-| NEXT_PUBLIC_DOUBAN_IMAGE_PROXY      | 自定义豆瓣图片代理 URL              | url prefix               | (空)                                                                                                                       |
-| NEXT_PUBLIC_DISABLE_YELLOW_FILTER   | 关闭色情内容过滤                    | true/false               | false                                                                                                                      |
-| NEXT_PUBLIC_FLUID_SEARCH            | 是否开启搜索接口流式输出            | true/ false              | true                                                                                                                       |
+以下仅保留部署启动必需或无法在管理后台修改的变量。可在管理后台修改的站点参数（如站点名、公告、豆瓣代理、搜索页数等）不再列出。
 
-NEXT_PUBLIC_DOUBAN_PROXY_TYPE 选项解释：
+| 变量                      | 说明                               | 可选值                | 默认值                            |
+| ------------------------- | ---------------------------------- | --------------------- | --------------------------------- |
+| ICETV_USERNAME            | 站长账号                           | 任意字符串            | 无默认，必填字段                  |
+| ICETV_PASSWORD            | 站长密码                           | 任意字符串            | 无默认，必填字段                  |
+| NEXT_PUBLIC_STORAGE_TYPE  | 播放记录/收藏的存储方式            | localdb               | 无默认，必填字段                  |
+| LOCAL_DB_PATH             | 本地文件存储路径（`localdb` 模式） | 绝对路径              | `/data/icetv-data.json`（Docker） |
+| AUTH_SESSION_TTL_HOURS    | 登录态有效期（小时）               | 正整数                | 168                               |
+| NEXT_PUBLIC_UPDATE_REPOS  | 版本检查仓库列表（逗号分隔）       | owner/repo,owner/repo | naseaoi/LunaTV                    |
+| NEXT_PUBLIC_UPDATE_BRANCH | 版本检查分支                       | 分支名                | main                              |
 
-- 账号密码变量优先级：`ICETV_USERNAME/ICETV_PASSWORD` > `MOONTV_USERNAME/MOONTV_PASSWORD` > `USERNAME/PASSWORD`。Windows 本地开发建议优先使用 `ICETV_*`，避免系统内置 `USERNAME` 变量干扰登录与站长识别。
-
-- direct: 由服务器直接请求豆瓣源站
-- cors-proxy-zwei: 浏览器向 cors proxy 请求豆瓣数据，该 cors proxy 由 [Zwei](https://github.com/bestzwei) 搭建
-- cmliussss-cdn-tencent: 浏览器向豆瓣 CDN 请求数据，该 CDN 由 [CMLiussss](https://github.com/cmliu) 搭建，并由腾讯云 cdn 提供加速
-- cmliussss-cdn-ali: 浏览器向豆瓣 CDN 请求数据，该 CDN 由 [CMLiussss](https://github.com/cmliu) 搭建，并由阿里云 cdn 提供加速
-- custom: 用户自定义 proxy，由 NEXT_PUBLIC_DOUBAN_PROXY 定义
-
-NEXT_PUBLIC_DOUBAN_IMAGE_PROXY_TYPE 选项解释：
-
-- direct：由浏览器直接请求豆瓣分配的默认图片域名
-- server：由服务器代理请求豆瓣分配的默认图片域名
-- img3：由浏览器请求豆瓣官方的精品 cdn（阿里云）
-- cmliussss-cdn-tencent：由浏览器请求豆瓣 CDN，该 CDN 由 [CMLiussss](https://github.com/cmliu) 搭建，并由腾讯云 cdn 提供加速
-- cmliussss-cdn-ali：由浏览器请求豆瓣 CDN，该 CDN 由 [CMLiussss](https://github.com/cmliu) 搭建，并由阿里云 cdn 提供加速
-- custom: 用户自定义 proxy，由 NEXT_PUBLIC_DOUBAN_IMAGE_PROXY 定义
+- 版本检查由后端接口 `/api/version/latest` 统一获取，前端不再直接请求 GitHub Raw。若仓库改名，更新 `NEXT_PUBLIC_UPDATE_REPOS` 并重启服务即可生效。
 
 ## 客户端
 
@@ -234,7 +208,7 @@ v100.0.0 以上版本可配合 [Selene](https://github.com/MoonTechLab/Selene) �
 
 ### 部署要求
 
-1. **设置环境变量 `PASSWORD`**：为您的实例设置一个强密码
+1. **设置环境变量 `ICETV_PASSWORD`**：为您的实例设置一个强密码
 2. **仅供个人使用**：请勿将您的实例链接公开分享或传播
 3. **遵守当地法律**：请确保您的使用行为符合当地法律法规
 
@@ -262,4 +236,4 @@ v100.0.0 以上版本可配合 [Selene](https://github.com/MoonTechLab/Selene) �
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=MoonTechLab/IceTV&type=Date)](https://www.star-history.com/#MoonTechLab/IceTV&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=naseaoi/LunaTV&type=Date)](https://www.star-history.com/#naseaoi/LunaTV&Date)
