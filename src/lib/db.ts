@@ -1,7 +1,7 @@
 /* eslint-disable no-console, @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion */
 
 import { AdminConfig } from './admin.types';
-import { LocalFileStorage } from './local-file.db';
+import { LocalSqliteStorage } from './sqlite.db';
 import { Favorite, IStorage, PlayRecord, SkipConfig } from './types';
 
 // storage type 常量: 'localstorage' | 'localdb'，默认 'localdb'
@@ -15,12 +15,12 @@ const STORAGE_TYPE =
 function createStorage(): IStorage {
   switch (STORAGE_TYPE) {
     case 'localdb':
-      return new LocalFileStorage();
+      return new LocalSqliteStorage();
     case 'localstorage':
       // localstorage 仅用于前端缓存策略，服务端仍需可用存储承载用户/配置数据
-      return new LocalFileStorage();
+      return new LocalSqliteStorage();
     default:
-      return new LocalFileStorage();
+      return new LocalSqliteStorage();
   }
 }
 

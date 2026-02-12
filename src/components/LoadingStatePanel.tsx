@@ -10,8 +10,11 @@ type StepItem = {
 interface LoadingStatePanelProps {
   icon: React.ReactNode;
   title: string;
+  titleClassName?: string;
   message?: string;
+  messageClassName?: string;
   description?: string;
+  descriptionClassName?: string;
   tone?: Tone;
   progress?: number;
   steps?: StepItem[];
@@ -98,8 +101,11 @@ const toneMap: Record<
 const LoadingStatePanel: React.FC<LoadingStatePanelProps> = ({
   icon,
   title,
+  titleClassName,
   message,
+  messageClassName,
   description,
+  descriptionClassName,
   tone = 'emerald',
   progress,
   steps,
@@ -145,27 +151,33 @@ const LoadingStatePanel: React.FC<LoadingStatePanelProps> = ({
           />
         </div>
 
-        <h3 className={`text-2xl font-semibold tracking-tight ${colors.text}`}>
+        <h3
+          className={`text-2xl font-semibold tracking-tight ${colors.text} ${titleClassName || ''}`}
+        >
           {title}
         </h3>
         {message && (
-          <p className={`mt-2 text-base font-medium ${colors.mutedText}`}>
+          <p
+            className={`mt-2 text-base font-medium ${colors.mutedText} ${messageClassName || ''}`}
+          >
             {message}
           </p>
         )}
         {description && (
-          <p className={`mt-2 text-sm leading-6 ${colors.mutedText}`}>
+          <p
+            className={`mt-2 text-sm leading-6 ${colors.mutedText} ${descriptionClassName || ''}`}
+          >
             {description}
           </p>
         )}
 
         {typeof progress === 'number' && (
-          <div className='mt-6 w-full max-w-[22rem]'>
+          <div className='mt-6 w-full max-w-[22rem]' dir='ltr'>
             <div
-              className={`h-2.5 overflow-hidden rounded-full ${colors.track}`}
+              className={`relative h-2.5 overflow-hidden rounded-full ${colors.track}`}
             >
               <div
-                className={`ls-shimmer h-full rounded-full bg-gradient-to-r ${colors.fill} transition-all duration-700 ease-out`}
+                className={`ls-shimmer absolute left-0 top-0 h-full rounded-full bg-gradient-to-r ${colors.fill} transition-all duration-700 ease-out`}
                 style={{ width: `${Math.max(0, Math.min(progress, 100))}%` }}
               />
             </div>
@@ -225,8 +237,26 @@ const LoadingStatePanel: React.FC<LoadingStatePanelProps> = ({
         }
 
         .ls-shimmer {
-          background-size: 200% 100%;
-          animation: ls-shimmer 2.2s linear infinite;
+          position: relative;
+          overflow: hidden;
+          background-size: 100% 100%;
+          background-position: 0 0;
+        }
+
+        .ls-shimmer::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0.16) 40%,
+            rgba(255, 255, 255, 0.34) 50%,
+            rgba(255, 255, 255, 0.16) 60%,
+            rgba(255, 255, 255, 0) 100%
+          );
+          transform: translateX(-100%);
+          animation: ls-shimmer-sweep 1.8s linear infinite;
         }
 
         @keyframes ls-rotate {
@@ -287,12 +317,12 @@ const LoadingStatePanel: React.FC<LoadingStatePanelProps> = ({
           }
         }
 
-        @keyframes ls-shimmer {
+        @keyframes ls-shimmer-sweep {
           0% {
-            background-position: 0% 0%;
+            transform: translateX(-100%);
           }
           100% {
-            background-position: 200% 0%;
+            transform: translateX(100%);
           }
         }
       `}</style>

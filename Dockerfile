@@ -40,7 +40,7 @@ ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 ENV DOCKER_ENV=true
-ENV LOCAL_DB_PATH=/data/icetv-data.json
+ENV LOCAL_DB_PATH=/data/icetv-data.sqlite
 
 # 从构建器中复制 standalone 输出
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./

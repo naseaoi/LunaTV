@@ -59,9 +59,8 @@ export function PlayLoadingView({
         <LoadingStatePanel
           icon={getLoadingStageIcon(loadingStage)}
           tone='emerald'
-          title='正在准备播放'
+          title='正在加载'
           message={loadingMessage}
-          description='正在连接播放源并同步剧集信息，请稍候。'
           progress={loadingProgress}
           steps={[
             {

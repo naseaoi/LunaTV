@@ -184,10 +184,10 @@ export function PlayMainContent(props: PlayMainContentProps) {
                       tone='emerald'
                       title={
                         videoLoadingStage === 'sourceChanging'
-                          ? '切换播放源中...'
-                          : '视频加载中...'
+                          ? '正在切换播放源'
+                          : '正在加载视频'
                       }
-                      description='正在建立播放器连接并缓冲首段视频。'
+                      titleClassName='text-white'
                     >
                       <div className='flex items-center justify-center text-emerald-300'>
                         <Loader2 className='w-5 h-5 animate-spin' />

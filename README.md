@@ -23,7 +23,7 @@
 - 🔍 **多源聚合搜索**：一次搜索立刻返回全源结果。
 - 📄 **丰富详情页**：支持剧集列表、演员、年份、简介等完整信息展示。
 - ▶️ **流畅在线播放**：集成 HLS.js & ArtPlayer。
-- ❤️ **收藏 + 继续观看**：支持本机文件/Kvrocks/Redis/Upstash 存储，多端同步进度。
+- ❤️ **收藏 + 继续观看**：支持本机文件存储，多端同步进度。
 - 📱 **PWA**：离线缓存、安装到桌面/主屏，移动端原生体验。
 - 🌗 **响应式布局**：桌面侧边栏 + 移动底部导航，自适应各种屏幕尺寸。
 - 👿 **智能去广告**：自动跳过视频中的切片广告（实验性）。
@@ -44,7 +44,7 @@
 - [技术栈](#技术栈)
 - [Admin 维护约定](#admin-维护约定)
 - [部署](#部署)
-  - [Docker 部署](#服务器本地文件存储单机部署推荐)
+  - [Docker 部署](#服务器本地-sqlite-存储单机部署推荐)
 - [配置文件](#配置文件)
 - [订阅](#订阅)
 - [自动更新](#自动更新)
@@ -87,14 +87,14 @@
 
 本项目**仅支持 Docker 或其他基于 Docker 的平台** 部署。
 
-### 服务器本地文件存储（单机部署推荐）
+### 服务器本地 SQLite 存储（单机部署推荐）
 
-适用于单台服务器 Docker 部署，不依赖第三方数据库。数据会写入容器挂载卷中的 JSON 文件。
+适用于单台服务器 Docker 部署，不依赖第三方数据库。数据会写入容器挂载卷中的 SQLite 文件。
 
 ```yml
 services:
   icetv-core:
-    image: ghcr.io/naseaoi/lunatv:latest
+    image: ghcr.io/naseaoi/icetv:latest
     container_name: icetv-core
     restart: on-failure
     ports:
@@ -103,7 +103,7 @@ services:
       - ICETV_USERNAME=admin
       - ICETV_PASSWORD=admin_password
       - NEXT_PUBLIC_STORAGE_TYPE=localdb
-      - LOCAL_DB_PATH=/data/icetv-data.json
+      - LOCAL_DB_PATH=/data/icetv-data.sqlite
     volumes:
       - icetv-data:/data
 
@@ -113,7 +113,8 @@ volumes:
 
 说明：
 
-- `localdb` 是服务端本地文件存储模式，不是浏览器 `localstorage`。
+- `localdb` 是服务端本地 SQLite 存储模式，不是浏览器 `localstorage`。
+- 旧版本 JSON 数据文件会在首次启动时自动迁移到 SQLite。
 - 升级镜像前请保留 `icetv-data` 卷，避免数据丢失。
 - 建议定期备份 `icetv-data` 卷。
 
@@ -168,25 +169,19 @@ IceTV 支持标准的苹果 CMS V10 API 格式。
 
 将完整的配置文件 base58 编码后提供 http 服务即为订阅链接，可在 IceTV 后台/Helios 中使用。
 
-## 自动更新
-
-可借助 [watchtower](https://github.com/containrrr/watchtower) 自动更新镜像容器
-
-dockge/komodo 等 docker compose UI 也有自动更新功能
-
 ## 环境变量
 
 以下仅保留部署启动必需或无法在管理后台修改的变量。可在管理后台修改的站点参数（如站点名、公告、豆瓣代理、搜索页数等）不再列出。
 
-| 变量                      | 说明                               | 可选值                | 默认值                            |
-| ------------------------- | ---------------------------------- | --------------------- | --------------------------------- |
-| ICETV_USERNAME            | 站长账号                           | 任意字符串            | 无默认，必填字段                  |
-| ICETV_PASSWORD            | 站长密码                           | 任意字符串            | 无默认，必填字段                  |
-| NEXT_PUBLIC_STORAGE_TYPE  | 播放记录/收藏的存储方式            | localdb               | 无默认，必填字段                  |
-| LOCAL_DB_PATH             | 本地文件存储路径（`localdb` 模式） | 绝对路径              | `/data/icetv-data.json`（Docker） |
-| AUTH_SESSION_TTL_HOURS    | 登录态有效期（小时）               | 正整数                | 168                               |
-| NEXT_PUBLIC_UPDATE_REPOS  | 版本检查仓库列表（逗号分隔）       | owner/repo,owner/repo | naseaoi/LunaTV                    |
-| NEXT_PUBLIC_UPDATE_BRANCH | 版本检查分支                       | 分支名                | main                              |
+| 变量                      | 说明                                   | 可选值                | 默认值                              |
+| ------------------------- | -------------------------------------- | --------------------- | ----------------------------------- |
+| ICETV_USERNAME            | 站长账号                               | 任意字符串            | 无默认，必填字段                    |
+| ICETV_PASSWORD            | 站长密码                               | 任意字符串            | 无默认，必填字段                    |
+| NEXT_PUBLIC_STORAGE_TYPE  | 播放记录/收藏的存储方式                | localdb               | 无默认，必填字段                    |
+| LOCAL_DB_PATH             | 本地 SQLite 文件路径（`localdb` 模式） | 绝对路径              | `/data/icetv-data.sqlite`（Docker） |
+| AUTH_SESSION_TTL_HOURS    | 登录态有效期（小时）                   | 正整数                | 168                                 |
+| NEXT_PUBLIC_UPDATE_REPOS  | 版本检查仓库列表（逗号分隔）           | owner/repo,owner/repo | naseaoi/LunaTV                      |
+| NEXT_PUBLIC_UPDATE_BRANCH | 版本检查分支                           | 分支名                | main                                |
 
 - 版本检查由后端接口 `/api/version/latest` 统一获取，前端不再直接请求 GitHub Raw。若仓库改名，更新 `NEXT_PUBLIC_UPDATE_REPOS` 并重启服务即可生效。
 
