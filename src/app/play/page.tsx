@@ -20,6 +20,7 @@ import {
   saveSkipConfig,
   subscribeToDataUpdates,
 } from '@/lib/db.client';
+import { filterSourcesForPlayback } from '@/lib/source_match';
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8 } from '@/lib/utils';
 
@@ -742,18 +743,12 @@ function PlayPageClient() {
         const data = await response.json();
 
         // 处理搜索结果，根据规则过滤
-        const results = data.results.filter(
-          (result: SearchResult) =>
-            result.title.replaceAll(' ', '').toLowerCase() ===
-              videoTitleRef.current.replaceAll(' ', '').toLowerCase() &&
-            (videoYearRef.current
-              ? result.year.toLowerCase() === videoYearRef.current.toLowerCase()
-              : true) &&
-            (searchType
-              ? (searchType === 'tv' && result.episodes.length > 1) ||
-                (searchType === 'movie' && result.episodes.length === 1)
-              : true),
-        );
+        const results = filterSourcesForPlayback(data.results, {
+          title: videoTitleRef.current,
+          year: videoYearRef.current,
+          searchType:
+            searchType === 'tv' || searchType === 'movie' ? searchType : '',
+        });
         setAvailableSources(results);
         return results;
       } catch (err) {
@@ -1494,7 +1489,7 @@ function PlayPageClient() {
         playsInline: true,
         autoPlayback: false,
         airplay: true,
-        theme: '#22c55e',
+        theme: '#3b82f6',
         lang: 'zh-cn',
         hotkey: false,
         fastForward: true,

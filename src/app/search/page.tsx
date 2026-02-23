@@ -19,6 +19,7 @@ import {
   getSearchHistory,
   subscribeToDataUpdates,
 } from '@/lib/db.client';
+import { filterSourcesForPlayback, SearchType } from '@/lib/source_match';
 import { SearchResult } from '@/lib/types';
 
 import PageLayout from '@/components/PageLayout';
@@ -85,8 +86,22 @@ function SearchPageClient() {
       });
       return res;
     })();
+
+    const inferredType: SearchType = episodes === 1 ? 'movie' : 'tv';
+    const representative = group[0];
+    const playableSources = representative
+      ? filterSourcesForPlayback(group, {
+          title: representative.title || '',
+          year: representative.year || '',
+          searchType: inferredType,
+        })
+      : [];
+
+    const sourcesForCount =
+      playableSources.length > 0 ? playableSources : group;
+
     const source_names = Array.from(
-      new Set(group.map((g) => g.source_name).filter(Boolean)),
+      new Set(sourcesForCount.map((g) => g.source_name).filter(Boolean)),
     ) as string[];
 
     const douban_id = (() => {
@@ -192,31 +207,71 @@ function SearchPageClient() {
     return order === 'asc' ? aNum - bNum : bNum - aNum;
   };
 
+  const normalizeTitleForAggregation = (title: string) => {
+    return title
+      .normalize('NFKC')
+      .toLowerCase()
+      .replace(/[\s\u00A0\u3000]+/g, '')
+      .replace(/[·•・.。:：,，!！?？'"`~～_\-—]/g, '');
+  };
+
   // 聚合后的结果（按标题和年份分组）
   const aggregatedResults = useMemo(() => {
-    const map = new Map<string, SearchResult[]>();
-    const keyOrder: string[] = []; // 记录键出现的顺序
+    const titleBuckets = new Map<string, SearchResult[]>();
+    const titleOrder: string[] = [];
 
     searchResults.forEach((item) => {
-      // 使用 title + year + type 作为键，year 必然存在，但依然兜底 'unknown'
-      const key = `${item.title.replaceAll(' ', '')}-${
-        item.year || 'unknown'
-      }-${item.episodes.length === 1 ? 'movie' : 'tv'}`;
-      const arr = map.get(key) || [];
-
-      // 如果是新的键，记录其顺序
-      if (arr.length === 0) {
-        keyOrder.push(key);
+      const normalizedTitle = normalizeTitleForAggregation(item.title || '');
+      if (!normalizedTitle) {
+        return;
       }
-
-      arr.push(item);
-      map.set(key, arr);
+      if (!titleBuckets.has(normalizedTitle)) {
+        titleBuckets.set(normalizedTitle, []);
+        titleOrder.push(normalizedTitle);
+      }
+      titleBuckets.get(normalizedTitle)!.push(item);
     });
 
-    // 按出现顺序返回聚合结果
-    return keyOrder.map(
-      (key) => [key, map.get(key)!] as [string, SearchResult[]],
-    );
+    const groupedResults: [string, SearchResult[]][] = [];
+
+    titleOrder.forEach((normalizedTitle) => {
+      const bucket = titleBuckets.get(normalizedTitle) || [];
+      if (bucket.length === 0) return;
+
+      const yearMap = new Map<string, SearchResult[]>();
+      const yearOrder: string[] = [];
+
+      bucket.forEach((item) => {
+        const normalizedYear =
+          item.year && item.year !== 'unknown' ? item.year : 'unknown';
+        if (!yearMap.has(normalizedYear)) {
+          yearMap.set(normalizedYear, []);
+          yearOrder.push(normalizedYear);
+        }
+        yearMap.get(normalizedYear)!.push(item);
+      });
+
+      const knownYears = yearOrder.filter((year) => year !== 'unknown');
+      const unknownItems = yearMap.get('unknown') || [];
+
+      if (unknownItems.length > 0) {
+        if (knownYears.length === 1) {
+          yearMap.get(knownYears[0])!.push(...unknownItems);
+          yearMap.delete('unknown');
+        }
+      }
+
+      yearOrder
+        .filter((year) => yearMap.has(year))
+        .forEach((year) => {
+          groupedResults.push([
+            `${normalizedTitle}-${year}`,
+            yearMap.get(year)!,
+          ]);
+        });
+    });
+
+    return groupedResults;
   }, [searchResults]);
 
   // 当聚合结果变化时，如果某个聚合已存在，则调用其卡片 ref 的 set 方法增量更新

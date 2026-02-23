@@ -53,6 +53,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
   const attemptedSourcesRef = useRef<Set<string>>(new Set());
   const testingSourcesRef = useRef<Set<string>>(new Set());
   const currentItemRef = useRef<HTMLDivElement | null>(null);
+  const listContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     attemptedSourcesRef.current = attemptedSources;
@@ -218,17 +219,17 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
         };
       })
       .sort((a, b) => {
-        if (a.hasValidInfo !== b.hasValidInfo) {
-          return a.hasValidInfo ? -1 : 1;
-        }
-        if (a.qualityRank !== b.qualityRank) {
-          return b.qualityRank - a.qualityRank;
-        }
         if (a.speedKBps !== b.speedKBps) {
           return b.speedKBps - a.speedKBps;
         }
         if (a.pingTime !== b.pingTime) {
           return a.pingTime - b.pingTime;
+        }
+        if (a.hasValidInfo !== b.hasValidInfo) {
+          return a.hasValidInfo ? -1 : 1;
+        }
+        if (a.qualityRank !== b.qualityRank) {
+          return b.qualityRank - a.qualityRank;
         }
         return a.index - b.index;
       })
@@ -237,11 +238,28 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
 
   useEffect(() => {
     if (!isActive) return;
-    if (!currentItemRef.current) return;
+    const listContainer = listContainerRef.current;
+    const currentItem = currentItemRef.current;
+    if (!listContainer || !currentItem) return;
 
     requestAnimationFrame(() => {
-      currentItemRef.current?.scrollIntoView({
-        block: 'nearest',
+      const containerRect = listContainer.getBoundingClientRect();
+      const itemRect = currentItem.getBoundingClientRect();
+      const targetScrollTop =
+        listContainer.scrollTop +
+        (itemRect.top - containerRect.top) -
+        listContainer.clientHeight / 2 +
+        currentItem.clientHeight / 2;
+
+      const maxScrollTop =
+        listContainer.scrollHeight - listContainer.clientHeight;
+      const nextScrollTop = Math.max(
+        0,
+        Math.min(targetScrollTop, maxScrollTop),
+      );
+
+      listContainer.scrollTo({
+        top: nextScrollTop,
         behavior: 'smooth',
       });
     });
@@ -287,7 +305,10 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
   }
 
   return (
-    <div className='flex-1 overflow-y-auto space-y-1 p-2 pb-20'>
+    <div
+      ref={listContainerRef}
+      className='flex-1 overflow-y-auto space-y-1 p-2 pb-20'
+    >
       {sortedSources.map((source, index) => {
         const isCurrentSource =
           source.source?.toString() === currentSource?.toString() &&
