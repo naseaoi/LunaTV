@@ -1,10 +1,4 @@
-import {
-  AlertTriangle,
-  Clapperboard,
-  Loader2,
-  Play,
-  RefreshCw,
-} from 'lucide-react';
+import { AlertTriangle, Play, RefreshCw } from 'lucide-react';
 import { RefObject, useEffect, useState } from 'react';
 
 import EpisodeSelector from '@/components/EpisodeSelector';
@@ -22,6 +16,7 @@ interface PlayMainContentProps {
   artRef: RefObject<HTMLDivElement>;
   isVideoLoading: boolean;
   videoLoadingStage: 'initing' | 'sourceChanging';
+  realtimeLoadSpeed: string;
   authRecoveryVisible: boolean;
   authRecoveryReasonMessage: string;
   onReloginAndRecover: () => void;
@@ -89,6 +84,7 @@ export function PlayMainContent(props: PlayMainContentProps) {
     artRef,
     isVideoLoading,
     videoLoadingStage,
+    realtimeLoadSpeed,
     authRecoveryVisible,
     authRecoveryReasonMessage,
     onReloginAndRecover,
@@ -129,7 +125,7 @@ export function PlayMainContent(props: PlayMainContentProps) {
         <div className='flex items-center relative'>
           {/* 标题居中于播放器区域 */}
           <div
-            className={`transition-[width] duration-300 ease-in-out flex justify-center ${
+            className={`transition-[width] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] flex justify-center ${
               isEpisodeSelectorCollapsed ? 'w-full' : 'w-full md:w-3/4'
             }`}
           >
@@ -160,7 +156,7 @@ export function PlayMainContent(props: PlayMainContentProps) {
 
         {/* 播放器 + 选集面板 */}
         <div
-          className={`grid lg:h-[500px] xl:h-[650px] 2xl:h-[750px] transition-[grid-template-columns] duration-300 ease-in-out ${
+          className={`grid lg:h-[500px] xl:h-[650px] 2xl:h-[750px] transition-[grid-template-columns] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
             isEpisodeSelectorCollapsed
               ? 'grid-cols-1 grid-rows-1'
               : 'grid-cols-1 md:grid-cols-4 gap-3'
@@ -168,7 +164,7 @@ export function PlayMainContent(props: PlayMainContentProps) {
         >
           {/* 播放器 */}
           <div
-            className={`h-full transition-all duration-300 ease-in-out rounded-xl overflow-hidden ${
+            className={`h-full transition-all duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] rounded-xl overflow-hidden ${
               isEpisodeSelectorCollapsed
                 ? 'col-span-1 row-span-1'
                 : 'md:col-span-3'
@@ -206,27 +202,100 @@ export function PlayMainContent(props: PlayMainContentProps) {
                       </button>
                     </LoadingStatePanel>
                   ) : (
-                    <LoadingStatePanel
-                      compact
-                      icon={
-                        videoLoadingStage === 'sourceChanging' ? (
-                          <RefreshCw className='w-9 h-9' />
-                        ) : (
-                          <Clapperboard className='w-9 h-9' />
-                        )
-                      }
-                      tone='emerald'
-                      title={
-                        videoLoadingStage === 'sourceChanging'
-                          ? '正在切换播放源'
-                          : '正在加载视频'
-                      }
-                      titleClassName='text-white'
-                    >
-                      <div className='flex items-center justify-center text-emerald-300'>
-                        <Loader2 className='w-5 h-5 animate-spin' />
+                    <div className='flex flex-col items-center'>
+                      {/* 复用全局 LoadingStatePanel 的 spinner 结构 */}
+                      <div className='relative'>
+                        <div className='player-ripple absolute -inset-4 rounded-full border border-emerald-300/40' />
+                        <div className='player-ripple player-ripple-delay absolute -inset-4 rounded-full border border-emerald-300/40' />
+                        <div className='player-spinner-shell relative z-[2] mx-auto h-20 w-20 sm:h-24 sm:w-24'>
+                          <div className='player-ring-outer absolute inset-0 rounded-full border-2 border-transparent bg-gradient-to-r from-emerald-400/70 via-green-500/40 to-emerald-300/20' />
+                          <div className='player-ring-inner absolute inset-[10px] rounded-full border border-white/30' />
+                          <div className='absolute inset-[2px] rounded-full bg-transparent' />
+                          <div className='player-orb absolute top-2 right-1 h-3 w-3 rounded-full bg-emerald-400/40' />
+                        </div>
                       </div>
-                    </LoadingStatePanel>
+                      {videoLoadingStage === 'sourceChanging' && (
+                        <div className='mt-3 text-xs font-medium text-white/50'>
+                          切换中
+                        </div>
+                      )}
+
+                      <style jsx>{`
+                        .player-ripple {
+                          animation: player-ripple 2.4s ease-out infinite;
+                          transform-origin: center;
+                        }
+                        .player-ripple-delay {
+                          animation-delay: 1.2s;
+                        }
+                        .player-spinner-shell {
+                          filter: drop-shadow(0 8px 26px rgba(0, 0, 0, 0.12));
+                        }
+                        .player-ring-outer {
+                          mask: radial-gradient(
+                            circle,
+                            transparent 58%,
+                            black 59%
+                          );
+                          -webkit-mask: radial-gradient(
+                            circle,
+                            transparent 58%,
+                            black 59%
+                          );
+                          animation: player-rotate 2.6s linear infinite;
+                        }
+                        .player-ring-inner {
+                          animation: player-rotate-reverse 3.3s linear infinite;
+                        }
+                        .player-orb {
+                          animation: player-ping 1.8s ease-out infinite;
+                        }
+                        @keyframes player-rotate {
+                          0% {
+                            transform: rotate(0deg);
+                          }
+                          100% {
+                            transform: rotate(360deg);
+                          }
+                        }
+                        @keyframes player-rotate-reverse {
+                          0% {
+                            transform: rotate(0deg);
+                          }
+                          100% {
+                            transform: rotate(-360deg);
+                          }
+                        }
+                        @keyframes player-ripple {
+                          0% {
+                            transform: scale(0.92);
+                            opacity: 0.45;
+                          }
+                          70% {
+                            transform: scale(1.2);
+                            opacity: 0;
+                          }
+                          100% {
+                            transform: scale(1.2);
+                            opacity: 0;
+                          }
+                        }
+                        @keyframes player-ping {
+                          0% {
+                            transform: scale(0.9);
+                            opacity: 0.65;
+                          }
+                          70% {
+                            transform: scale(1.9);
+                            opacity: 0;
+                          }
+                          100% {
+                            transform: scale(1.9);
+                            opacity: 0;
+                          }
+                        }
+                      `}</style>
+                    </div>
                   )}
                 </div>
               )}
@@ -263,10 +332,10 @@ export function PlayMainContent(props: PlayMainContentProps) {
 
           {/* 选集面板 */}
           <div
-            className={`md:overflow-hidden transition-[opacity,transform] duration-300 ease-in-out ${
+            className={`md:overflow-hidden transition-[opacity,max-width,transform] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
               isEpisodeSelectorCollapsed
-                ? 'h-0 md:col-span-1 lg:opacity-0 lg:scale-95 lg:pointer-events-none lg:overflow-hidden'
-                : 'h-[300px] lg:h-full md:col-span-1 lg:opacity-100 lg:scale-100'
+                ? 'h-0 md:col-span-1 lg:max-w-0 lg:opacity-0 lg:translate-x-8 lg:pointer-events-none lg:overflow-hidden'
+                : 'h-[300px] lg:h-full md:col-span-1 lg:max-w-[100%] lg:opacity-100 lg:translate-x-0'
             }`}
           >
             <EpisodeSelector

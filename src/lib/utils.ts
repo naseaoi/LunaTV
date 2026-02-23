@@ -4,12 +4,12 @@ import Hls from 'hls.js';
 
 function getDoubanImageProxyConfig(): {
   proxyType:
-  | 'direct'
-  | 'server'
-  | 'img3'
-  | 'cmliussss-cdn-tencent'
-  | 'cmliussss-cdn-ali'
-  | 'custom';
+    | 'direct'
+    | 'server'
+    | 'img3'
+    | 'cmliussss-cdn-tencent'
+    | 'cmliussss-cdn-ali'
+    | 'custom';
   proxyUrl: string;
 } {
   const doubanImageProxyType =
@@ -46,12 +46,12 @@ export function processImageUrl(originalUrl: string): string {
     case 'cmliussss-cdn-tencent':
       return originalUrl.replace(
         /img\d+\.doubanio\.com/g,
-        'img.doubanio.cmliussss.net'
+        'img.doubanio.cmliussss.net',
       );
     case 'cmliussss-cdn-ali':
       return originalUrl.replace(
         /img\d+\.doubanio\.com/g,
-        'img.doubanio.cmliussss.com'
+        'img.doubanio.cmliussss.com',
       );
     case 'custom':
       return `${proxyUrl}${encodeURIComponent(originalUrl)}`;
@@ -94,12 +94,36 @@ export async function getVideoResolutionFromM3u8(m3u8Url: string): Promise<{
       // 固定使用hls.js加载
       const hls = new Hls();
 
-      // 设置超时处理
+      // 设置超时处理（8秒，兼顾慢速源）
       const timeout = setTimeout(() => {
-        hls.destroy();
-        video.remove();
-        reject(new Error('Timeout loading video metadata'));
-      }, 4000);
+        // 超时但已有部分结果时，返回部分数据而非直接失败
+        if (hasMetadataLoaded || hasSpeedCalculated) {
+          const width = video.videoWidth;
+          const quality =
+            width >= 3840
+              ? '4K'
+              : width >= 2560
+                ? '2K'
+                : width >= 1920
+                  ? '1080p'
+                  : width >= 1280
+                    ? '720p'
+                    : width >= 854
+                      ? '480p'
+                      : '未知';
+          hls.destroy();
+          video.remove();
+          resolve({
+            quality,
+            loadSpeed: actualLoadSpeed,
+            pingTime: Math.round(pingTime),
+          });
+        } else {
+          hls.destroy();
+          video.remove();
+          reject(new Error('Timeout loading video metadata'));
+        }
+      }, 8000);
 
       video.onerror = () => {
         clearTimeout(timeout);
@@ -175,14 +199,9 @@ export async function getVideoResolutionFromM3u8(m3u8Url: string): Promise<{
           if (loadTime > 0 && size > 0) {
             const speedKBps = size / 1024 / (loadTime / 1000);
 
-            // 立即计算速度，无需等待更多分片
-            const avgSpeedKBps = speedKBps;
-
-            if (avgSpeedKBps >= 1024) {
-              actualLoadSpeed = `${(avgSpeedKBps / 1024).toFixed(1)} MB/s`;
-            } else {
-              actualLoadSpeed = `${avgSpeedKBps.toFixed(1)} KB/s`;
-            }
+            // 转换为 Mbps（网络速率单位）：KB/s × 8 / 1024 = Mbps
+            const speedMbps = (speedKBps * 8) / 1024;
+            actualLoadSpeed = `${speedMbps.toFixed(1)} Mbps`;
             hasSpeedCalculated = true;
             checkAndResolve(); // 尝试返回结果
           }
@@ -211,8 +230,9 @@ export async function getVideoResolutionFromM3u8(m3u8Url: string): Promise<{
     });
   } catch (error) {
     throw new Error(
-      `Error getting video resolution: ${error instanceof Error ? error.message : String(error)
-      }`
+      `Error getting video resolution: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
     );
   }
 }

@@ -26,7 +26,7 @@ const PageLayout = ({ children, activePath = '/' }: PageLayoutProps) => {
         </div>
 
         {/* 主内容区域 */}
-        <div className='min-w-0 flex-1 transition-all duration-300'>
+        <div className='min-w-0 flex-1 transition-[margin] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)]'>
           {/* 桌面端顶部工具栏 */}
           <div className='hidden md:flex items-center justify-end px-4 sm:px-10 py-2 gap-1'>
             <div className='flex items-center w-full max-w-[95%] mx-auto gap-1'>

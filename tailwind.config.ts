@@ -17,7 +17,17 @@ const config: Config = {
         },
       },
       fontFamily: {
-        primary: ['Inter', ...defaultTheme.fontFamily.sans],
+        primary: [
+          'Inter',
+          'system-ui',
+          '-apple-system',
+          'PingFang SC',
+          'Microsoft YaHei',
+          'Hiragino Sans GB',
+          'Noto Sans SC',
+          'sans-serif',
+          ...defaultTheme.fontFamily.sans,
+        ],
       },
       colors: {
         primary: {

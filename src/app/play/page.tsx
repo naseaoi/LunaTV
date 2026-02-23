@@ -242,6 +242,8 @@ function PlayPageClient() {
   const [videoLoadingStage, setVideoLoadingStage] = useState<
     'initing' | 'sourceChanging'
   >('initing');
+  const [realtimeLoadSpeed, setRealtimeLoadSpeed] =
+    useState<string>('测速中...');
   const [authRecoveryVisible, setAuthRecoveryVisible] = useState(false);
   const [authRecoveryReason, setAuthRecoveryReason] =
     useState<SessionLostReason>('missing_cookie');
@@ -285,10 +287,7 @@ function PlayPageClient() {
               return null;
             }
 
-            const episodeUrl =
-              source.episodes.length > 1
-                ? source.episodes[1]
-                : source.episodes[0];
+            const episodeUrl = source.episodes[0];
             const testResult = await getVideoResolutionFromM3u8(episodeUrl);
 
             return {
@@ -321,6 +320,14 @@ function PlayPageClient() {
       if (result) {
         // 成功的结果
         newVideoInfoMap.set(sourceKey, result.testResult);
+      } else {
+        // 失败的结果也存入，标记 hasError，避免 SourcesTab 重复测速
+        newVideoInfoMap.set(sourceKey, {
+          quality: '未知',
+          loadSpeed: '未知',
+          pingTime: 0,
+          hasError: true,
+        });
       }
     });
 
@@ -343,12 +350,14 @@ function PlayPageClient() {
         const speedStr = result.testResult.loadSpeed;
         if (speedStr === '未知' || speedStr === '测量中...') return 0;
 
-        const match = speedStr.match(/^([\d.]+)\s*(KB\/s|MB\/s)$/);
+        const match = speedStr.match(/^([\d.]+)\s*(Mbps|KB\/s|MB\/s)$/);
         if (!match) return 0;
 
         const value = parseFloat(match[1]);
         const unit = match[2];
-        return unit === 'MB/s' ? value * 1024 : value; // 统一转换为 KB/s
+        // 统一转换为 KB/s 用于内部评分比较
+        if (unit === 'Mbps') return (value * 1024) / 8;
+        return unit === 'MB/s' ? value * 1024 : value;
       })
       .filter((speed) => speed > 0);
 
@@ -652,6 +661,17 @@ function PlayPageClient() {
     }
   };
 
+  const formatBytesPerSecond = (bytesPerSecond: number): string => {
+    if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) {
+      return '0 KB/s';
+    }
+    const kb = bytesPerSecond / 1024;
+    if (kb >= 1024) {
+      return `${(kb / 1024).toFixed(1)} MB/s`;
+    }
+    return `${kb.toFixed(1)} KB/s`;
+  };
+
   class CustomHlsJsLoader extends Hls.DefaultConfig.loader {
     constructor(config: any) {
       super(config);
@@ -828,11 +848,7 @@ function PlayPageClient() {
 
       setLoadingStage('ready');
       setLoadingMessage('准备就绪，即将开始播放...');
-
-      // 短暂延迟让用户看到完成状态
-      setTimeout(() => {
-        setLoading(false);
-      }, 1000);
+      setLoading(false);
     };
 
     initAll();
@@ -903,6 +919,7 @@ function PlayPageClient() {
       // 显示换源加载状态
       setVideoLoadingStage('sourceChanging');
       setIsVideoLoading(true);
+      setRealtimeLoadSpeed('测速中...');
 
       // 记录当前播放进度（仅在同一集数切换时恢复）
       const currentPlayTime = artPlayerRef.current?.currentTime || 0;
@@ -978,6 +995,7 @@ function PlayPageClient() {
     } catch (err) {
       // 隐藏换源加载状态
       setIsVideoLoading(false);
+      setRealtimeLoadSpeed('');
       setError(err instanceof Error ? err.message : '换源失败');
     }
   };
@@ -994,6 +1012,7 @@ function PlayPageClient() {
       setAuthRecoveryLoginUrl(detail.loginUrl);
       setAuthRecoveryVisible(true);
       setIsVideoLoading(false);
+      setRealtimeLoadSpeed('');
     };
 
     window.addEventListener(AUTH_LOST_EVENT, onSessionLost as EventListener);
@@ -1514,6 +1533,14 @@ function PlayPageClient() {
             adSegmentRangesRef.current = [];
             lastAdJumpAtRef.current = 0;
             lastAdRangeKeyRef.current = '';
+            setRealtimeLoadSpeed('测速中...');
+
+            // 5秒后如果仍然没有分片加载完成，回落为 0 KB/s
+            const speedFallbackTimer = setTimeout(() => {
+              setRealtimeLoadSpeed((prev) =>
+                prev === '测速中...' ? '0 KB/s' : prev,
+              );
+            }, 5000);
 
             hls.loadSource(url);
             hls.attachMedia(video);
@@ -1544,6 +1571,26 @@ function PlayPageClient() {
             hls.on(Hls.Events.FRAG_CHANGED, function (_: any, data: any) {
               if (!blockAdEnabledRef.current) return;
               skipAdFragment(data?.frag);
+            });
+
+            hls.on(Hls.Events.FRAG_LOADED, function (_: any, data: any) {
+              clearTimeout(speedFallbackTimer);
+              const stats = data?.stats;
+              const frag = data?.frag;
+              // 优先用 stats.loaded，兜底 frag 级别的 stats
+              const loadedBytes =
+                stats?.loaded ?? stats?.total ?? frag?.stats?.loaded ?? 0;
+              const startTime =
+                stats?.tfirst ?? stats?.trequest ?? frag?.stats?.tfirst ?? 0;
+              const endTime = stats?.tload ?? frag?.stats?.tload ?? 0;
+              const elapsedMs = endTime > startTime ? endTime - startTime : 0;
+              if (loadedBytes > 0 && elapsedMs > 0) {
+                const bytesPerSecond = loadedBytes / (elapsedMs / 1000);
+                setRealtimeLoadSpeed(formatBytesPerSecond(bytesPerSecond));
+              } else if (loadedBytes > 0) {
+                // 有数据但无法计算耗时，显示 0 而非卡在"测速中..."
+                setRealtimeLoadSpeed('0 KB/s');
+              }
             });
           },
         },
@@ -1734,6 +1781,7 @@ function PlayPageClient() {
 
         // 隐藏换源加载状态
         setIsVideoLoading(false);
+        setRealtimeLoadSpeed('');
       });
 
       // 监听视频时间更新事件，实现跳过片头片尾
@@ -1879,6 +1927,7 @@ function PlayPageClient() {
       artRef={artRef}
       isVideoLoading={isVideoLoading}
       videoLoadingStage={videoLoadingStage}
+      realtimeLoadSpeed={realtimeLoadSpeed}
       authRecoveryVisible={authRecoveryVisible}
       authRecoveryReasonMessage={getAuthRecoveryMessage(authRecoveryReason)}
       onReloginAndRecover={handleReloginAndRecover}

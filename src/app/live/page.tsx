@@ -1160,30 +1160,6 @@ function LivePageClient() {
               message={loadingMessage}
               description='正在同步直播源、频道列表与节目单信息。'
               progress={loadingProgress}
-              steps={[
-                {
-                  label: '源配置',
-                  status:
-                    loadingStage === 'loading'
-                      ? 'active'
-                      : loadingStageIndex > 0
-                        ? 'done'
-                        : 'pending',
-                },
-                {
-                  label: '频道拉取',
-                  status:
-                    loadingStage === 'fetching'
-                      ? 'active'
-                      : loadingStageIndex > 1
-                        ? 'done'
-                        : 'pending',
-                },
-                {
-                  label: '完成',
-                  status: loadingStage === 'ready' ? 'active' : 'pending',
-                },
-              ]}
             />
             <button
               onClick={() => router.back()}

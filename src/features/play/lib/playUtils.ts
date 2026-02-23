@@ -47,12 +47,15 @@ export function calculateSourceScore(
     const speedStr = testResult.loadSpeed;
     if (speedStr === '未知' || speedStr === '测量中...') return 30;
 
-    const match = speedStr.match(/^([\d.]+)\s*(KB\/s|MB\/s)$/);
+    const match = speedStr.match(/^([\d.]+)\s*(Mbps|KB\/s|MB\/s)$/);
     if (!match) return 30;
 
     const value = parseFloat(match[1]);
     const unit = match[2];
-    const speedKBps = unit === 'MB/s' ? value * 1024 : value;
+    // 统一转换为 KB/s 用于内部评分比较
+    let speedKBps: number;
+    if (unit === 'Mbps') speedKBps = (value * 1024) / 8;
+    else speedKBps = unit === 'MB/s' ? value * 1024 : value;
     const speedRatio = speedKBps / maxSpeed;
     return Math.min(100, Math.max(0, speedRatio * 100));
   })();

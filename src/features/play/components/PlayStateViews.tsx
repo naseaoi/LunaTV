@@ -66,39 +66,6 @@ export function PlayLoadingView({
             title='正在加载'
             message={loadingMessage}
             progress={loadingProgress}
-            steps={[
-              {
-                label: '搜索',
-                status:
-                  loadingStage === 'searching'
-                    ? 'active'
-                    : loadingStageIndex > 0
-                      ? 'done'
-                      : 'pending',
-              },
-              {
-                label: '优选',
-                status:
-                  loadingStage === 'preferring'
-                    ? 'active'
-                    : loadingStageIndex > 1
-                      ? 'done'
-                      : 'pending',
-              },
-              {
-                label: '详情',
-                status:
-                  loadingStage === 'fetching'
-                    ? 'active'
-                    : loadingStageIndex > 2
-                      ? 'done'
-                      : 'pending',
-              },
-              {
-                label: '完成',
-                status: loadingStage === 'ready' ? 'active' : 'pending',
-              },
-            ]}
           />
           <button
             onClick={onBack}
