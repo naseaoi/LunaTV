@@ -156,7 +156,9 @@ export function PlayMainContent(props: PlayMainContentProps) {
 
         {/* 播放器 + 选集面板 */}
         <div
-          className={`grid lg:h-[500px] xl:h-[650px] 2xl:h-[750px] transition-[grid-template-columns] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
+          className={`grid lg:h-[500px] xl:h-[650px] 2xl:h-[750px] transition-[grid-template-columns] ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
+            isEpisodeSelectorCollapsed ? 'duration-300' : 'duration-0'
+          } ${
             isEpisodeSelectorCollapsed
               ? 'grid-cols-1 grid-rows-1'
               : 'grid-cols-1 md:grid-cols-4 gap-3'
@@ -332,7 +334,9 @@ export function PlayMainContent(props: PlayMainContentProps) {
 
           {/* 选集面板 */}
           <div
-            className={`md:overflow-hidden transition-[opacity,max-width,transform] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
+            className={`md:overflow-hidden transition-[opacity,max-width,transform] ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
+              isEpisodeSelectorCollapsed ? 'duration-300' : 'duration-0'
+            } ${
               isEpisodeSelectorCollapsed
                 ? 'h-0 md:col-span-1 lg:max-w-0 lg:opacity-0 lg:translate-x-8 lg:pointer-events-none lg:overflow-hidden'
                 : 'h-[300px] lg:h-full md:col-span-1 lg:max-w-[100%] lg:opacity-100 lg:translate-x-0'

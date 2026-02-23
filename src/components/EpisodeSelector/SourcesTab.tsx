@@ -1,7 +1,13 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useRouter } from 'next/navigation';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
@@ -17,6 +23,7 @@ interface SourcesTabProps {
   availableSources: SearchResult[];
   sourceSearchLoading: boolean;
   sourceSearchError: string | null;
+  isActive?: boolean;
   currentSource?: string;
   currentId?: string;
   videoTitle?: string;
@@ -28,6 +35,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
   availableSources,
   sourceSearchLoading,
   sourceSearchError,
+  isActive = false,
   currentSource,
   currentId,
   videoTitle,
@@ -44,6 +52,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
   );
   const attemptedSourcesRef = useRef<Set<string>>(new Set());
   const testingSourcesRef = useRef<Set<string>>(new Set());
+  const currentItemRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     attemptedSourcesRef.current = attemptedSources;
@@ -140,6 +149,104 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
     [onSourceChange],
   );
 
+  const parseSpeedToKBps = (loadSpeed?: string): number => {
+    if (!loadSpeed || loadSpeed === '未知' || loadSpeed === '测量中...') {
+      return 0;
+    }
+
+    const match = loadSpeed.match(/^([\d.]+)\s*(Mbps|KB\/s|MB\/s)$/i);
+    if (!match) {
+      return 0;
+    }
+
+    const value = Number.parseFloat(match[1]);
+    if (!Number.isFinite(value) || value <= 0) {
+      return 0;
+    }
+
+    const unit = match[2].toLowerCase();
+    if (unit === 'mbps') {
+      return (value * 1024) / 8;
+    }
+    if (unit === 'mb/s') {
+      return value * 1024;
+    }
+    return value;
+  };
+
+  const getQualityRank = (quality?: string): number => {
+    if (!quality || quality === '未知' || quality === '错误') {
+      return 0;
+    }
+
+    const normalized = quality.toUpperCase();
+    if (normalized.includes('4K') || normalized.includes('2160')) {
+      return 5;
+    }
+    if (normalized.includes('2K') || normalized.includes('1440')) {
+      return 4;
+    }
+    if (normalized.includes('1080')) {
+      return 3;
+    }
+    if (normalized.includes('720')) {
+      return 2;
+    }
+    if (normalized.includes('480')) {
+      return 1;
+    }
+    return 0;
+  };
+
+  const sortedSources = useMemo(() => {
+    return availableSources
+      .map((source, index) => {
+        const sourceKey = `${source.source}-${source.id}`;
+        const videoInfo = videoInfoMap.get(sourceKey);
+        const hasValidInfo = !!videoInfo && !videoInfo.hasError;
+
+        return {
+          source,
+          index,
+          qualityRank: hasValidInfo ? getQualityRank(videoInfo.quality) : 0,
+          speedKBps: hasValidInfo ? parseSpeedToKBps(videoInfo.loadSpeed) : 0,
+          pingTime:
+            hasValidInfo && Number.isFinite(videoInfo.pingTime)
+              ? videoInfo.pingTime
+              : Number.MAX_SAFE_INTEGER,
+          hasValidInfo,
+        };
+      })
+      .sort((a, b) => {
+        if (a.hasValidInfo !== b.hasValidInfo) {
+          return a.hasValidInfo ? -1 : 1;
+        }
+        if (a.qualityRank !== b.qualityRank) {
+          return b.qualityRank - a.qualityRank;
+        }
+        if (a.speedKBps !== b.speedKBps) {
+          return b.speedKBps - a.speedKBps;
+        }
+        if (a.pingTime !== b.pingTime) {
+          return a.pingTime - b.pingTime;
+        }
+        return a.index - b.index;
+      })
+      .map((item) => item.source);
+  }, [availableSources, videoInfoMap]);
+
+  useEffect(() => {
+    if (!isActive) return;
+    if (!currentItemRef.current) return;
+
+    requestAnimationFrame(() => {
+      currentItemRef.current?.scrollIntoView({
+        block: 'nearest',
+        behavior: 'smooth',
+      });
+    });
+  }, [isActive, currentSource, currentId, sortedSources]);
+
   if (sourceSearchLoading) {
     return (
       <div className='flex items-center justify-center py-8 flex-1'>
@@ -181,7 +288,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
 
   return (
     <div className='flex-1 overflow-y-auto space-y-1 p-2 pb-20'>
-      {availableSources.map((source, index) => {
+      {sortedSources.map((source, index) => {
         const isCurrentSource =
           source.source?.toString() === currentSource?.toString() &&
           source.id?.toString() === currentId?.toString();
@@ -191,6 +298,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
         return (
           <div
             key={sourceKey}
+            ref={isCurrentSource ? currentItemRef : null}
             onClick={() => {
               if (!isCurrentSource) {
                 handleSourceClick(source);

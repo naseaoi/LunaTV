@@ -124,6 +124,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
           availableSources={availableSources}
           sourceSearchLoading={sourceSearchLoading}
           sourceSearchError={sourceSearchError}
+          isActive={activeTab === 'sources'}
           currentSource={currentSource}
           currentId={currentId}
           videoTitle={videoTitle}

@@ -63,30 +63,36 @@ declare global {
   }
 }
 
+const getInitialSidebarCollapsed = (): boolean => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  if (typeof window.__sidebarCollapsed === 'boolean') {
+    return window.__sidebarCollapsed;
+  }
+
+  const saved = localStorage.getItem('sidebarCollapsed');
+  if (saved === null) {
+    return false;
+  }
+
+  try {
+    const parsed = JSON.parse(saved);
+    return parsed === true;
+  } catch {
+    return false;
+  }
+};
+
 const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   // 若同一次 SPA 会话中已经读取过折叠状态，则直接复用，避免闪烁
-  const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
-    if (
-      typeof window !== 'undefined' &&
-      typeof window.__sidebarCollapsed === 'boolean'
-    ) {
-      return window.__sidebarCollapsed;
-    }
-    return false; // 默认展开
-  });
-
-  // 首次挂载时读取 localStorage，以便刷新后仍保持上次的折叠状态
-  useLayoutEffect(() => {
-    const saved = localStorage.getItem('sidebarCollapsed');
-    if (saved !== null) {
-      const val = JSON.parse(saved);
-      setIsCollapsed(val);
-      window.__sidebarCollapsed = val;
-    }
-  }, []);
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(
+    getInitialSidebarCollapsed,
+  );
 
   // 当折叠状态变化时，同步到 <html> data 属性，供首屏 CSS 使用
   useLayoutEffect(() => {
