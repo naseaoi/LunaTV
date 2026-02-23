@@ -1,8 +1,9 @@
 # ---- 第 1 阶段：安装依赖 ----
-FROM node:20-alpine AS deps
+FROM node:20-bookworm-slim AS deps
 
-# better-sqlite3 等原生 addon 在 arm64/musl 上无预编译二进制，需 node-gyp 编译
-RUN apk add --no-cache python3 make g++
+# better-sqlite3 等原生 addon 需要 node-gyp 编译工具链
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
 
 # 启用 corepack 并激活 pnpm（版本与 package.json packageManager 字段一致）
 RUN corepack enable && corepack prepare pnpm@10.14.0 --activate
@@ -16,7 +17,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
 # ---- 第 2 阶段：构建项目 ----
-FROM node:20-alpine AS builder
+FROM node:20-bookworm-slim AS builder
 RUN corepack enable && corepack prepare pnpm@10.14.0 --activate
 WORKDIR /app
 
@@ -32,10 +33,10 @@ ENV DOCKER_ENV=true
 RUN pnpm run build
 
 # ---- 第 3 阶段：生成运行时镜像 ----
-FROM node:20-alpine AS runner
+FROM node:20-bookworm-slim AS runner
 
 # 创建非 root 用户
-RUN addgroup -g 1001 -S nodejs && adduser -u 1001 -S nextjs -G nodejs
+RUN groupadd --gid 1001 nodejs && useradd --uid 1001 --gid nodejs --create-home --shell /usr/sbin/nologin nextjs
 RUN mkdir -p /data && chown -R nextjs:nodejs /data
 
 WORKDIR /app

@@ -22,6 +22,7 @@ permissions:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - platform: linux/amd64
@@ -66,6 +67,8 @@ jobs:
       - name: Build and push by digest
         id: build
         uses: docker/build-push-action@v5
+        env:
+          BUILDKIT_PROGRESS: plain
         with:
           context: .
           file: ./Dockerfile
