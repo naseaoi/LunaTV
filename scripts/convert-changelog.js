@@ -1,7 +1,5 @@
 #!/usr/bin / env node
 
-/* eslint-disable */
-
 const fs = require('fs');
 const path = require('path');
 
@@ -17,7 +15,7 @@ function parseChangelog(content) {
 
     // 匹配版本行: ## [X.Y.Z] - YYYY-MM-DD
     const versionMatch = trimmedLine.match(
-      /^## \[([\d.]+)\] - (\d{4}-\d{2}-\d{2})$/
+      /^## \[([\d.]+)\] - (\d{4}-\d{2}-\d{2})$/,
     );
     if (versionMatch) {
       if (currentVersion) {
@@ -134,17 +132,6 @@ export default changelog;
 `;
 }
 
-function updateVersionFile(version) {
-  const versionTxtPath = path.join(process.cwd(), 'VERSION.txt');
-  try {
-    fs.writeFileSync(versionTxtPath, version, 'utf8');
-    console.log(`✅ 已更新 VERSION.txt: ${version}`);
-  } catch (error) {
-    console.error(`❌ 无法更新 VERSION.txt:`, error.message);
-    process.exit(1);
-  }
-}
-
 function updateVersionTs(version) {
   const versionTsPath = path.join(process.cwd(), 'src/lib/version.ts');
   try {
@@ -153,7 +140,7 @@ function updateVersionTs(version) {
     // 替换 CURRENT_VERSION 常量
     const updatedContent = content.replace(
       /const CURRENT_VERSION = ['"`][^'"`]+['"`];/,
-      `const CURRENT_VERSION = '${version}';`
+      `const CURRENT_VERSION = '${version}';`,
     );
 
     fs.writeFileSync(versionTsPath, updatedContent, 'utf8');
@@ -199,21 +186,20 @@ function main() {
     const isGitHubActions = process.env.GITHUB_ACTIONS === 'true';
 
     if (isGitHubActions) {
-      // 在 GitHub Actions 中，更新版本文件
-      console.log('正在更新版本文件...');
-      updateVersionFile(latestVersion);
+      // 在 GitHub Actions 中，更新版本常量
+      console.log('正在更新版本常量...');
       updateVersionTs(latestVersion);
     } else {
       // 在本地运行时，只提示但不更新版本文件
-      console.log('🔧 本地运行模式：跳过版本文件更新');
-      console.log('💡 版本文件更新将在 git tag 触发的 release 工作流中完成');
+      console.log('🔧 本地运行模式：跳过版本常量更新');
+      console.log('💡 版本常量更新将在 git tag 触发的 release 工作流中完成');
     }
 
     console.log(`✅ 成功生成 ${outputPath}`);
     console.log(`📊 版本统计:`);
     changelogData.versions.forEach((version) => {
       console.log(
-        `   ${version.version} (${version.date}): +${version.added.length} ~${version.changed.length} !${version.fixed.length}`
+        `   ${version.version} (${version.date}): +${version.added.length} ~${version.changed.length} !${version.fixed.length}`,
       );
     });
 

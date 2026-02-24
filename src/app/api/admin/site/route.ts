@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
       DoubanImageProxy,
       DisableYellowFilter,
       FluidSearch,
+      AdBlockMode,
     } = body as {
       SiteName: string;
       Announcement: string;
@@ -45,6 +46,7 @@ export async function POST(request: NextRequest) {
       DoubanImageProxy: string;
       DisableYellowFilter: boolean;
       FluidSearch: boolean;
+      AdBlockMode?: 'player' | 'server';
     };
 
     // 参数校验
@@ -58,7 +60,10 @@ export async function POST(request: NextRequest) {
       typeof DoubanImageProxyType !== 'string' ||
       typeof DoubanImageProxy !== 'string' ||
       typeof DisableYellowFilter !== 'boolean' ||
-      typeof FluidSearch !== 'boolean'
+      typeof FluidSearch !== 'boolean' ||
+      (AdBlockMode !== undefined &&
+        AdBlockMode !== 'player' &&
+        AdBlockMode !== 'server')
     ) {
       return NextResponse.json({ error: '参数格式错误' }, { status: 400 });
     }
@@ -77,6 +82,7 @@ export async function POST(request: NextRequest) {
       DoubanImageProxy,
       DisableYellowFilter,
       FluidSearch,
+      AdBlockMode: AdBlockMode || 'player',
     };
 
     // 写入数据库

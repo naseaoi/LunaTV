@@ -15,6 +15,7 @@ export interface RuntimeConfig {
   DISABLE_YELLOW_FILTER: boolean;
   CUSTOM_CATEGORIES: { name: string; type: 'movie' | 'tv'; query: string }[];
   FLUID_SEARCH: boolean;
+  PLAY_AD_BLOCK_MODE: 'player' | 'server';
 }
 
 declare global {

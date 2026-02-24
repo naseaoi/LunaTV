@@ -53,15 +53,6 @@ export function getPrimaryRepoUrl(): string {
   return `https://github.com/${repos[0]}`;
 }
 
-export function buildVersionUrls(): string[] {
-  const branch = getUpdateBranch();
-
-  return getUpdateRepos().flatMap((repo) => [
-    `https://raw.githubusercontent.com/${repo}/${branch}/VERSION.txt`,
-    `https://raw.githubusercontent.com/${repo}/${branch}/VERSION`,
-  ]);
-}
-
 export function buildChangelogUrls(): string[] {
   const branch = getUpdateBranch();
 

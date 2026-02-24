@@ -26,17 +26,20 @@ const SiteConfigComponent = ({
     Announcement: '',
     SearchDownstreamMaxPage: 1,
     SiteInterfaceCacheTime: 7200,
-    DoubanProxyType: 'cmliussss-cdn-tencent',
+    DoubanProxyType: 'direct',
     DoubanProxy: '',
     DoubanImageProxyType: 'cmliussss-cdn-tencent',
     DoubanImageProxy: '',
     DisableYellowFilter: false,
     FluidSearch: true,
+    AdBlockMode: 'player',
   });
 
   // 豆瓣数据源相关状态
   const [isDoubanDropdownOpen, setIsDoubanDropdownOpen] = useState(false);
   const [isDoubanImageProxyDropdownOpen, setIsDoubanImageProxyDropdownOpen] =
+    useState(false);
+  const [isAdBlockModeDropdownOpen, setIsAdBlockModeDropdownOpen] =
     useState(false);
 
   // 豆瓣数据源选项
@@ -64,6 +67,11 @@ const SiteConfigComponent = ({
     { value: 'custom', label: '自定义代理' },
   ];
 
+  const adBlockModeOptions = [
+    { value: 'player', label: '播放器侧处理（省服务器流量，可能闪帧）' },
+    { value: 'server', label: '服务器预处理（更无感，消耗服务器流量）' },
+  ];
+
   // 获取感谢信息
   const getThanksInfo = (dataSource: string) => {
     switch (dataSource) {
@@ -87,14 +95,14 @@ const SiteConfigComponent = ({
     if (config?.SiteConfig) {
       setSiteSettings({
         ...config.SiteConfig,
-        DoubanProxyType:
-          config.SiteConfig.DoubanProxyType || 'cmliussss-cdn-tencent',
+        DoubanProxyType: config.SiteConfig.DoubanProxyType || 'direct',
         DoubanProxy: config.SiteConfig.DoubanProxy || '',
         DoubanImageProxyType:
           config.SiteConfig.DoubanImageProxyType || 'cmliussss-cdn-tencent',
         DoubanImageProxy: config.SiteConfig.DoubanImageProxy || '',
         DisableYellowFilter: config.SiteConfig.DisableYellowFilter || false,
         FluidSearch: config.SiteConfig.FluidSearch || true,
+        AdBlockMode: config.SiteConfig.AdBlockMode || 'player',
       });
     }
   }, [config]);
@@ -133,6 +141,23 @@ const SiteConfigComponent = ({
         document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [isDoubanImageProxyDropdownOpen]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isAdBlockModeDropdownOpen) {
+        const target = event.target as Element;
+        if (!target.closest('[data-dropdown="adblock-mode"]')) {
+          setIsAdBlockModeDropdownOpen(false);
+        }
+      }
+    };
+
+    if (isAdBlockModeDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () =>
+        document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isAdBlockModeDropdownOpen]);
 
   // 处理豆瓣数据源变化
   const handleDoubanDataSourceChange = (value: string) => {
@@ -448,6 +473,66 @@ const SiteConfigComponent = ({
             }
             className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
           />
+        </div>
+
+        <div>
+          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+            去广告处理模式
+          </label>
+          <div className='relative' data-dropdown='adblock-mode'>
+            <button
+              type='button'
+              onClick={() =>
+                setIsAdBlockModeDropdownOpen(!isAdBlockModeDropdownOpen)
+              }
+              className='w-full px-3 py-2.5 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm hover:border-gray-400 dark:hover:border-gray-500 text-left'
+            >
+              {
+                adBlockModeOptions.find(
+                  (option) =>
+                    option.value === (siteSettings.AdBlockMode || 'player'),
+                )?.label
+              }
+            </button>
+            <div className='absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none'>
+              <ChevronDown
+                className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${
+                  isAdBlockModeDropdownOpen ? 'rotate-180' : ''
+                }`}
+              />
+            </div>
+            {isAdBlockModeDropdownOpen && (
+              <div className='absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-auto'>
+                {adBlockModeOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type='button'
+                    onClick={() => {
+                      setSiteSettings((prev) => ({
+                        ...prev,
+                        AdBlockMode: option.value as 'player' | 'server',
+                      }));
+                      setIsAdBlockModeDropdownOpen(false);
+                    }}
+                    className={`w-full px-3 py-2.5 text-left text-sm transition-colors duration-150 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                      (siteSettings.AdBlockMode || 'player') === option.value
+                        ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
+                        : 'text-gray-900 dark:text-gray-100'
+                    }`}
+                  >
+                    <span className='truncate'>{option.label}</span>
+                    {(siteSettings.AdBlockMode || 'player') ===
+                      option.value && (
+                      <Check className='w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 ml-2' />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+            仅影响播放页“去广告”开启时的处理方式。
+          </p>
         </div>
       </div>
 

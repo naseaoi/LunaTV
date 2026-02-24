@@ -2,11 +2,31 @@
 const fs = require('fs');
 const path = require('path');
 
-const versionFilePath = path.join(__dirname, 'VERSION.txt');
 let appVersion = '100.0.3';
 
+function extractLatestVersionFromChangelog(content) {
+  const match = content.match(/^## \[([\d.]+)\] - \d{4}-\d{2}-\d{2}/m);
+  return match?.[1]?.trim() || null;
+}
+
 try {
-  appVersion = fs.readFileSync(versionFilePath, 'utf8').trim() || appVersion;
+  const changelogPaths = [
+    path.join(__dirname, 'CHANGELOG'),
+    path.join(__dirname, 'CHANGELOG.md'),
+  ];
+
+  for (const changelogPath of changelogPaths) {
+    if (!fs.existsSync(changelogPath)) {
+      continue;
+    }
+
+    const content = fs.readFileSync(changelogPath, 'utf8');
+    const latestVersion = extractLatestVersionFromChangelog(content);
+    if (latestVersion) {
+      appVersion = latestVersion;
+      break;
+    }
+  }
 } catch {
   // Ignore and keep fallback version.
 }

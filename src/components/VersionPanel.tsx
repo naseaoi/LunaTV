@@ -111,6 +111,42 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
     }
   };
 
+  const localVersions = changelog.map((entry) => entry.version);
+  const remoteNewEntries = remoteChangelog.filter(
+    (entry) => !localVersions.includes(entry.version),
+  );
+  const shouldInjectLatestFallback =
+    hasUpdate &&
+    !!latestVersion &&
+    !localVersions.includes(latestVersion) &&
+    !remoteNewEntries.some((entry) => entry.version === latestVersion);
+
+  const remoteLatestFallbackEntry: ChangelogEntry | null =
+    shouldInjectLatestFallback
+      ? {
+          version: latestVersion,
+          date: '日期未知',
+          added: [],
+          changed: ['已检测到远程最新版本，暂未获取到该版本完整更新日志。'],
+          fixed: [],
+        }
+      : null;
+
+  const remoteDisplayEntries = remoteLatestFallbackEntry
+    ? [remoteLatestFallbackEntry, ...remoteNewEntries]
+    : remoteNewEntries;
+
+  const mergedChangelogEntries = [
+    ...remoteDisplayEntries.map((entry) => ({
+      entry,
+      isRemote: true,
+    })),
+    ...changelog.map((entry) => ({
+      entry,
+      isRemote: false,
+    })),
+  ];
+
   // 渲染变更日志条目
   const renderChangelogEntry = (
     entry: ChangelogEntry | RemoteChangelogEntry,
@@ -367,102 +403,94 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
                   </button>
                 </div>
 
-                {showRemoteContent && remoteChangelog.length > 0 && (
+                {showRemoteContent && remoteDisplayEntries.length > 0 && (
                   <div className='space-y-4'>
-                    {remoteChangelog
-                      .filter((entry) => {
-                        // 找到第一个本地版本，过滤掉本地已有的版本
-                        const localVersions = changelog.map(
-                          (local) => local.version,
-                        );
-                        return !localVersions.includes(entry.version);
-                      })
-                      .map((entry, index) => (
-                        <div
-                          key={index}
-                          className={`p-4 rounded-lg border ${
-                            entry.version === latestVersion
-                              ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
-                              : 'bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700'
-                          }`}
-                        >
-                          <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3'>
-                            <div className='flex flex-wrap items-center gap-2'>
-                              <h4 className='text-lg font-semibold text-gray-900 dark:text-gray-100'>
-                                v{entry.version}
-                              </h4>
-                              {entry.version === latestVersion && (
-                                <span className='px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 rounded-full flex items-center gap-1'>
-                                  远程最新
-                                </span>
-                              )}
-                            </div>
-                            <div className='flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400'>
-                              {entry.date}
-                            </div>
+                    {remoteDisplayEntries.map((entry) => (
+                      <div
+                        key={entry.version}
+                        className={`p-4 rounded-lg border ${
+                          entry.version === latestVersion
+                            ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
+                            : 'bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700'
+                        }`}
+                      >
+                        <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3'>
+                          <div className='flex flex-wrap items-center gap-2'>
+                            <h4 className='text-lg font-semibold text-gray-900 dark:text-gray-100'>
+                              v{entry.version}
+                            </h4>
+                            {entry.version === latestVersion && (
+                              <span className='px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 rounded-full flex items-center gap-1'>
+                                远程最新
+                              </span>
+                            )}
                           </div>
-
-                          {entry.added && entry.added.length > 0 && (
-                            <div className='mb-3'>
-                              <h5 className='text-sm font-medium text-green-600 dark:text-green-400 mb-2 flex items-center gap-1'>
-                                <Plus className='w-4 h-4' />
-                                新增功能
-                              </h5>
-                              <ul className='space-y-1'>
-                                {entry.added.map((item, itemIndex) => (
-                                  <li
-                                    key={itemIndex}
-                                    className='text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2'
-                                  >
-                                    <span className='w-1.5 h-1.5 bg-green-400 rounded-full mt-2 flex-shrink-0'></span>
-                                    {item}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-
-                          {entry.changed && entry.changed.length > 0 && (
-                            <div className='mb-3'>
-                              <h5 className='text-sm font-medium text-blue-600 dark:text-blue-400 mb-2 flex items-center gap-1'>
-                                <RefreshCw className='w-4 h-4' />
-                                功能改进
-                              </h5>
-                              <ul className='space-y-1'>
-                                {entry.changed.map((item, itemIndex) => (
-                                  <li
-                                    key={itemIndex}
-                                    className='text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2'
-                                  >
-                                    <span className='w-1.5 h-1.5 bg-blue-400 rounded-full mt-2 flex-shrink-0'></span>
-                                    {item}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-
-                          {entry.fixed && entry.fixed.length > 0 && (
-                            <div>
-                              <h5 className='text-sm font-medium text-purple-700 dark:text-purple-400 mb-2 flex items-center gap-1'>
-                                <Bug className='w-4 h-4' />
-                                问题修复
-                              </h5>
-                              <ul className='space-y-1'>
-                                {entry.fixed.map((item, itemIndex) => (
-                                  <li
-                                    key={itemIndex}
-                                    className='text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2'
-                                  >
-                                    <span className='w-1.5 h-1.5 bg-purple-500 rounded-full mt-2 flex-shrink-0'></span>
-                                    {item}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
+                          <div className='flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400'>
+                            {entry.date}
+                          </div>
                         </div>
-                      ))}
+
+                        {entry.added && entry.added.length > 0 && (
+                          <div className='mb-3'>
+                            <h5 className='text-sm font-medium text-green-600 dark:text-green-400 mb-2 flex items-center gap-1'>
+                              <Plus className='w-4 h-4' />
+                              新增功能
+                            </h5>
+                            <ul className='space-y-1'>
+                              {entry.added.map((item, itemIndex) => (
+                                <li
+                                  key={itemIndex}
+                                  className='text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2'
+                                >
+                                  <span className='w-1.5 h-1.5 bg-green-400 rounded-full mt-2 flex-shrink-0'></span>
+                                  {item}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {entry.changed && entry.changed.length > 0 && (
+                          <div className='mb-3'>
+                            <h5 className='text-sm font-medium text-blue-600 dark:text-blue-400 mb-2 flex items-center gap-1'>
+                              <RefreshCw className='w-4 h-4' />
+                              功能改进
+                            </h5>
+                            <ul className='space-y-1'>
+                              {entry.changed.map((item, itemIndex) => (
+                                <li
+                                  key={itemIndex}
+                                  className='text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2'
+                                >
+                                  <span className='w-1.5 h-1.5 bg-blue-400 rounded-full mt-2 flex-shrink-0'></span>
+                                  {item}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {entry.fixed && entry.fixed.length > 0 && (
+                          <div>
+                            <h5 className='text-sm font-medium text-purple-700 dark:text-purple-400 mb-2 flex items-center gap-1'>
+                              <Bug className='w-4 h-4' />
+                              问题修复
+                            </h5>
+                            <ul className='space-y-1'>
+                              {entry.fixed.map((item, itemIndex) => (
+                                <li
+                                  key={itemIndex}
+                                  className='text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2'
+                                >
+                                  <span className='w-1.5 h-1.5 bg-purple-500 rounded-full mt-2 flex-shrink-0'></span>
+                                  {item}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -476,11 +504,11 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
 
               <div className='space-y-4'>
                 {/* 本地变更日志 */}
-                {changelog.map((entry) =>
+                {mergedChangelogEntries.map(({ entry, isRemote }) =>
                   renderChangelogEntry(
                     entry,
                     entry.version === CURRENT_VERSION,
-                    false,
+                    isRemote,
                   ),
                 )}
               </div>

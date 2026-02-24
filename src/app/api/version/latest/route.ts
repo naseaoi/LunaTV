@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 
 import {
   buildChangelogUrls,
-  buildVersionUrls,
   getUpdateBranch,
   getUpdateRepos,
 } from '@/lib/update_source';
@@ -80,24 +79,15 @@ function parseChangelog(content: string): RemoteChangelogEntry[] {
   return versions;
 }
 
-async function fetchVersionFromUrl(url: string): Promise<string | null> {
-  try {
-    const response = await fetch(url, { method: 'GET' });
-    if (!response.ok) {
-      return null;
-    }
-
-    const text = await response.text();
-    const version = text.trim();
-    return version || null;
-  } catch {
-    return null;
-  }
+function extractLatestVersionFromChangelog(content: string): string | null {
+  const match = content.match(/^## \[([\d.]+)\] - \d{4}-\d{2}-\d{2}/m);
+  return match?.[1]?.trim() || null;
 }
 
-async function fetchChangelogFromUrl(
-  url: string,
-): Promise<RemoteChangelogEntry[] | null> {
+async function fetchChangelogFromUrl(url: string): Promise<{
+  latestVersion: string | null;
+  changelog: RemoteChangelogEntry[];
+} | null> {
   try {
     const response = await fetch(url, { method: 'GET' });
     if (!response.ok) {
@@ -105,8 +95,16 @@ async function fetchChangelogFromUrl(
     }
 
     const content = await response.text();
+    const latestVersion = extractLatestVersionFromChangelog(content);
     const parsed = parseChangelog(content);
-    return parsed.length > 0 ? parsed : null;
+    if (!latestVersion && parsed.length === 0) {
+      return null;
+    }
+
+    return {
+      latestVersion: latestVersion || parsed[0]?.version || null,
+      changelog: parsed,
+    };
   } catch {
     return null;
   }
@@ -119,17 +117,11 @@ export async function GET() {
   let latestVersion: string | null = null;
   let changelog: RemoteChangelogEntry[] = [];
 
-  for (const url of buildVersionUrls()) {
-    latestVersion = await fetchVersionFromUrl(url);
-    if (latestVersion) {
-      break;
-    }
-  }
-
   for (const url of buildChangelogUrls()) {
-    const parsed = await fetchChangelogFromUrl(url);
-    if (parsed) {
-      changelog = parsed;
+    const result = await fetchChangelogFromUrl(url);
+    if (result) {
+      latestVersion = result.latestVersion;
+      changelog = result.changelog;
       break;
     }
   }

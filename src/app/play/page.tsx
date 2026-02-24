@@ -10,6 +10,7 @@ import {
   getSkipConfig,
   saveSkipConfig,
 } from '@/lib/db.client';
+import { getRuntimeConfig } from '@/lib/runtime-config';
 import { SearchResult } from '@/lib/types';
 
 import { PlayMainContent } from '@/features/play/components/PlayMainContent';
@@ -22,7 +23,6 @@ import { useKeyboardShortcuts } from '@/features/play/hooks/useKeyboardShortcuts
 import { usePlayFavorite } from '@/features/play/hooks/usePlayFavorite';
 import { usePlayInit, updateVideoUrl } from '@/features/play/hooks/usePlayInit';
 import { usePlayProgress } from '@/features/play/hooks/usePlayProgress';
-import { AdRange } from '@/features/play/lib/playUtils';
 import {
   AUTH_LOST_EVENT,
   SessionLostDetail,
@@ -66,9 +66,6 @@ function PlayPageClient() {
 
   // 跳过检查时间间隔控制
   const lastSkipCheckRef = useRef(0);
-  const adSegmentRangesRef = useRef<AdRange[]>([]);
-  const lastAdJumpAtRef = useRef(0);
-  const lastAdRangeKeyRef = useRef('');
 
   // 去广告开关
   const [blockAdEnabled, setBlockAdEnabled] = useState<boolean>(() => {
@@ -82,6 +79,10 @@ function PlayPageClient() {
   useEffect(() => {
     blockAdEnabledRef.current = blockAdEnabled;
   }, [blockAdEnabled]);
+  const [adBlockMode] = useState<'player' | 'server'>(() => {
+    const mode = getRuntimeConfig()?.PLAY_AD_BLOCK_MODE;
+    return mode === 'server' ? 'server' : 'player';
+  });
 
   // 视频基本信息
   const [videoTitle, setVideoTitle] = useState(searchParams.get('title') || '');
@@ -590,6 +591,7 @@ function PlayPageClient() {
     detail,
     currentEpisodeIndex,
     totalEpisodes,
+    adBlockMode,
     blockAdEnabled,
     blockAdEnabledRef,
     skipConfigRef,
@@ -597,9 +599,6 @@ function PlayPageClient() {
     lastVolumeRef,
     lastPlaybackRateRef,
     lastSkipCheckRef,
-    adSegmentRangesRef,
-    lastAdJumpAtRef,
-    lastAdRangeKeyRef,
     lastSaveTimeRef,
     detailRef,
     currentEpisodeIndexRef,

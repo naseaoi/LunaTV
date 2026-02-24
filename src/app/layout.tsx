@@ -55,8 +55,7 @@ export default async function RootLayout({
     process.env.ANNOUNCEMENT ||
     '本网站仅提供影视信息搜索服务，所有内容均来自第三方网站。本站不存储任何视频资源，不对任何内容的准确性、合法性、完整性负责。';
 
-  let doubanProxyType =
-    process.env.NEXT_PUBLIC_DOUBAN_PROXY_TYPE || 'cmliussss-cdn-tencent';
+  let doubanProxyType = process.env.NEXT_PUBLIC_DOUBAN_PROXY_TYPE || 'direct';
   let doubanProxy = process.env.NEXT_PUBLIC_DOUBAN_PROXY || '';
   let doubanImageProxyType =
     process.env.NEXT_PUBLIC_DOUBAN_IMAGE_PROXY_TYPE || 'cmliussss-cdn-tencent';
@@ -64,6 +63,7 @@ export default async function RootLayout({
   let disableYellowFilter =
     process.env.NEXT_PUBLIC_DISABLE_YELLOW_FILTER === 'true';
   let fluidSearch = process.env.NEXT_PUBLIC_FLUID_SEARCH !== 'false';
+  let playAdBlockMode: 'player' | 'server' = 'player';
   let openRegister = false;
   let customCategories = [] as {
     name: string;
@@ -88,6 +88,8 @@ export default async function RootLayout({
       query: category.query,
     }));
     fluidSearch = config.SiteConfig.FluidSearch;
+    playAdBlockMode =
+      config.SiteConfig.AdBlockMode === 'server' ? 'server' : 'player';
     openRegister = !!config.UserConfig.OpenRegister;
   }
 
@@ -106,6 +108,7 @@ export default async function RootLayout({
     DISABLE_YELLOW_FILTER: disableYellowFilter,
     CUSTOM_CATEGORIES: customCategories,
     FLUID_SEARCH: fluidSearch,
+    PLAY_AD_BLOCK_MODE: playAdBlockMode,
   };
 
   return (

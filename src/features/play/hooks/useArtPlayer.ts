@@ -5,14 +5,6 @@ import Hls from 'hls.js';
 
 import { SearchResult } from '@/lib/types';
 
-import {
-  AD_KEYWORD_RE,
-  AD_TAG_RE,
-  AdRange,
-  collectAdRangesFromM3U8,
-  isLikelyAdUri,
-  mergeAdRanges,
-} from '@/features/play/lib/playUtils';
 import { WakeLockSentinel } from '@/features/play/lib/playTypes';
 
 // ---------------------------------------------------------------------------
@@ -53,6 +45,19 @@ function formatBytesPerSecond(bytesPerSecond: number): string {
   return `${kb.toFixed(1)} KB/s`;
 }
 
+function filterAdsFromM3U8(m3u8Content: string): string {
+  if (!m3u8Content) return '';
+  const lines = m3u8Content.split('\n');
+  const filteredLines: string[] = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (!line.includes('#EXT-X-DISCONTINUITY')) {
+      filteredLines.push(line);
+    }
+  }
+  return filteredLines.join('\n');
+}
+
 // ---------------------------------------------------------------------------
 // 类型
 // ---------------------------------------------------------------------------
@@ -73,6 +78,7 @@ export interface UseArtPlayerParams {
   detail: SearchResult | null;
   currentEpisodeIndex: number;
   totalEpisodes: number;
+  adBlockMode: 'player' | 'server';
   blockAdEnabled: boolean;
   blockAdEnabledRef: MutableRefObject<boolean>;
   skipConfigRef: MutableRefObject<SkipConfig>;
@@ -80,9 +86,6 @@ export interface UseArtPlayerParams {
   lastVolumeRef: MutableRefObject<number>;
   lastPlaybackRateRef: MutableRefObject<number>;
   lastSkipCheckRef: MutableRefObject<number>;
-  adSegmentRangesRef: MutableRefObject<AdRange[]>;
-  lastAdJumpAtRef: MutableRefObject<number>;
-  lastAdRangeKeyRef: MutableRefObject<string>;
   lastSaveTimeRef: MutableRefObject<number>;
   detailRef: MutableRefObject<SearchResult | null>;
   currentEpisodeIndexRef: MutableRefObject<number>;
@@ -115,6 +118,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
     detail,
     currentEpisodeIndex,
     totalEpisodes,
+    adBlockMode,
     blockAdEnabled,
     blockAdEnabledRef,
     skipConfigRef,
@@ -122,9 +126,6 @@ export function useArtPlayer(params: UseArtPlayerParams) {
     lastVolumeRef,
     lastPlaybackRateRef,
     lastSkipCheckRef,
-    adSegmentRangesRef,
-    lastAdJumpAtRef,
-    lastAdRangeKeyRef,
     lastSaveTimeRef,
     detailRef,
     currentEpisodeIndexRef,
@@ -140,84 +141,6 @@ export function useArtPlayer(params: UseArtPlayerParams) {
     releaseWakeLock,
     cleanupPlayer,
   } = params;
-
-  // --- 广告过滤辅助 ---
-
-  const appendAdRanges = (ranges: AdRange[]) => {
-    if (!ranges.length) return;
-    adSegmentRangesRef.current = mergeAdRanges([
-      ...adSegmentRangesRef.current,
-      ...ranges,
-    ]);
-  };
-
-  const skipAdRangeByCurrentTime = (): boolean => {
-    const player = artPlayerRef.current;
-    if (!player || !blockAdEnabledRef.current) return false;
-    const currentTime = player.currentTime || 0;
-    const duration = player.duration || 0;
-    if (duration <= 0 || currentTime <= 0) return false;
-
-    const hitRange = adSegmentRangesRef.current.find(
-      (range) =>
-        currentTime >= Math.max(0, range.start - 0.12) &&
-        currentTime < range.end - 0.05,
-    );
-    if (!hitRange) return false;
-
-    const now = Date.now();
-    const rangeKey = `${hitRange.start.toFixed(2)}-${hitRange.end.toFixed(2)}`;
-    if (
-      rangeKey === lastAdRangeKeyRef.current &&
-      now - lastAdJumpAtRef.current < 600
-    )
-      return false;
-
-    const target = Math.min(
-      duration - 0.3,
-      Math.max(currentTime + 0.5, hitRange.end + 0.08),
-    );
-    if (!Number.isFinite(target) || target <= currentTime + 0.05) return false;
-
-    player.currentTime = target;
-    lastAdJumpAtRef.current = now;
-    lastAdRangeKeyRef.current = rangeKey;
-    player.notice.show = '已自动跳过广告片段';
-    return true;
-  };
-
-  const skipAdFragment = (frag: Record<string, unknown>): boolean => {
-    if (!frag || !blockAdEnabledRef.current || !artPlayerRef.current)
-      return false;
-
-    const fragUrl = String(frag.url || frag.relurl || '');
-    const byUrl = isLikelyAdUri(fragUrl);
-    const byTitle =
-      typeof frag.title === 'string' && AD_KEYWORD_RE.test(frag.title);
-    const byTags =
-      Array.isArray(frag.tagList) &&
-      (frag.tagList as Array<unknown[]>).some((tag) => {
-        const tagName = String(tag?.[0] || '');
-        const tagValue = String(tag?.[1] || '');
-        const normalizedTagName = tagName.startsWith('#')
-          ? tagName
-          : `#${tagName}`;
-        return AD_TAG_RE.test(`${normalizedTagName}:${tagValue}`);
-      });
-
-    if (!byUrl && !byTitle && !byTags) return false;
-
-    const start = Number(frag.start) || 0;
-    const fragDuration = Number(frag.duration) || 0;
-    const target = start + fragDuration + 0.08;
-    const current = artPlayerRef.current.currentTime || 0;
-    if (target <= current + 0.05) return false;
-
-    artPlayerRef.current.currentTime = target;
-    artPlayerRef.current.notice.show = '已自动跳过广告片段';
-    lastAdJumpAtRef.current = Date.now();
-    return true;
-  };
 
   // --- 主 useEffect ---
 
@@ -272,8 +195,6 @@ export function useArtPlayer(params: UseArtPlayerParams) {
       cleanupPlayer();
     }
 
-    // CustomHlsJsLoader: HLS.js loader 内部类型极其复杂，
-    // 原代码也使用 any 来处理，这里用类型断言桥接。
     class CustomHlsJsLoader extends (Hls.DefaultConfig.loader as unknown as {
       new (config: unknown): { load: (...args: unknown[]) => void };
     }) {
@@ -289,7 +210,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
           const cbs = callbacks as {
             onSuccess: (...args: unknown[]) => unknown;
           };
-          if (ctx.type === 'manifest') {
+          if (ctx.type === 'manifest' || ctx.type === 'level') {
             const onSuccess = cbs.onSuccess;
             cbs.onSuccess = function (
               response: unknown,
@@ -298,8 +219,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
             ) {
               const resp = response as { data?: unknown };
               if (resp.data && typeof resp.data === 'string') {
-                const ranges = collectAdRangesFromM3U8(resp.data);
-                appendAdRanges(ranges);
+                resp.data = filterAdsFromM3U8(resp.data);
               }
               return onSuccess(response, stats, cbCtx, null);
             };
@@ -363,14 +283,17 @@ export function useArtPlayer(params: UseArtPlayerParams) {
               maxBufferLength: 30,
               backBufferLength: 30,
               maxBufferSize: 60 * 1000 * 1000,
-              loader: blockAdEnabledRef.current
-                ? (CustomHlsJsLoader as unknown as typeof Hls.DefaultConfig.loader)
-                : Hls.DefaultConfig.loader,
+              loader:
+                blockAdEnabledRef.current && adBlockMode === 'player'
+                  ? (CustomHlsJsLoader as unknown as typeof Hls.DefaultConfig.loader)
+                  : Hls.DefaultConfig.loader,
             });
 
-            adSegmentRangesRef.current = [];
-            lastAdJumpAtRef.current = 0;
-            lastAdRangeKeyRef.current = '';
+            const targetUrl =
+              blockAdEnabledRef.current && adBlockMode === 'server'
+                ? `/api/proxy/m3u8?url=${encodeURIComponent(url)}&removeAds=true`
+                : url;
+
             setRealtimeLoadSpeed('测速中...');
 
             const speedFallbackTimer = setTimeout(() => {
@@ -378,11 +301,6 @@ export function useArtPlayer(params: UseArtPlayerParams) {
                 prev === '测速中...' ? '0 KB/s' : prev,
               );
             }, 5000);
-
-            hls.loadSource(url);
-            hls.attachMedia(video);
-            video.hls = hls;
-            ensureVideoSource(video, url);
 
             hls.on(Hls.Events.ERROR, function (_event, data) {
               console.error('HLS Error:', _event, data);
@@ -401,59 +319,6 @@ export function useArtPlayer(params: UseArtPlayerParams) {
               }
             });
 
-            hls.on(Hls.Events.FRAG_CHANGED, function (_, data) {
-              if (!blockAdEnabledRef.current) return;
-              skipAdFragment(data.frag as unknown as Record<string, unknown>);
-            });
-
-            hls.on(Hls.Events.LEVEL_LOADED, function (_, data) {
-              if (!blockAdEnabledRef.current) return;
-              const fragments = (
-                data as { details?: { fragments?: unknown[] } }
-              ).details?.fragments;
-              if (!Array.isArray(fragments) || !fragments.length) return;
-
-              const ranges: AdRange[] = [];
-              for (const fragItem of fragments) {
-                const frag = fragItem as Record<string, unknown>;
-                const fragUrl = String(frag.url || frag.relurl || '');
-                const byUrl = isLikelyAdUri(fragUrl);
-                const byTitle =
-                  typeof frag.title === 'string' &&
-                  AD_KEYWORD_RE.test(frag.title);
-                const byTags =
-                  Array.isArray(frag.tagList) &&
-                  (frag.tagList as Array<unknown[]>).some((tag) => {
-                    const tagName = String(tag?.[0] || '');
-                    const tagValue = String(tag?.[1] || '');
-                    const normalizedTagName = tagName.startsWith('#')
-                      ? tagName
-                      : `#${tagName}`;
-                    return AD_TAG_RE.test(`${normalizedTagName}:${tagValue}`);
-                  });
-
-                if (!byUrl && !byTitle && !byTags) continue;
-
-                const start = Number(frag.start);
-                const fragDuration = Number(frag.duration);
-                if (
-                  !Number.isFinite(start) ||
-                  !Number.isFinite(fragDuration) ||
-                  fragDuration <= 0
-                ) {
-                  continue;
-                }
-
-                ranges.push({
-                  start,
-                  end: start + fragDuration,
-                  reason: byTags ? 'tag' : byUrl ? 'uri' : 'title',
-                });
-              }
-
-              appendAdRanges(ranges);
-            });
-
             hls.on(Hls.Events.FRAG_LOADED, function (_, data) {
               clearTimeout(speedFallbackTimer);
               const stats = data.frag.stats;
@@ -468,6 +333,11 @@ export function useArtPlayer(params: UseArtPlayerParams) {
                 setRealtimeLoadSpeed('0 KB/s');
               }
             });
+
+            hls.loadSource(targetUrl);
+            hls.attachMedia(video);
+            video.hls = hls;
+            ensureVideoSource(video, targetUrl);
           },
         },
         icons: {
@@ -664,9 +534,8 @@ export function useArtPlayer(params: UseArtPlayerParams) {
         setRealtimeLoadSpeed('');
       });
 
-      // 跳过片头片尾 + 广告跳过
+      // 跳过片头片尾
       artPlayerRef.current.on('video:timeupdate', () => {
-        if (blockAdEnabledRef.current) skipAdRangeByCurrentTime();
         if (!skipConfigRef.current.enable) return;
         if (!artPlayerRef.current) return;
 
@@ -743,5 +612,5 @@ export function useArtPlayer(params: UseArtPlayerParams) {
       console.error('创建播放器失败:', err);
       setError('播放器初始化失败');
     }
-  }, [Artplayer, Hls, videoUrl, loading, blockAdEnabled]);
+  }, [Artplayer, Hls, videoUrl, loading, blockAdEnabled, adBlockMode]);
 }

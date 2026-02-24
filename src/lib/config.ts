@@ -210,8 +210,7 @@ async function getInitConfig(
       SearchDownstreamMaxPage:
         Number(process.env.NEXT_PUBLIC_SEARCH_MAX_PAGE) || 5,
       SiteInterfaceCacheTime: cfgFile.cache_time || 7200,
-      DoubanProxyType:
-        process.env.NEXT_PUBLIC_DOUBAN_PROXY_TYPE || 'cmliussss-cdn-tencent',
+      DoubanProxyType: process.env.NEXT_PUBLIC_DOUBAN_PROXY_TYPE || 'direct',
       DoubanProxy: process.env.NEXT_PUBLIC_DOUBAN_PROXY || '',
       DoubanImageProxyType:
         process.env.NEXT_PUBLIC_DOUBAN_IMAGE_PROXY_TYPE ||
@@ -220,6 +219,7 @@ async function getInitConfig(
       DisableYellowFilter:
         process.env.NEXT_PUBLIC_DISABLE_YELLOW_FILTER === 'true',
       FluidSearch: process.env.NEXT_PUBLIC_FLUID_SEARCH !== 'false',
+      AdBlockMode: 'player',
     },
     UserConfig: {
       Users: [],
@@ -343,6 +343,33 @@ export function configSelfCheck(adminConfig: AdminConfig): AdminConfig {
   }
   if (!adminConfig.LiveConfig || !Array.isArray(adminConfig.LiveConfig)) {
     adminConfig.LiveConfig = [];
+  }
+  if (!adminConfig.SiteConfig) {
+    adminConfig.SiteConfig = {
+      SiteName: process.env.NEXT_PUBLIC_SITE_NAME || 'IceTV',
+      Announcement:
+        process.env.ANNOUNCEMENT ||
+        '本网站仅提供影视信息搜索服务，所有内容均来自第三方网站。本站不存储任何视频资源，不对任何内容的准确性、合法性、完整性负责。',
+      SearchDownstreamMaxPage:
+        Number(process.env.NEXT_PUBLIC_SEARCH_MAX_PAGE) || 5,
+      SiteInterfaceCacheTime: 7200,
+      DoubanProxyType: process.env.NEXT_PUBLIC_DOUBAN_PROXY_TYPE || 'direct',
+      DoubanProxy: process.env.NEXT_PUBLIC_DOUBAN_PROXY || '',
+      DoubanImageProxyType:
+        process.env.NEXT_PUBLIC_DOUBAN_IMAGE_PROXY_TYPE ||
+        'cmliussss-cdn-tencent',
+      DoubanImageProxy: process.env.NEXT_PUBLIC_DOUBAN_IMAGE_PROXY || '',
+      DisableYellowFilter:
+        process.env.NEXT_PUBLIC_DISABLE_YELLOW_FILTER === 'true',
+      FluidSearch: process.env.NEXT_PUBLIC_FLUID_SEARCH !== 'false',
+      AdBlockMode: 'player',
+    };
+  }
+  if (
+    adminConfig.SiteConfig.AdBlockMode !== 'server' &&
+    adminConfig.SiteConfig.AdBlockMode !== 'player'
+  ) {
+    adminConfig.SiteConfig.AdBlockMode = 'player';
   }
 
   // 站长变更自检

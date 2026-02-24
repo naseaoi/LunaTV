@@ -9,6 +9,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const url = searchParams.get('url');
   const allowCORS = searchParams.get('allowCORS') === 'true';
+  const removeAds = searchParams.get('removeAds') === 'true';
   const source =
     searchParams.get('icetv-source') ||
     searchParams.get('moontv-source') ||
@@ -18,11 +19,13 @@ export async function GET(request: Request) {
   }
 
   const config = await getConfig();
-  const liveSource = config.LiveConfig?.find((s: any) => s.key === source);
-  if (!liveSource) {
+  const liveSource = source
+    ? config.LiveConfig?.find((s: any) => s.key === source)
+    : null;
+  if (source && !liveSource) {
     return NextResponse.json({ error: 'Source not found' }, { status: 404 });
   }
-  const ua = liveSource.ua || 'AptvPlayer/1.4.10';
+  const ua = liveSource?.ua || 'AptvPlayer/1.4.10';
 
   let response: Response | null = null;
   let responseUsed = false;
@@ -66,6 +69,8 @@ export async function GET(request: Request) {
         baseUrl,
         request,
         allowCORS,
+        removeAds,
+        source,
       );
 
       const headers = new Headers();
@@ -129,6 +134,8 @@ function rewriteM3U8Content(
   baseUrl: string,
   req: Request,
   allowCORS: boolean,
+  removeAds: boolean,
+  source: string | null,
 ) {
   // 从 referer 头提取协议信息
   const referer = req.headers.get('referer');
@@ -148,27 +155,46 @@ function rewriteM3U8Content(
   const lines = content.split('\n');
   const rewrittenLines: string[] = [];
 
+  const buildProxyPath = (
+    path: 'segment' | 'm3u8' | 'key',
+    targetUrl: string,
+    extra: Record<string, string> = {},
+  ) => {
+    const params = new URLSearchParams({
+      url: targetUrl,
+      ...extra,
+    });
+    if (source) {
+      params.set('icetv-source', source);
+    }
+    return `${proxyBase}/${path}?${params.toString()}`;
+  };
+
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i].trim();
+
+    if (removeAds && line.includes('#EXT-X-DISCONTINUITY')) {
+      continue;
+    }
 
     // 处理 TS 片段 URL 和其他媒体文件
     if (line && !line.startsWith('#')) {
       const resolvedUrl = resolveUrl(baseUrl, line);
       const proxyUrl = allowCORS
         ? resolvedUrl
-        : `${proxyBase}/segment?url=${encodeURIComponent(resolvedUrl)}`;
+        : buildProxyPath('segment', resolvedUrl);
       rewrittenLines.push(proxyUrl);
       continue;
     }
 
     // 处理 EXT-X-MAP 标签中的 URI
     if (line.startsWith('#EXT-X-MAP:')) {
-      line = rewriteMapUri(line, baseUrl, proxyBase);
+      line = rewriteMapUri(line, baseUrl, proxyBase, source);
     }
 
     // 处理 EXT-X-KEY 标签中的 URI
     if (line.startsWith('#EXT-X-KEY:')) {
-      line = rewriteKeyUri(line, baseUrl, proxyBase);
+      line = rewriteKeyUri(line, baseUrl, proxyBase, source);
     }
 
     // 处理嵌套的 M3U8 文件 (EXT-X-STREAM-INF)
@@ -180,7 +206,9 @@ function rewriteM3U8Content(
         const nextLine = lines[i].trim();
         if (nextLine && !nextLine.startsWith('#')) {
           const resolvedUrl = resolveUrl(baseUrl, nextLine);
-          const proxyUrl = `${proxyBase}/m3u8?url=${encodeURIComponent(resolvedUrl)}`;
+          const proxyUrl = buildProxyPath('m3u8', resolvedUrl, {
+            removeAds: String(removeAds),
+          });
           rewrittenLines.push(proxyUrl);
         } else {
           rewrittenLines.push(nextLine);
@@ -195,23 +223,41 @@ function rewriteM3U8Content(
   return rewrittenLines.join('\n');
 }
 
-function rewriteMapUri(line: string, baseUrl: string, proxyBase: string) {
+function rewriteMapUri(
+  line: string,
+  baseUrl: string,
+  proxyBase: string,
+  source: string | null,
+) {
   const uriMatch = line.match(/URI="([^"]+)"/);
   if (uriMatch) {
     const originalUri = uriMatch[1];
     const resolvedUrl = resolveUrl(baseUrl, originalUri);
-    const proxyUrl = `${proxyBase}/segment?url=${encodeURIComponent(resolvedUrl)}`;
+    const params = new URLSearchParams({ url: resolvedUrl });
+    if (source) {
+      params.set('icetv-source', source);
+    }
+    const proxyUrl = `${proxyBase}/segment?${params.toString()}`;
     return line.replace(uriMatch[0], `URI="${proxyUrl}"`);
   }
   return line;
 }
 
-function rewriteKeyUri(line: string, baseUrl: string, proxyBase: string) {
+function rewriteKeyUri(
+  line: string,
+  baseUrl: string,
+  proxyBase: string,
+  source: string | null,
+) {
   const uriMatch = line.match(/URI="([^"]+)"/);
   if (uriMatch) {
     const originalUri = uriMatch[1];
     const resolvedUrl = resolveUrl(baseUrl, originalUri);
-    const proxyUrl = `${proxyBase}/key?url=${encodeURIComponent(resolvedUrl)}`;
+    const params = new URLSearchParams({ url: resolvedUrl });
+    if (source) {
+      params.set('icetv-source', source);
+    }
+    const proxyUrl = `${proxyBase}/key?${params.toString()}`;
     return line.replace(uriMatch[0], `URI="${proxyUrl}"`);
   }
   return line;
