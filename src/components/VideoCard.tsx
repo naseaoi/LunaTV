@@ -672,6 +672,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
                 src={processedPoster}
                 alt={actualTitle}
                 fill
+                sizes='(max-width: 640px) 96px, 180px'
                 className={`${origin === 'live' ? 'object-contain' : 'object-cover'} transition-opacity duration-200 ${isLoading ? 'opacity-100' : 'opacity-0'}`}
                 referrerPolicy='no-referrer'
                 loading='lazy'

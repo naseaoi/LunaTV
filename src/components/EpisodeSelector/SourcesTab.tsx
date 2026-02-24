@@ -8,9 +8,7 @@ import React, {
 } from 'react';
 
 import { SearchResult } from '@/lib/types';
-import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
-
-import NoImageCover from '@/components/NoImageCover';
+import { getVideoResolutionFromM3u8 } from '@/lib/utils';
 
 interface VideoInfo {
   quality: string;
@@ -47,7 +45,6 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
   const [videoInfoMap, setVideoInfoMap] = useState<Map<string, VideoInfo>>(
     new Map(),
   );
-  const [failedCovers, setFailedCovers] = useState<Set<string>>(new Set());
   const [attemptedSources, setAttemptedSources] = useState<Set<string>>(
     new Set(),
   );
@@ -220,18 +217,23 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
         };
       })
       .sort((a, b) => {
-        if (a.speedKBps !== b.speedKBps) {
-          return b.speedKBps - a.speedKBps;
-        }
-        if (a.pingTime !== b.pingTime) {
-          return a.pingTime - b.pingTime;
-        }
+        // 有有效数据的源优先于无数据的，但测速失败的不过度降权
         if (a.hasValidInfo !== b.hasValidInfo) {
           return a.hasValidInfo ? -1 : 1;
         }
-        if (a.qualityRank !== b.qualityRank) {
-          return b.qualityRank - a.qualityRank;
+        // 同为有效数据时，按速度 > 延迟 > 分辨率排序
+        if (a.hasValidInfo && b.hasValidInfo) {
+          if (a.speedKBps !== b.speedKBps) {
+            return b.speedKBps - a.speedKBps;
+          }
+          if (a.pingTime !== b.pingTime) {
+            return a.pingTime - b.pingTime;
+          }
+          if (a.qualityRank !== b.qualityRank) {
+            return b.qualityRank - a.qualityRank;
+          }
         }
+        // 同组内保持原始顺序
         return a.index - b.index;
       })
       .map((item) => item.source);
@@ -306,66 +308,35 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
   }
 
   return (
-    <div
-      ref={listContainerRef}
-      className='flex-1 overflow-y-auto space-y-1 p-2 pb-20'
-    >
-      {sortedSources.map((source, index) => {
-        const isCurrentSource =
-          source.source?.toString() === currentSource?.toString() &&
-          source.id?.toString() === currentId?.toString();
-        const sourceKey = `${source.source}-${source.id}`;
-        const videoInfo = videoInfoMap.get(sourceKey);
+    <div ref={listContainerRef} className='flex-1 overflow-y-auto p-2 pb-20'>
+      <div className='grid grid-cols-2 gap-1.5'>
+        {sortedSources.map((source, index) => {
+          const isCurrentSource =
+            source.source?.toString() === currentSource?.toString() &&
+            source.id?.toString() === currentId?.toString();
+          const sourceKey = `${source.source}-${source.id}`;
+          const videoInfo = videoInfoMap.get(sourceKey);
 
-        return (
-          <div
-            key={sourceKey}
-            ref={isCurrentSource ? currentItemRef : null}
-            onClick={() => {
-              if (!isCurrentSource) {
-                handleSourceClick(source);
-              }
-              if (videoInfo?.hasError) {
-                getVideoInfo(source);
-              }
-            }}
-            className={`flex items-start gap-3 px-2.5 py-2.5 rounded-lg transition-all select-none duration-150 relative
-                ${
-                  isCurrentSource
-                    ? 'bg-green-50 dark:bg-green-500/10 ring-1 ring-green-500/30'
-                    : 'hover:bg-gray-50 dark:hover:bg-white/[0.06] cursor-pointer'
-                }`.trim()}
-          >
-            {/* 封面 */}
-            <div className='relative flex-shrink-0 w-11 h-[4.25rem] bg-gray-100 dark:bg-gray-800 rounded-md overflow-hidden'>
-              {!source.poster ||
-              source.poster.trim() === '' ||
-              failedCovers.has(sourceKey) ? (
-                <NoImageCover
-                  label='无封面'
-                  iconSize={16}
-                  iconStrokeWidth={1.5}
-                  className='bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500'
-                  labelClassName='text-[8px]'
-                />
-              ) : (
-                <img
-                  src={processImageUrl(source.poster)}
-                  alt={source.title}
-                  className='w-full h-full object-cover'
-                  onError={() => {
-                    setFailedCovers((prev) => new Set(prev).add(sourceKey));
-                  }}
-                />
-              )}
-            </div>
-
-            {/* 信息区域 */}
-            <div className='flex-1 min-w-0 flex flex-col justify-between h-[4.25rem]'>
-              {/* 标题和分辨率 */}
-              <div className='flex items-start justify-between gap-2'>
+          return (
+            <div
+              key={sourceKey}
+              ref={isCurrentSource ? currentItemRef : null}
+              onClick={() => {
+                if (!isCurrentSource) {
+                  handleSourceClick(source);
+                }
+              }}
+              className={`flex flex-col gap-1.5 px-2.5 py-2 rounded-lg transition-all select-none duration-150 relative
+                  ${
+                    isCurrentSource
+                      ? 'bg-green-50 dark:bg-green-500/10 ring-1 ring-green-500/30'
+                      : 'bg-gray-50/80 dark:bg-white/[0.04] ring-1 ring-gray-200/60 dark:ring-white/[0.06] hover:bg-gray-100/80 dark:hover:bg-white/[0.08] hover:ring-gray-300/60 dark:hover:ring-white/[0.1] cursor-pointer'
+                  }`.trim()}
+            >
+              {/* 标题行 */}
+              <div className='flex items-center justify-between gap-1 min-w-0'>
                 <div className='flex-1 min-w-0 relative group/title'>
-                  <h3 className='font-medium text-sm truncate text-gray-900 dark:text-gray-100 leading-tight'>
+                  <h3 className='font-medium text-xs truncate text-gray-900 dark:text-gray-100 leading-tight'>
                     {source.title}
                   </h3>
                   {index !== 0 && (
@@ -375,53 +346,57 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
                     </div>
                   )}
                 </div>
-                {videoInfo &&
-                  videoInfo.quality !== '未知' &&
-                  (() => {
-                    if (videoInfo.hasError) {
+                {/* 分辨率徽章（含占位，保持高度一致） */}
+                {videoInfo && videoInfo.quality !== '未知' ? (
+                  videoInfo.hasError ? (
+                    <span className='inline-flex items-center px-1 py-0.5 rounded text-[9px] font-medium bg-red-50 text-red-500 dark:bg-red-900/20 dark:text-red-400 flex-shrink-0'>
+                      失败
+                    </span>
+                  ) : (
+                    (() => {
+                      const isUltraHigh = ['4K', '2K'].includes(
+                        videoInfo.quality,
+                      );
+                      const isHigh = ['1080p', '720p'].includes(
+                        videoInfo.quality,
+                      );
+                      const colorClasses = isUltraHigh
+                        ? 'bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400'
+                        : isHigh
+                          ? 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400'
+                          : 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400';
                       return (
-                        <span className='inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-500 dark:bg-red-900/20 dark:text-red-400 flex-shrink-0'>
-                          检测失败
+                        <span
+                          className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] font-semibold flex-shrink-0 ${colorClasses}`}
+                        >
+                          {videoInfo.quality}
                         </span>
                       );
-                    }
-                    const isUltraHigh = ['4K', '2K'].includes(
-                      videoInfo.quality,
-                    );
-                    const isHigh = ['1080p', '720p'].includes(
-                      videoInfo.quality,
-                    );
-                    const colorClasses = isUltraHigh
-                      ? 'bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400'
-                      : isHigh
-                        ? 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400'
-                        : 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400';
-                    return (
-                      <span
-                        className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold flex-shrink-0 ${colorClasses}`}
-                      >
-                        {videoInfo.quality}
-                      </span>
-                    );
-                  })()}
+                    })()
+                  )
+                ) : optimizationEnabled ? (
+                  <span className='inline-flex items-center px-1 py-0.5 rounded text-[9px] font-medium text-transparent flex-shrink-0'>
+                    --
+                  </span>
+                ) : null}
               </div>
 
-              {/* 源名称和集数 */}
-              <div className='flex items-center justify-between'>
-                <span className='text-[11px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-white/[0.08] text-gray-600 dark:text-gray-400 font-medium'>
+              {/* 源名称 + 集数 */}
+              <div className='flex items-center justify-between gap-1'>
+                <span className='text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-white/[0.08] text-gray-600 dark:text-gray-400 font-medium truncate'>
                   {source.source_name}
                 </span>
                 {source.episodes.length > 1 && (
-                  <span className='text-[11px] text-gray-400 dark:text-gray-500'>
-                    {source.episodes.length} 集
+                  <span className='text-[10px] text-gray-400 dark:text-gray-500 flex-shrink-0'>
+                    {source.episodes.length}集
                   </span>
                 )}
               </div>
 
-              {/* 网络信息 */}
-              <div className='flex items-end gap-3'>
-                {videoInfo && !videoInfo.hasError && (
-                  <div className='flex items-center gap-2.5 text-[11px]'>
+              {/* 网络信息（固定占位，避免测速前后高度跳变） */}
+              <div className='flex items-center gap-2 min-h-[16px]'>
+                {videoInfo && !videoInfo.hasError ? (
+                  <div className='flex items-center gap-1.5 text-[10px]'>
                     <span className='text-green-600 dark:text-green-400 font-medium'>
                       {videoInfo.loadSpeed}
                     </span>
@@ -429,24 +404,49 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
                       {videoInfo.pingTime}ms
                     </span>
                   </div>
-                )}
-                {videoInfo && videoInfo.hasError && (
-                  <span className='text-[11px] text-gray-400 dark:text-gray-500'>
-                    无测速数据
+                ) : videoInfo && videoInfo.hasError ? (
+                  <span
+                    className='text-[10px] text-blue-400 dark:text-blue-400 cursor-pointer hover:underline'
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setVideoInfoMap((prev) => {
+                        const newMap = new Map(prev);
+                        newMap.delete(sourceKey);
+                        return newMap;
+                      });
+                      setAttemptedSources((prev) => {
+                        const newSet = new Set(prev);
+                        newSet.delete(sourceKey);
+                        return newSet;
+                      });
+                      attemptedSourcesRef.current.delete(sourceKey);
+                      getVideoInfo(source);
+                    }}
+                  >
+                    未测速 · 重试
                   </span>
-                )}
+                ) : optimizationEnabled ? (
+                  <div className='flex items-center gap-1.5 text-[10px]'>
+                    <span className='text-gray-300 dark:text-gray-600 font-medium'>
+                      --
+                    </span>
+                    <span className='text-gray-300 dark:text-gray-600 font-medium'>
+                      --
+                    </span>
+                  </div>
+                ) : null}
               </div>
-            </div>
 
-            {/* 当前源标记 */}
-            {isCurrentSource && (
-              <div className='absolute top-1.5 right-1.5'>
-                <div className='w-1.5 h-1.5 rounded-full bg-green-500'></div>
-              </div>
-            )}
-          </div>
-        );
-      })}
+              {/* 当前源标记 */}
+              {isCurrentSource && (
+                <div className='absolute top-1.5 right-1.5'>
+                  <div className='w-1.5 h-1.5 rounded-full bg-green-500'></div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
 
       <div className='flex-shrink-0 mt-auto pt-2 border-t border-gray-100 dark:border-white/[0.06]'>
         <button

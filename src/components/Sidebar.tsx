@@ -34,18 +34,24 @@ const SidebarContext = createContext<SidebarContextType>({
 
 export const useSidebar = () => useContext(SidebarContext);
 
-// 可替换为你自己的 logo 图片
-const Logo = () => {
-  const { siteName } = useSite();
+// 站点图标：有自定义则用自定义，否则用默认 favicon
+const SiteIcon = () => {
+  const { siteIcon, siteName } = useSite();
+  const iconSrc = siteIcon || '/favicon.ico';
+
   return (
-    <Link
-      href='/'
-      className='flex items-center justify-center h-16 select-none hover:opacity-80 transition-opacity duration-200'
-    >
-      <span className='text-2xl font-bold text-green-600 tracking-tight'>
-        {siteName}
-      </span>
-    </Link>
+    <img
+      src={iconSrc}
+      alt={siteName}
+      className='w-full h-full object-contain'
+      onError={(e) => {
+        const img = e.target as HTMLImageElement;
+        // 自定义图标加载失败时回退到默认 favicon
+        if (img.src !== window.location.origin + '/favicon.ico') {
+          img.src = '/favicon.ico';
+        }
+      }}
+    />
   );
 };
 
@@ -87,6 +93,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { siteName } = useSite();
   // 若同一次 SPA 会话中已经读取过折叠状态，则直接复用，避免闪烁
   const [isCollapsed, setIsCollapsed] = useState<boolean>(
     getInitialSidebarCollapsed,
@@ -202,28 +209,28 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
           }}
         >
           <div className='flex h-full flex-col'>
-            {/* 顶部 Logo 区域 */}
-            <div className='relative h-16 overflow-hidden'>
-              <div
-                className={`absolute inset-0 flex items-center justify-center transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
-                  isCollapsed
-                    ? 'opacity-0 scale-90 pointer-events-none'
-                    : 'opacity-100 scale-100'
-                }`}
+            {/* 顶部品牌区域 - 完全复制菜单项布局结构以保证对齐 */}
+            <div className='px-2 flex items-center h-16'>
+              <Link
+                href='/'
+                className={`flex items-center rounded-lg px-2 py-2 pl-2 w-full select-none hover:opacity-90 transition-opacity duration-200 min-h-[40px] gap-2.5 justify-start overflow-hidden`}
               >
-                <div className='w-[calc(100%-4rem)] flex justify-center'>
-                  <Logo />
+                <div className='w-8 h-8 flex-shrink-0'>
+                  <SiteIcon />
                 </div>
-              </div>
-              <button
-                onClick={handleToggle}
-                className={`absolute top-1/2 -translate-y-1/2 flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 transition-all duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] z-10 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700/50 ${
-                  isCollapsed ? 'left-1/2 -translate-x-1/2' : 'right-2'
-                }`}
-              >
-                <Menu className='h-4 w-4' />
-              </button>
+                <span
+                  className={`text-base font-bold text-gray-800 dark:text-gray-100 tracking-tight whitespace-nowrap overflow-hidden transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
+                    isCollapsed
+                      ? 'max-w-0 opacity-0'
+                      : 'max-w-[140px] opacity-100'
+                  }`}
+                >
+                  {siteName}
+                </span>
+              </Link>
             </div>
+            {/* 分割线 */}
+            <div className='mx-3 h-px bg-gradient-to-r from-transparent via-gray-200 dark:via-gray-700 to-transparent' />
 
             {/* 首页和搜索导航 */}
             <nav className='px-2 mt-4 space-y-1'>
@@ -315,6 +322,29 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
                   );
                 })}
               </div>
+            </div>
+
+            {/* 底部折叠/展开按钮 */}
+            <div className='px-2 pb-4 pt-2'>
+              <div className='mx-1 mb-2 h-px bg-gradient-to-r from-transparent via-gray-200 dark:via-gray-700 to-transparent' />
+              <button
+                onClick={handleToggle}
+                className={`group flex items-center rounded-lg px-2 py-2 pl-4 w-full text-sm text-gray-500 hover:bg-gray-100/30 hover:text-green-600 transition-colors duration-200 min-h-[40px] dark:text-gray-400 dark:hover:text-green-400 gap-3 justify-start`}
+                title={isCollapsed ? '展开侧栏' : '折叠侧栏'}
+              >
+                <div className='w-4 h-4 flex-shrink-0 flex items-center justify-center'>
+                  <Menu className='h-4 w-4' />
+                </div>
+                <span
+                  className={`whitespace-nowrap overflow-hidden transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
+                    isCollapsed
+                      ? 'max-w-0 opacity-0'
+                      : 'max-w-[120px] opacity-100'
+                  }`}
+                >
+                  折叠
+                </span>
+              </button>
             </div>
           </div>
         </aside>

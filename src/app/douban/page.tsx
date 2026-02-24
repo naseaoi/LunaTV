@@ -2,7 +2,9 @@
 
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import { Cat, Clover, Film, LayoutGrid, Tv } from 'lucide-react';
 
 import { GetBangumiCalendarData } from '@/lib/bangumi.client';
 import {
@@ -680,13 +682,28 @@ function DoubanPageClient() {
     return type === 'movie'
       ? '电影'
       : type === 'tv'
-        ? '电视剧'
+        ? '剧集'
         : type === 'anime'
           ? '动漫'
           : type === 'show'
             ? '综艺'
             : '自定义';
   };
+
+  const PageTitleIcon = useMemo(() => {
+    switch (type) {
+      case 'movie':
+        return Film;
+      case 'tv':
+        return Tv;
+      case 'anime':
+        return Cat;
+      case 'show':
+        return Clover;
+      default:
+        return LayoutGrid;
+    }
+  }, [type]);
 
   const getPageDescription = () => {
     if (type === 'anime' && primarySelection === '每日放送') {
@@ -712,7 +729,8 @@ function DoubanPageClient() {
           <div className='mb-6 sm:mb-8 space-y-4 sm:space-y-6'>
             {/* 页面标题 */}
             <div>
-              <h1 className='text-2xl sm:text-3xl font-bold text-gray-800 mb-1 sm:mb-2 dark:text-gray-200'>
+              <h1 className='flex items-center gap-2 text-2xl sm:text-3xl font-bold text-gray-800 mb-1 sm:mb-2 dark:text-gray-200'>
+                <PageTitleIcon className='w-6 h-6 sm:w-7 sm:h-7' />
                 {getPageTitle()}
               </h1>
               <p className='text-sm sm:text-base text-gray-600 dark:text-gray-400'>

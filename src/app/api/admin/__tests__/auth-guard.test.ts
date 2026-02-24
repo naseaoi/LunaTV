@@ -120,6 +120,7 @@ describe('admin api auth guard regression', () => {
     ConfigFile: '',
     SiteConfig: {
       SiteName: 'IceTV',
+      SiteIcon: '',
       Announcement: '',
       SearchDownstreamMaxPage: 5,
       SiteInterfaceCacheTime: 300,

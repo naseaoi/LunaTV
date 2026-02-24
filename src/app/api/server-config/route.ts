@@ -9,6 +9,7 @@ export async function GET(_request: NextRequest) {
   const config = await getConfig();
   const result = {
     SiteName: config.SiteConfig.SiteName,
+    SiteIcon: config.SiteConfig.SiteIcon || '',
     StorageType: process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage',
     Version: CURRENT_VERSION,
     OpenRegister: !!config.UserConfig.OpenRegister,

@@ -92,6 +92,16 @@ html.dark body {
   );
 }
 
+/* 防止侧栏折叠状态在刷新时闪烁：CSS 在 React 水合前即生效 */
+@media (min-width: 768px) {
+  html[data-sidebar-collapsed='true'] [data-sidebar] {
+    width: 4rem;
+  }
+  html[data-sidebar-collapsed='true'] .sidebar-offset {
+    width: 4rem;
+  }
+}
+
 /* 隐藏移动端（<768px）垂直滚动条 */
 @media (max-width: 767px) {
   html,

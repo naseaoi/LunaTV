@@ -1,7 +1,14 @@
 'use client';
 
-import { Check, ChevronDown, ExternalLink } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import {
+  Check,
+  ChevronDown,
+  ExternalLink,
+  ImagePlus,
+  Trash2,
+  Upload,
+} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
 import AlertModal from '@/features/admin/components/AlertModal';
 import { useAlertModal } from '@/features/admin/hooks/useAlertModal';
@@ -23,6 +30,7 @@ const SiteConfigComponent = ({
   const { isLoading, withLoading } = useLoadingState();
   const [siteSettings, setSiteSettings] = useState<SiteConfig>({
     SiteName: '',
+    SiteIcon: '',
     Announcement: '',
     SearchDownstreamMaxPage: 1,
     SiteInterfaceCacheTime: 7200,
@@ -41,6 +49,11 @@ const SiteConfigComponent = ({
     useState(false);
   const [isAdBlockModeDropdownOpen, setIsAdBlockModeDropdownOpen] =
     useState(false);
+
+  // 站点图标相关状态
+  const [iconPreview, setIconPreview] = useState<string>('');
+  const [iconUploading, setIconUploading] = useState(false);
+  const iconFileRef = useRef<HTMLInputElement>(null);
 
   // 豆瓣数据源选项
   const doubanDataSourceOptions = [
@@ -104,6 +117,11 @@ const SiteConfigComponent = ({
         FluidSearch: config.SiteConfig.FluidSearch || true,
         AdBlockMode: config.SiteConfig.AdBlockMode || 'player',
       });
+      // 初始化图标预览
+      const icon = config.SiteConfig.SiteIcon;
+      if (icon) {
+        setIconPreview(icon.startsWith('/') ? `${icon}?t=${Date.now()}` : icon);
+      }
     }
   }, [config]);
 
@@ -216,6 +234,121 @@ const SiteConfigComponent = ({
           />
         </div>
 
+        {/* 站点图标 */}
+        <div>
+          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+            站点图标
+          </label>
+          <div className='flex items-start gap-3'>
+            {/* 预览 */}
+            <div className='flex-shrink-0 w-10 h-10 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-800 flex items-center justify-center'>
+              {iconPreview ? (
+                <img
+                  src={iconPreview}
+                  alt='站点图标'
+                  className='w-full h-full object-contain'
+                  onError={() => setIconPreview('')}
+                />
+              ) : (
+                <ImagePlus className='w-5 h-5 text-gray-400' />
+              )}
+            </div>
+            <div className='flex-1 space-y-2'>
+              {/* URL 输入 + 操作按钮同行 */}
+              <div className='flex items-center gap-2'>
+                <input
+                  type='text'
+                  value={siteSettings.SiteIcon}
+                  onChange={(e) => {
+                    const url = e.target.value;
+                    setSiteSettings((prev) => ({ ...prev, SiteIcon: url }));
+                    setIconPreview(url);
+                  }}
+                  placeholder='输入图标 URL 或上传文件'
+                  className='flex-1 min-w-0 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm'
+                />
+                <button
+                  type='button'
+                  disabled={iconUploading}
+                  onClick={() => iconFileRef.current?.click()}
+                  className='flex-shrink-0 flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors'
+                >
+                  <Upload className='w-3.5 h-3.5' />
+                  {iconUploading ? '上传中...' : '上传'}
+                </button>
+                {siteSettings.SiteIcon && (
+                  <button
+                    type='button'
+                    onClick={async () => {
+                      if (
+                        siteSettings.SiteIcon.startsWith('/api/admin/site-icon')
+                      ) {
+                        try {
+                          await fetch('/api/admin/site-icon', {
+                            method: 'DELETE',
+                          });
+                        } catch {
+                          /* ignore */
+                        }
+                      }
+                      setSiteSettings((prev) => ({ ...prev, SiteIcon: '' }));
+                      setIconPreview('');
+                    }}
+                    className='flex-shrink-0 flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-red-300 dark:border-red-600/50 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors'
+                  >
+                    <Trash2 className='w-3.5 h-3.5' />
+                    清除
+                  </button>
+                )}
+              </div>
+              <input
+                ref={iconFileRef}
+                type='file'
+                accept='image/png,image/jpeg,image/webp,image/svg+xml,image/gif,image/x-icon'
+                className='hidden'
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  if (file.size > 512 * 1024) {
+                    showError('图标文件不能超过 512KB', showAlert);
+                    return;
+                  }
+                  setIconUploading(true);
+                  try {
+                    const formData = new FormData();
+                    formData.append('icon', file);
+                    const res = await fetch('/api/admin/site-icon', {
+                      method: 'POST',
+                      body: formData,
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                      showError(data.error || '上传失败', showAlert);
+                      return;
+                    }
+                    setSiteSettings((prev) => ({
+                      ...prev,
+                      SiteIcon: '/api/admin/site-icon',
+                    }));
+                    setIconPreview(
+                      data.url || `/api/admin/site-icon?t=${Date.now()}`,
+                    );
+                    showSuccess('图标上传成功', showAlert);
+                  } catch (err) {
+                    showError('上传失败', showAlert);
+                  } finally {
+                    setIconUploading(false);
+                    e.target.value = '';
+                  }
+                }}
+              />
+            </div>
+          </div>
+          <p className='mt-1.5 text-xs text-gray-400 dark:text-gray-500'>
+            支持 URL 链接或本地上传（PNG/JPEG/WebP/SVG/ICO，≤512KB）
+          </p>
+        </div>
+
         {/* 站点公告 */}
         <div>
           <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
@@ -232,6 +365,67 @@ const SiteConfigComponent = ({
             rows={1}
             className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
           />
+        </div>
+
+        {/* 去广告处理模式 */}
+        <div>
+          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+            去广告处理模式
+          </label>
+          <div className='relative' data-dropdown='adblock-mode'>
+            <button
+              type='button'
+              onClick={() =>
+                setIsAdBlockModeDropdownOpen(!isAdBlockModeDropdownOpen)
+              }
+              className='w-full px-3 py-2.5 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm hover:border-gray-400 dark:hover:border-gray-500 text-left'
+            >
+              {
+                adBlockModeOptions.find(
+                  (option) =>
+                    option.value === (siteSettings.AdBlockMode || 'player'),
+                )?.label
+              }
+            </button>
+            <div className='absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none'>
+              <ChevronDown
+                className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${
+                  isAdBlockModeDropdownOpen ? 'rotate-180' : ''
+                }`}
+              />
+            </div>
+            {isAdBlockModeDropdownOpen && (
+              <div className='absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-auto'>
+                {adBlockModeOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type='button'
+                    onClick={() => {
+                      setSiteSettings((prev) => ({
+                        ...prev,
+                        AdBlockMode: option.value as 'player' | 'server',
+                      }));
+                      setIsAdBlockModeDropdownOpen(false);
+                    }}
+                    className={`w-full px-3 py-2.5 text-left text-sm transition-colors duration-150 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                      (siteSettings.AdBlockMode || 'player') === option.value
+                        ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
+                        : 'text-gray-900 dark:text-gray-100'
+                    }`}
+                  >
+                    <span className='truncate'>{option.label}</span>
+                    {(siteSettings.AdBlockMode || 'player') ===
+                      option.value && (
+                      <Check className='w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 ml-2' />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+            仅影响播放页"去广告"开启时的处理方式。
+          </p>
         </div>
 
         {/* 豆瓣数据源设置 */}
@@ -473,66 +667,6 @@ const SiteConfigComponent = ({
             }
             className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
           />
-        </div>
-
-        <div>
-          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
-            去广告处理模式
-          </label>
-          <div className='relative' data-dropdown='adblock-mode'>
-            <button
-              type='button'
-              onClick={() =>
-                setIsAdBlockModeDropdownOpen(!isAdBlockModeDropdownOpen)
-              }
-              className='w-full px-3 py-2.5 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm hover:border-gray-400 dark:hover:border-gray-500 text-left'
-            >
-              {
-                adBlockModeOptions.find(
-                  (option) =>
-                    option.value === (siteSettings.AdBlockMode || 'player'),
-                )?.label
-              }
-            </button>
-            <div className='absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none'>
-              <ChevronDown
-                className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${
-                  isAdBlockModeDropdownOpen ? 'rotate-180' : ''
-                }`}
-              />
-            </div>
-            {isAdBlockModeDropdownOpen && (
-              <div className='absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-auto'>
-                {adBlockModeOptions.map((option) => (
-                  <button
-                    key={option.value}
-                    type='button'
-                    onClick={() => {
-                      setSiteSettings((prev) => ({
-                        ...prev,
-                        AdBlockMode: option.value as 'player' | 'server',
-                      }));
-                      setIsAdBlockModeDropdownOpen(false);
-                    }}
-                    className={`w-full px-3 py-2.5 text-left text-sm transition-colors duration-150 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                      (siteSettings.AdBlockMode || 'player') === option.value
-                        ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
-                        : 'text-gray-900 dark:text-gray-100'
-                    }`}
-                  >
-                    <span className='truncate'>{option.label}</span>
-                    {(siteSettings.AdBlockMode || 'player') ===
-                      option.value && (
-                      <Check className='w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 ml-2' />
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
-            仅影响播放页“去广告”开启时的处理方式。
-          </p>
         </div>
       </div>
 

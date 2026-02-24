@@ -1,6 +1,6 @@
 'use client';
 
-import { Cat, ChevronRight, Film, Sparkles, Star, Tv } from 'lucide-react';
+import { Cat, ChevronRight, Clover, Film, Star, Tv } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense, useEffect, useState } from 'react';
 
@@ -170,7 +170,7 @@ function HomeClient() {
 
   return (
     <PageLayout>
-      <div className='px-2 sm:px-10 py-4 sm:py-8 overflow-visible'>
+      <div className='px-2 sm:px-10 pt-4 sm:pt-8 pb-2 overflow-visible'>
         {/* 顶部 Tab 切换 */}
         <div className='mb-8 flex justify-center'>
           <CapsuleSwitch
@@ -399,10 +399,10 @@ function HomeClient() {
               </section>
 
               {/* 热门综艺 */}
-              <section className='mb-8'>
+              <section className='mb-0'>
                 <div className='mb-4 flex items-center justify-between'>
                   <h2 className='flex items-center gap-2 text-xl font-bold text-gray-800 dark:text-gray-200'>
-                    <Sparkles className='w-5 h-5 text-violet-500' />
+                    <Clover className='w-5 h-5 text-violet-500' />
                     热门综艺
                   </h2>
                   <Link

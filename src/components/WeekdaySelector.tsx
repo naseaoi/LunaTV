@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 interface WeekdaySelectorProps {
   onWeekdayChange: (weekday: string) => void;
@@ -21,10 +21,16 @@ const WeekdaySelector: React.FC<WeekdaySelectorProps> = ({
   onWeekdayChange,
   className = '',
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [indicatorStyle, setIndicatorStyle] = useState<{
+    left: number;
+    width: number;
+  }>({ left: 0, width: 0 });
+
   // 获取今天的星期数，默认选中今天
   const getTodayWeekday = (): string => {
     const today = new Date().getDay();
-    // getDay() 返回 0-6，0 是周日，1-6 是周一到周六
     const weekdayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     return weekdayMap[today];
   };
@@ -32,32 +38,80 @@ const WeekdaySelector: React.FC<WeekdaySelectorProps> = ({
   const [selectedWeekday, setSelectedWeekday] =
     useState<string>(getTodayWeekday());
 
-  // 组件初始化时通知父组件默认选中的星期
+  // 更新指示器位置
+  const updateIndicatorPosition = (activeIndex: number) => {
+    if (
+      activeIndex >= 0 &&
+      buttonRefs.current[activeIndex] &&
+      containerRef.current
+    ) {
+      const timeoutId = setTimeout(() => {
+        const button = buttonRefs.current[activeIndex];
+        const container = containerRef.current;
+        if (button && container) {
+          const buttonRect = button.getBoundingClientRect();
+          const containerRect = container.getBoundingClientRect();
+          if (buttonRect.width > 0) {
+            setIndicatorStyle({
+              left: buttonRect.left - containerRect.left,
+              width: buttonRect.width,
+            });
+          }
+        }
+      }, 0);
+      return () => clearTimeout(timeoutId);
+    }
+  };
+
+  // 组件初始化时通知父组件默认选中的星期并计算指示器位置
   useEffect(() => {
     onWeekdayChange(getTodayWeekday());
-  }, []); // 只在组件挂载时执行一次
+    const activeIndex = weekdays.findIndex(
+      (w) => w.value === getTodayWeekday(),
+    );
+    updateIndicatorPosition(activeIndex);
+  }, []);
+
+  // 监听选中项变化
+  useEffect(() => {
+    const activeIndex = weekdays.findIndex((w) => w.value === selectedWeekday);
+    const cleanup = updateIndicatorPosition(activeIndex);
+    return cleanup;
+  }, [selectedWeekday]);
 
   return (
     <div
-      className={`relative inline-flex rounded-full p-0.5 sm:p-1 ${className}`}
+      ref={containerRef}
+      className={`relative inline-flex bg-gray-200/60 rounded-lg p-0.5 sm:p-1 dark:bg-gray-700/60 backdrop-blur-sm ${className}`}
     >
-      {weekdays.map((weekday) => {
+      {/* 滑动的白色背景指示器 */}
+      {indicatorStyle.width > 0 && (
+        <div
+          className='absolute top-0.5 bottom-0.5 sm:top-1 sm:bottom-1 bg-white dark:bg-gray-500 rounded-lg shadow-sm transition-all duration-300 ease-out'
+          style={{
+            left: `${indicatorStyle.left}px`,
+            width: `${indicatorStyle.width}px`,
+          }}
+        />
+      )}
+
+      {weekdays.map((weekday, index) => {
         const isActive = selectedWeekday === weekday.value;
         return (
           <button
             key={weekday.value}
+            ref={(el) => {
+              buttonRefs.current[index] = el;
+            }}
             onClick={() => {
               setSelectedWeekday(weekday.value);
               onWeekdayChange(weekday.value);
             }}
-            className={`
-              relative z-10 px-2 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium rounded-full transition-all duration-200 whitespace-nowrap
-              ${
-                isActive
-                  ? 'text-green-600 dark:text-green-400 font-semibold'
-                  : 'text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 cursor-pointer'
-              }
-            `}
+            className={`relative z-10 px-2 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-all duration-200 whitespace-nowrap ${
+              isActive
+                ? 'text-gray-900 dark:text-gray-100 cursor-default'
+                : 'text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 cursor-pointer'
+            }`}
             title={weekday.label}
           >
             {weekday.shortLabel}

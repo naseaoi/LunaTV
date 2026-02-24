@@ -1,7 +1,7 @@
 import {
   AlertTriangle,
   Cat,
-  Clapperboard,
+  Clover,
   Film,
   Play,
   RefreshCw,
@@ -124,12 +124,13 @@ export function PlayMainContent(props: PlayMainContentProps) {
   const TitleIcon = useMemo(() => {
     const typeName = detail?.type_name || '';
     if (/电影|Movie/i.test(typeName)) return Film;
-    if (/电视|连续剧|TV|Drama/i.test(typeName)) return Tv;
+    if (/电视|连续剧|剧集|[国韩美日泰港台]剧|TV|Drama/i.test(typeName))
+      return Tv;
     if (/动[漫画]|番[剧组]|Anime|OVA/i.test(typeName)) return Cat;
-    if (/综艺|娱乐|Variety|Show/i.test(typeName)) return Clapperboard;
+    if (/综艺|娱乐|Variety|Show/i.test(typeName)) return Clover;
     // 兜底：根据集数推断
     if (totalEpisodes <= 1) return Film;
-    return Play;
+    return Tv;
   }, [detail?.type_name, totalEpisodes]);
 
   // 锁定播放器高度：首次渲染后读取 16:9 容器的实际高度，

@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
 
     const {
       SiteName,
+      SiteIcon,
       Announcement,
       SearchDownstreamMaxPage,
       SiteInterfaceCacheTime,
@@ -37,6 +38,7 @@ export async function POST(request: NextRequest) {
       AdBlockMode,
     } = body as {
       SiteName: string;
+      SiteIcon: string;
       Announcement: string;
       SearchDownstreamMaxPage: number;
       SiteInterfaceCacheTime: number;
@@ -73,6 +75,10 @@ export async function POST(request: NextRequest) {
     // 更新缓存中的站点设置
     adminConfig.SiteConfig = {
       SiteName,
+      SiteIcon:
+        typeof SiteIcon === 'string'
+          ? SiteIcon
+          : adminConfig.SiteConfig.SiteIcon || '',
       Announcement,
       SearchDownstreamMaxPage,
       SiteInterfaceCacheTime,

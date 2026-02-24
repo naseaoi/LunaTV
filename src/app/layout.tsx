@@ -51,6 +51,7 @@ export default async function RootLayout({
   const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
 
   let siteName = process.env.NEXT_PUBLIC_SITE_NAME || 'IceTV';
+  let siteIcon = '';
   let announcement =
     process.env.ANNOUNCEMENT ||
     '本网站仅提供影视信息搜索服务，所有内容均来自第三方网站。本站不存储任何视频资源，不对任何内容的准确性、合法性、完整性负责。';
@@ -73,6 +74,7 @@ export default async function RootLayout({
   if (storageType !== 'localstorage') {
     const config = await getConfig();
     siteName = config.SiteConfig.SiteName;
+    siteIcon = config.SiteConfig.SiteIcon || '';
     announcement = config.SiteConfig.Announcement;
 
     doubanProxyType = config.SiteConfig.DoubanProxyType;
@@ -118,7 +120,11 @@ export default async function RootLayout({
           name='viewport'
           content='width=device-width, initial-scale=1.0, viewport-fit=cover'
         />
-        <link rel='apple-touch-icon' href='/icons/icon-192x192.png' />
+        <link
+          rel='apple-touch-icon'
+          href={siteIcon || '/icons/icon-192x192.png'}
+        />
+        <link rel='icon' href={siteIcon || '/favicon.ico'} />
         <script
           dangerouslySetInnerHTML={{
             __html: `(() => {
@@ -150,7 +156,11 @@ export default async function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <SiteProvider siteName={siteName} announcement={announcement}>
+          <SiteProvider
+            siteName={siteName}
+            siteIcon={siteIcon}
+            announcement={announcement}
+          >
             {children}
             <GlobalErrorIndicator />
           </SiteProvider>

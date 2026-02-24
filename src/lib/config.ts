@@ -204,6 +204,7 @@ async function getInitConfig(
     ConfigSubscribtion: subConfig,
     SiteConfig: {
       SiteName: process.env.NEXT_PUBLIC_SITE_NAME || 'IceTV',
+      SiteIcon: '',
       Announcement:
         process.env.ANNOUNCEMENT ||
         '本网站仅提供影视信息搜索服务，所有内容均来自第三方网站。本站不存储任何视频资源，不对任何内容的准确性、合法性、完整性负责。',
@@ -347,6 +348,7 @@ export function configSelfCheck(adminConfig: AdminConfig): AdminConfig {
   if (!adminConfig.SiteConfig) {
     adminConfig.SiteConfig = {
       SiteName: process.env.NEXT_PUBLIC_SITE_NAME || 'IceTV',
+      SiteIcon: '',
       Announcement:
         process.env.ANNOUNCEMENT ||
         '本网站仅提供影视信息搜索服务，所有内容均来自第三方网站。本站不存储任何视频资源，不对任何内容的准确性、合法性、完整性负责。',
@@ -370,6 +372,10 @@ export function configSelfCheck(adminConfig: AdminConfig): AdminConfig {
     adminConfig.SiteConfig.AdBlockMode !== 'player'
   ) {
     adminConfig.SiteConfig.AdBlockMode = 'player';
+  }
+  // 兼容旧配置：补全 SiteIcon 字段
+  if (typeof adminConfig.SiteConfig.SiteIcon !== 'string') {
+    adminConfig.SiteConfig.SiteIcon = '';
   }
 
   // 站长变更自检

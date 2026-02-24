@@ -1,8 +1,9 @@
 import { X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import React from 'react';
+import React, { useState } from 'react';
 
 import { clearSearchHistory, deleteSearchHistory } from '@/lib/db.client';
+import ConfirmModal from '@/components/modals/ConfirmModal';
 
 interface SearchHistoryProps {
   searchHistory: string[];
@@ -14,6 +15,7 @@ export default function SearchHistory({
   setSearchQuery,
 }: SearchHistoryProps) {
   const router = useRouter();
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   if (searchHistory.length === 0) return null;
 
@@ -23,9 +25,7 @@ export default function SearchHistory({
         搜索历史
         {searchHistory.length > 0 && (
           <button
-            onClick={() => {
-              clearSearchHistory();
-            }}
+            onClick={() => setShowClearConfirm(true)}
             className='ml-3 text-sm text-gray-500 hover:text-red-500 transition-colors dark:text-gray-400 dark:hover:text-red-500'
           >
             清空
@@ -58,6 +58,20 @@ export default function SearchHistory({
           </div>
         ))}
       </div>
+
+      <ConfirmModal
+        isOpen={showClearConfirm}
+        title='确认清空搜索历史？'
+        message='该操作将删除所有搜索历史记录，删除后无法恢复。'
+        danger
+        cancelText='取消'
+        confirmText='清空'
+        onCancel={() => setShowClearConfirm(false)}
+        onConfirm={() => {
+          clearSearchHistory();
+          setShowClearConfirm(false);
+        }}
+      />
     </section>
   );
 }

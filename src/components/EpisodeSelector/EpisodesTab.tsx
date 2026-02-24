@@ -194,22 +194,32 @@ export const EpisodesTab: React.FC<EpisodesTabProps> = ({
               : rawTitle
             : `${episodeNumber}`;
           const isNumericLabel = /^\d+$/.test(displayTitle);
+          // 基于像素估算：CJK ≈ 13px，Latin ≈ 7.5px，按钮 px-2 内边距 16px
+          // 列宽 3rem(48px) + gap-2(8px)，span N 可用文本宽度 ≈ 56N - 24
+          const estimatedPx = Array.from(displayTitle).reduce(
+            (sum, char) =>
+              sum +
+              (/[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/.test(char)
+                ? 13
+                : 7.5),
+            0,
+          );
           const dynamicSpan = Math.max(
             1,
-            Math.min(4, Math.ceil(displayTitle.length / 4)),
+            Math.min(3, Math.ceil((estimatedPx + 24) / 56)),
           );
           return (
             <button
               key={episodeNumber}
               onClick={() => onChange?.(episodeNumber - 1)}
               style={
-                isNumericLabel
-                  ? undefined
-                  : {
+                dynamicSpan > 1
+                  ? {
                       gridColumn: `span ${dynamicSpan} / span ${dynamicSpan}`,
                     }
+                  : undefined
               }
-              className={`h-11 ${isNumericLabel ? 'px-0' : 'px-3'} flex items-center justify-center text-[13px] font-semibold rounded-lg transition-all duration-150 whitespace-nowrap ${isNumericLabel ? 'font-mono' : 'font-medium'}
+              className={`h-11 ${dynamicSpan > 1 ? 'px-2' : 'px-1'} flex items-center justify-center text-[13px] rounded-lg transition-all duration-150 min-w-0 font-medium
                 ${
                   isActive
                     ? 'bg-green-500 text-white shadow-md shadow-green-500/20'
@@ -217,7 +227,7 @@ export const EpisodesTab: React.FC<EpisodesTabProps> = ({
                 }`.trim()}
               title={rawTitle || `第 ${episodeNumber} 集`}
             >
-              {displayTitle}
+              <span className='truncate'>{displayTitle}</span>
             </button>
           );
         })}

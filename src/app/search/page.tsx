@@ -400,9 +400,23 @@ function SearchPageClient() {
   );
 }
 
+function SearchPageSkeleton() {
+  return (
+    <PageLayout activePath='/search'>
+      <div className='px-4 sm:px-10 py-4 sm:py-8 overflow-visible mb-10'>
+        <div className='mb-8'>
+          <div className='max-w-2xl mx-auto'>
+            <div className='w-full h-12 rounded-lg bg-gray-50/80 border border-gray-200/50 dark:bg-gray-800 dark:border-gray-700' />
+          </div>
+        </div>
+      </div>
+    </PageLayout>
+  );
+}
+
 export default function SearchPage() {
   return (
-    <Suspense>
+    <Suspense fallback={<SearchPageSkeleton />}>
       <SearchPageClient />
     </Suspense>
   );

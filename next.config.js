@@ -47,7 +47,9 @@ const nextConfig = {
 
   // Uncoment to add domain whitelist
   images: {
-    unoptimized: true,
+    unoptimized: false,
+    deviceSizes: [640, 750, 828, 1080],
+    imageSizes: [96, 128, 180, 256],
     remotePatterns: [
       {
         protocol: 'https',
