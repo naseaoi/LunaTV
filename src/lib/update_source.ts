@@ -1,10 +1,6 @@
 import { getRuntimeConfig } from '@/lib/runtime-config';
 
-const DEFAULT_UPDATE_REPOS = [
-  'naseaoi/LunaTV',
-  'MoonTechLab/IceTV',
-  'MoonTechLab/MoonTV',
-];
+const DEFAULT_UPDATE_REPOS = ['naseaoi/IceTV'];
 
 const DEFAULT_UPDATE_BRANCH = 'main';
 
