@@ -120,6 +120,9 @@ importers:
       '@types/bs58':
         specifier: ^5.0.0
         version: 5.0.0
+      '@types/crypto-js':
+        specifier: ^4.2.2
+        version: 4.2.2
       '@types/he':
         specifier: ^1.2.3
         version: 1.2.3
@@ -1691,6 +1694,9 @@ packages:
   '@types/bs58@5.0.0':
     resolution: {integrity: sha512-cAw/jKBzo98m6Xz1X5ETqymWfIMbXbu6nK15W4LQYjeHJkVqSmM5PO8Bd9KVHQJ/F4rHcSso9LcjtgCW6TGu2w==}
     deprecated: This is a stub types definition. bs58 provides its own type definitions, so you do not need this installed.
+
+  '@types/crypto-js@4.2.2':
+    resolution: {integrity: sha512-sDOLlVbHhXpAUAL0YHDUUwDZf3iN4Bwi4W6a0W0b+QcAezUbRtH4FVb+9J4h+XFPW7l/gQ9F8qC7P+Ec4k8QVQ==}
 
   '@types/eslint-scope@3.7.7':
     resolution: {integrity: sha512-MzMFlSLBqNF2gcHWO0G1vP/YQyfvrxZ0bF+u7mzUdZ1/xK4A4sru+nraZz5i3iEIk1l1uyicaDVTB4QbbEkAYg==}
@@ -7519,6 +7525,8 @@ snapshots:
   '@types/bs58@5.0.0':
     dependencies:
       bs58: 6.0.0
+
+  '@types/crypto-js@4.2.2': {}
 
   '@types/eslint-scope@3.7.7':
     dependencies:
