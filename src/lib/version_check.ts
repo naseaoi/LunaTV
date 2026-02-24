@@ -21,6 +21,13 @@ export async function checkForUpdates(): Promise<UpdateStatus> {
   }
 
   cachedCheckPromise = checkForUpdatesInternal();
+
+  cachedCheckPromise.then((status) => {
+    if (status === UpdateStatus.FETCH_FAILED) {
+      cachedCheckPromise = null;
+    }
+  });
+
   return cachedCheckPromise;
 }
 
@@ -61,7 +68,11 @@ async function fetchLatestVersion(): Promise<string | null> {
 
     const data = await response.json();
     const version =
-      typeof data?.latestVersion === 'string' ? data.latestVersion : '';
+      typeof data?.latestVersion === 'string'
+        ? data.latestVersion
+        : typeof data?.changelog?.[0]?.version === 'string'
+          ? data.changelog[0].version
+          : '';
     return version.trim() || null;
   } catch (error) {
     return null;
