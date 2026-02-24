@@ -1,6 +1,4 @@
 /** @type {import('next').NextConfig} */
-/* eslint-disable @typescript-eslint/no-var-requires */
-
 const fs = require('fs');
 const path = require('path');
 
@@ -16,6 +14,12 @@ try {
 const nextConfig = {
   output: 'standalone',
   reactStrictMode: false,
+  compiler: {
+    removeConsole:
+      process.env.NODE_ENV === 'production'
+        ? { exclude: ['error', 'warn'] }
+        : false,
+  },
   serverExternalPackages: ['better-sqlite3'],
   env: {
     NEXT_PUBLIC_APP_VERSION: appVersion,

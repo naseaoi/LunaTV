@@ -199,7 +199,10 @@ export function useArtPlayer(params: UseArtPlayerParams) {
       (frag.tagList as Array<unknown[]>).some((tag) => {
         const tagName = String(tag?.[0] || '');
         const tagValue = String(tag?.[1] || '');
-        return AD_TAG_RE.test(`${tagName}:${tagValue}`);
+        const normalizedTagName = tagName.startsWith('#')
+          ? tagName
+          : `#${tagName}`;
+        return AD_TAG_RE.test(`${normalizedTagName}:${tagValue}`);
       });
 
     if (!byUrl && !byTitle && !byTags) return false;
@@ -286,7 +289,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
           const cbs = callbacks as {
             onSuccess: (...args: unknown[]) => unknown;
           };
-          if (ctx.type === 'manifest' || ctx.type === 'level') {
+          if (ctx.type === 'manifest') {
             const onSuccess = cbs.onSuccess;
             cbs.onSuccess = function (
               response: unknown,
@@ -401,6 +404,54 @@ export function useArtPlayer(params: UseArtPlayerParams) {
             hls.on(Hls.Events.FRAG_CHANGED, function (_, data) {
               if (!blockAdEnabledRef.current) return;
               skipAdFragment(data.frag as unknown as Record<string, unknown>);
+            });
+
+            hls.on(Hls.Events.LEVEL_LOADED, function (_, data) {
+              if (!blockAdEnabledRef.current) return;
+              const fragments = (
+                data as { details?: { fragments?: unknown[] } }
+              ).details?.fragments;
+              if (!Array.isArray(fragments) || !fragments.length) return;
+
+              const ranges: AdRange[] = [];
+              for (const fragItem of fragments) {
+                const frag = fragItem as Record<string, unknown>;
+                const fragUrl = String(frag.url || frag.relurl || '');
+                const byUrl = isLikelyAdUri(fragUrl);
+                const byTitle =
+                  typeof frag.title === 'string' &&
+                  AD_KEYWORD_RE.test(frag.title);
+                const byTags =
+                  Array.isArray(frag.tagList) &&
+                  (frag.tagList as Array<unknown[]>).some((tag) => {
+                    const tagName = String(tag?.[0] || '');
+                    const tagValue = String(tag?.[1] || '');
+                    const normalizedTagName = tagName.startsWith('#')
+                      ? tagName
+                      : `#${tagName}`;
+                    return AD_TAG_RE.test(`${normalizedTagName}:${tagValue}`);
+                  });
+
+                if (!byUrl && !byTitle && !byTags) continue;
+
+                const start = Number(frag.start);
+                const fragDuration = Number(frag.duration);
+                if (
+                  !Number.isFinite(start) ||
+                  !Number.isFinite(fragDuration) ||
+                  fragDuration <= 0
+                ) {
+                  continue;
+                }
+
+                ranges.push({
+                  start,
+                  end: start + fragDuration,
+                  reason: byTags ? 'tag' : byUrl ? 'uri' : 'title',
+                });
+              }
+
+              appendAdRanges(ranges);
             });
 
             hls.on(Hls.Events.FRAG_LOADED, function (_, data) {
