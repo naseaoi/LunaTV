@@ -60,7 +60,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   videoDoubanId = 0,
 }) => {
   const [activeTab, setActiveTab] = useState<TabKey>(
-    totalEpisodes > 1 ? 'episodes' : 'sources',
+    totalEpisodes > 1 ? 'episodes' : 'info',
   );
 
   const tabs: { key: TabKey; label: string; show: boolean }[] = [

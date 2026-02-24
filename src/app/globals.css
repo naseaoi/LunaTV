@@ -42,6 +42,19 @@ html:not(.dark) body {
   background-attachment: fixed;
 }
 
+html.dark body {
+  background: linear-gradient(
+    180deg,
+    #0a0e14 0%,
+    #0d1117 18%,
+    #111820 38%,
+    #0f1419 60%,
+    #0c1015 80%,
+    #0a0d12 100%
+  );
+  background-attachment: fixed;
+}
+
 /* 自定义滚动条样式 */
 ::-webkit-scrollbar {
   width: 8px;

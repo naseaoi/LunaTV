@@ -223,10 +223,24 @@ export async function getVideoResolutionFromM3u8(m3u8Url: string): Promise<{
         }
       });
 
-      // 监听视频元数据加载完成
-      video.onloadedmetadata = () => {
+      // 使用 loadeddata 代替 loadedmetadata，确保首帧已解码
+      // 这样 videoWidth/videoHeight 反映的是真实编码分辨率，
+      // 而非 m3u8 master playlist 中可能虚标的 RESOLUTION 值
+      video.onloadeddata = () => {
         hasMetadataLoaded = true;
-        checkAndResolve(); // 尝试返回结果
+        checkAndResolve();
+      };
+      // loadedmetadata 作为后备，某些环境下 loadeddata 可能不触发
+      video.onloadedmetadata = () => {
+        if (!hasMetadataLoaded) {
+          // 延迟读取，给浏览器时间完成实际帧解码
+          setTimeout(() => {
+            if (!hasMetadataLoaded) {
+              hasMetadataLoaded = true;
+              checkAndResolve();
+            }
+          }, 300);
+        }
       };
     });
   } catch (error) {

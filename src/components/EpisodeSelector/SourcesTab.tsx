@@ -10,6 +10,8 @@ import React, {
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
 
+import NoImageCover from '@/components/NoImageCover';
+
 interface VideoInfo {
   quality: string;
   loadSpeed: string;
@@ -45,6 +47,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
   const [videoInfoMap, setVideoInfoMap] = useState<Map<string, VideoInfo>>(
     new Map(),
   );
+  const [failedCovers, setFailedCovers] = useState<Set<string>>(new Set());
   const [attemptedSources, setAttemptedSources] = useState<Set<string>>(
     new Set(),
   );
@@ -334,14 +337,24 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
                 }`.trim()}
           >
             {/* 封面 */}
-            <div className='flex-shrink-0 w-11 h-[4.25rem] bg-gray-200 dark:bg-gray-700 rounded-md overflow-hidden'>
-              {source.episodes && source.episodes.length > 0 && (
+            <div className='relative flex-shrink-0 w-11 h-[4.25rem] bg-gray-100 dark:bg-gray-800 rounded-md overflow-hidden'>
+              {!source.poster ||
+              source.poster.trim() === '' ||
+              failedCovers.has(sourceKey) ? (
+                <NoImageCover
+                  label='无封面'
+                  iconSize={16}
+                  iconStrokeWidth={1.5}
+                  className='bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500'
+                  labelClassName='text-[8px]'
+                />
+              ) : (
                 <img
                   src={processImageUrl(source.poster)}
                   alt={source.title}
                   className='w-full h-full object-cover'
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
+                  onError={() => {
+                    setFailedCovers((prev) => new Set(prev).add(sourceKey));
                   }}
                 />
               )}

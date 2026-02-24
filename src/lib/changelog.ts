@@ -11,6 +11,17 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '100.1.1',
+    date: '2026-02-24',
+    added: [
+      // 无新增内容
+    ],
+    changed: [
+      // 无变更内容
+    ],
+    fixed: ['修复去广告失效问题', '修复版本日志不显示问题'],
+  },
+  {
     version: '100.1.0',
     date: '2026-02-23',
     added: [

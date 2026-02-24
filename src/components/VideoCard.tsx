@@ -29,6 +29,7 @@ import {
 import { processImageUrl } from '@/lib/utils';
 import { useLongPress } from '@/hooks/useLongPress';
 
+import ConfirmModal from '@/components/modals/ConfirmModal';
 import { ImagePlaceholder } from '@/components/ImagePlaceholder';
 import MobileActionSheet from '@/components/MobileActionSheet';
 import NoImageCover from '@/components/NoImageCover';
@@ -100,6 +101,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
     const [searchFavorited, setSearchFavorited] = useState<boolean | null>(
       null,
     ); // 搜索结果的收藏状态
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     // 可外部修改的可控字段
     const [dynamicEpisodes, setDynamicEpisodes] = useState<number | undefined>(
@@ -243,15 +245,22 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
         e.preventDefault();
         e.stopPropagation();
         if (from !== 'playrecord' || !actualSource || !actualId) return;
-        try {
-          await deletePlayRecord(actualSource, actualId);
-          onDelete?.();
-        } catch (err) {
-          throw new Error('删除播放记录失败');
-        }
+        setShowDeleteConfirm(true);
       },
-      [from, actualSource, actualId, onDelete],
+      [from, actualSource, actualId],
     );
+
+    const confirmDeleteRecord = useCallback(async () => {
+      if (!actualSource || !actualId) return;
+      try {
+        await deletePlayRecord(actualSource, actualId);
+        onDelete?.();
+      } catch (err) {
+        throw new Error('删除播放记录失败');
+      } finally {
+        setShowDeleteConfirm(false);
+      }
+    }, [actualSource, actualId, onDelete]);
 
     const handleClick = useCallback(() => {
       if (origin === 'live' && actualSource && actualId) {
@@ -1262,6 +1271,18 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
           totalEpisodes={actualEpisodes}
           origin={origin}
           anchorRect={actionSheetAnchorRect}
+        />
+
+        {/* 删除播放记录确认弹窗 */}
+        <ConfirmModal
+          isOpen={showDeleteConfirm}
+          title='确认删除该记录？'
+          message={`确认删除「${actualTitle}」的观看记录吗？删除后无法恢复。`}
+          danger
+          cancelText='取消'
+          confirmText='确认删除'
+          onCancel={() => setShowDeleteConfirm(false)}
+          onConfirm={confirmDeleteRecord}
         />
       </>
     );

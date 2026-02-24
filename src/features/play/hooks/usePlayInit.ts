@@ -7,7 +7,9 @@ import { getVideoResolutionFromM3u8 } from '@/lib/utils';
 import { calculateSourceScore } from '@/features/play/lib/playUtils';
 
 // ---------------------------------------------------------------------------
-// preferBestSource — 播放源优选
+// preferBestSource — 播放源优选（竞速模式）
+// 所有源同时并发测试，首个成功后启动短暂收割窗口，窗口结束后从已收集
+// 结果中选最优源。快源不再被慢源拖累，大幅缩短用户等待时间。
 // ---------------------------------------------------------------------------
 
 export async function preferBestSource(
@@ -20,103 +22,115 @@ export async function preferBestSource(
 ): Promise<SearchResult> {
   if (sources.length === 1) return sources[0];
 
-  const batchSize = Math.ceil(sources.length / 2);
-  const allResults: Array<{
+  // 收割窗口：首个源测速成功后，再等待此时间收集更多结果
+  const HARVEST_WINDOW_MS = 1500;
+
+  type TestResult = {
     source: SearchResult;
     testResult: { quality: string; loadSpeed: string; pingTime: number };
-  } | null> = [];
+  };
 
-  for (let start = 0; start < sources.length; start += batchSize) {
-    const batchSources = sources.slice(start, start + batchSize);
-    const batchResults = await Promise.all(
-      batchSources.map(async (source) => {
-        try {
-          if (!source.episodes || source.episodes.length === 0) {
-            console.warn(`播放源 ${source.source_name} 没有可用的播放地址`);
-            return null;
-          }
+  const collectedResults: TestResult[] = [];
+  let harvestTimer: ReturnType<typeof setTimeout> | null = null;
+  let settled = false;
 
-          const episodeUrl = source.episodes[0];
-          const testResult = await getVideoResolutionFromM3u8(episodeUrl);
+  return new Promise<SearchResult>((resolveMain) => {
+    // 最终从已收集结果中选出最优源并返回
+    const finalize = () => {
+      if (settled) return;
+      settled = true;
+      if (harvestTimer) clearTimeout(harvestTimer);
 
-          return { source, testResult };
-        } catch {
-          return null;
+      // 构建预计算 Map（SourcesTab 复用）
+      const newVideoInfoMap = new Map<
+        string,
+        {
+          quality: string;
+          loadSpeed: string;
+          pingTime: number;
+          hasError?: boolean;
         }
-      }),
-    );
-    allResults.push(...batchResults);
-  }
+      >();
+      const collectedKeys = new Set<string>();
+      for (const r of collectedResults) {
+        const key = `${r.source.source}-${r.source.id}`;
+        newVideoInfoMap.set(key, r.testResult);
+        collectedKeys.add(key);
+      }
+      // 未完成的源标记为 hasError，后续 SourcesTab 会自行重新测速
+      for (const s of sources) {
+        const key = `${s.source}-${s.id}`;
+        if (!collectedKeys.has(key)) {
+          newVideoInfoMap.set(key, {
+            quality: '未知',
+            loadSpeed: '未知',
+            pingTime: 0,
+            hasError: true,
+          });
+        }
+      }
+      setPrecomputedVideoInfo(newVideoInfoMap);
 
-  const newVideoInfoMap = new Map<
-    string,
-    {
-      quality: string;
-      loadSpeed: string;
-      pingTime: number;
-      hasError?: boolean;
-    }
-  >();
-  allResults.forEach((result, index) => {
-    const source = sources[index];
-    const sourceKey = `${source.source}-${source.id}`;
+      if (collectedResults.length === 0) {
+        resolveMain(sources[0]);
+        return;
+      }
 
-    if (result) {
-      newVideoInfoMap.set(sourceKey, result.testResult);
-    } else {
-      newVideoInfoMap.set(sourceKey, {
-        quality: '未知',
-        loadSpeed: '未知',
-        pingTime: 0,
-        hasError: true,
-      });
+      // 评分排序
+      const validSpeeds = collectedResults
+        .map((r) => {
+          const m = r.testResult.loadSpeed.match(
+            /^([\d.]+)\s*(Mbps|KB\/s|MB\/s)$/,
+          );
+          if (!m) return 0;
+          const v = parseFloat(m[1]);
+          const u = m[2];
+          if (u === 'Mbps') return (v * 1024) / 8;
+          return u === 'MB/s' ? v * 1024 : v;
+        })
+        .filter((s) => s > 0);
+      const maxSpeed = validSpeeds.length > 0 ? Math.max(...validSpeeds) : 1024;
+      const validPings = collectedResults
+        .map((r) => r.testResult.pingTime)
+        .filter((p) => p > 0);
+      const minPing = validPings.length > 0 ? Math.min(...validPings) : 50;
+      const maxPing = validPings.length > 0 ? Math.max(...validPings) : 1000;
+
+      const scored = collectedResults.map((r) => ({
+        ...r,
+        score: calculateSourceScore(r.testResult, maxSpeed, minPing, maxPing),
+      }));
+      scored.sort((a, b) => b.score - a.score);
+      resolveMain(scored[0].source);
+    };
+
+    // 全量并发测试
+    let pendingCount = sources.length;
+    for (const source of sources) {
+      if (!source.episodes || source.episodes.length === 0) {
+        pendingCount--;
+        if (pendingCount === 0) finalize();
+        continue;
+      }
+      getVideoResolutionFromM3u8(source.episodes[0])
+        .then((testResult) => {
+          if (settled) return;
+          collectedResults.push({ source, testResult });
+          // 首个成功：启动收割窗口
+          if (!harvestTimer) {
+            harvestTimer = setTimeout(finalize, HARVEST_WINDOW_MS);
+          }
+        })
+        .catch(() => {
+          // 测速失败，不计入
+        })
+        .finally(() => {
+          pendingCount--;
+          // 所有源都完成了（无论成败），直接 finalize
+          if (pendingCount === 0 && !settled) finalize();
+        });
     }
   });
-
-  const successfulResults = allResults.filter(Boolean) as Array<{
-    source: SearchResult;
-    testResult: { quality: string; loadSpeed: string; pingTime: number };
-  }>;
-
-  setPrecomputedVideoInfo(newVideoInfoMap);
-
-  if (successfulResults.length === 0) {
-    console.warn('所有播放源测速都失败，使用第一个播放源');
-    return sources[0];
-  }
-
-  const validSpeeds = successfulResults
-    .map((result) => {
-      const speedStr = result.testResult.loadSpeed;
-      if (speedStr === '未知' || speedStr === '测量中...') return 0;
-
-      const match = speedStr.match(/^([\d.]+)\s*(Mbps|KB\/s|MB\/s)$/);
-      if (!match) return 0;
-
-      const value = parseFloat(match[1]);
-      const unit = match[2];
-      if (unit === 'Mbps') return (value * 1024) / 8;
-      return unit === 'MB/s' ? value * 1024 : value;
-    })
-    .filter((speed) => speed > 0);
-
-  const maxSpeed = validSpeeds.length > 0 ? Math.max(...validSpeeds) : 1024;
-
-  const validPings = successfulResults
-    .map((result) => result.testResult.pingTime)
-    .filter((ping) => ping > 0);
-
-  const minPing = validPings.length > 0 ? Math.min(...validPings) : 50;
-  const maxPing = validPings.length > 0 ? Math.max(...validPings) : 1000;
-
-  const resultsWithScore = successfulResults.map((result) => ({
-    ...result,
-    score: calculateSourceScore(result.testResult, maxSpeed, minPing, maxPing),
-  }));
-
-  resultsWithScore.sort((a, b) => b.score - a.score);
-
-  return resultsWithScore[0].source;
 }
 
 // ---------------------------------------------------------------------------

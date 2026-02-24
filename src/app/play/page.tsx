@@ -542,12 +542,14 @@ function PlayPageClient() {
         return;
       }
 
-      let targetIndex = currentEpisodeIndex;
+      // 使用 ref 获取最新集数索引，避免闭包捕获到过期的 state 值
+      const latestEpisodeIndex = currentEpisodeIndexRef.current;
+      let targetIndex = latestEpisodeIndex;
       if (!newDetail.episodes || targetIndex >= newDetail.episodes.length) {
         targetIndex = 0;
       }
 
-      if (targetIndex !== currentEpisodeIndex) {
+      if (targetIndex !== latestEpisodeIndex) {
         resumeTimeRef.current = 0;
       } else if (
         (!resumeTimeRef.current || resumeTimeRef.current === 0) &&
