@@ -1,5 +1,3 @@
-/* eslint-disable no-console,react-hooks/exhaustive-deps,@typescript-eslint/no-explicit-any */
-
 'use client';
 
 import { useSearchParams } from 'next/navigation';
@@ -80,9 +78,9 @@ function DoubanPageClient() {
 
   // 获取自定义分类数据
   useEffect(() => {
-    const runtimeConfig = (window as any).RUNTIME_CONFIG;
-    if (runtimeConfig?.CUSTOM_CATEGORIES?.length > 0) {
-      setCustomCategories(runtimeConfig.CUSTOM_CATEGORIES);
+    const runtimeConfig = window.RUNTIME_CONFIG;
+    if ((runtimeConfig?.CUSTOM_CATEGORIES?.length ?? 0) > 0) {
+      setCustomCategories(runtimeConfig!.CUSTOM_CATEGORIES);
     }
   }, []);
 
@@ -363,8 +361,6 @@ function DoubanPageClient() {
           setDoubanData(data.list);
           setHasMore(data.list.length !== 0);
           setLoading(false);
-        } else {
-          console.log('参数不一致，不执行任何操作，避免设置过期数据');
         }
         // 如果参数不一致，不执行任何操作，避免设置过期数据
       } else {
@@ -522,8 +518,6 @@ function DoubanPageClient() {
             if (isSnapshotEqual(requestSnapshot, currentSnapshot)) {
               setDoubanData((prev) => [...prev, ...data.list]);
               setHasMore(data.list.length !== 0);
-            } else {
-              console.log('参数不一致，不执行任何操作，避免设置过期数据');
             }
           } else {
             throw new Error(data.message || '获取数据失败');

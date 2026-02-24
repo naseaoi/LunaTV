@@ -1,10 +1,9 @@
-/* eslint-disable no-console */
-
 import Database from 'better-sqlite3';
 import { existsSync, mkdirSync, readFileSync } from 'fs';
 import path from 'path';
 
 import { AdminConfig } from './admin.types';
+import { hashPassword, verifyPassword } from './password';
 import { Favorite, IStorage, PlayRecord, SkipConfig } from './types';
 
 const SEARCH_HISTORY_LIMIT = 20;
@@ -343,18 +342,29 @@ export class LocalSqliteStorage implements IStorage {
   }
 
   async registerUser(userName: string, password: string): Promise<void> {
+    const hashed = await hashPassword(password);
     this.db
       .prepare(
         'INSERT OR REPLACE INTO users (username, password) VALUES (?, ?)',
       )
-      .run(userName, password);
+      .run(userName, hashed);
   }
 
   async verifyUser(userName: string, password: string): Promise<boolean> {
     const row = this.db
       .prepare('SELECT password FROM users WHERE username = ?')
       .get(userName) as { password: string } | undefined;
-    return row?.password === password;
+    if (!row) return false;
+
+    const { match, needsRehash } = await verifyPassword(password, row.password);
+    if (match && needsRehash) {
+      // 旧明文密码验证通过，自动升级为 bcrypt 哈希
+      const hashed = await hashPassword(password);
+      this.db
+        .prepare('UPDATE users SET password = ? WHERE username = ?')
+        .run(hashed, userName);
+    }
+    return match;
   }
 
   async checkUserExist(userName: string): Promise<boolean> {
@@ -366,9 +376,10 @@ export class LocalSqliteStorage implements IStorage {
   }
 
   async changePassword(userName: string, newPassword: string): Promise<void> {
+    const hashed = await hashPassword(newPassword);
     this.db
       .prepare('UPDATE users SET password = ? WHERE username = ?')
-      .run(newPassword, userName);
+      .run(hashed, userName);
   }
 
   async deleteUser(userName: string): Promise<void> {

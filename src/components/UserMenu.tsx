@@ -1,5 +1,3 @@
-/* eslint-disable no-console,@typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion */
-
 'use client';
 
 import {
@@ -108,6 +106,7 @@ export const UserMenu: React.FC = () => {
   ];
 
   // 修改密码相关状态
+  const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
@@ -128,8 +127,7 @@ export const UserMenu: React.FC = () => {
       const auth = getAuthInfoFromBrowserCookie();
       setAuthInfo(auth);
 
-      const type =
-        (window as any).RUNTIME_CONFIG?.STORAGE_TYPE || 'localstorage';
+      const type = window.RUNTIME_CONFIG?.STORAGE_TYPE || 'localstorage';
       setStorageType(type);
     }
   }, []);
@@ -146,8 +144,7 @@ export const UserMenu: React.FC = () => {
 
       const savedDoubanDataSource = localStorage.getItem('doubanDataSource');
       const defaultDoubanProxyType =
-        (window as any).RUNTIME_CONFIG?.DOUBAN_PROXY_TYPE ||
-        'cmliussss-cdn-tencent';
+        window.RUNTIME_CONFIG?.DOUBAN_PROXY_TYPE || 'cmliussss-cdn-tencent';
       if (savedDoubanDataSource !== null) {
         setDoubanDataSource(savedDoubanDataSource);
       } else if (defaultDoubanProxyType) {
@@ -155,8 +152,7 @@ export const UserMenu: React.FC = () => {
       }
 
       const savedDoubanProxyUrl = localStorage.getItem('doubanProxyUrl');
-      const defaultDoubanProxy =
-        (window as any).RUNTIME_CONFIG?.DOUBAN_PROXY || '';
+      const defaultDoubanProxy = window.RUNTIME_CONFIG?.DOUBAN_PROXY || '';
       if (savedDoubanProxyUrl !== null) {
         setDoubanProxyUrl(savedDoubanProxyUrl);
       } else if (defaultDoubanProxy) {
@@ -167,7 +163,7 @@ export const UserMenu: React.FC = () => {
         'doubanImageProxyType',
       );
       const defaultDoubanImageProxyType =
-        (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE ||
+        window.RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE ||
         'cmliussss-cdn-tencent';
       if (savedDoubanImageProxyType !== null) {
         setDoubanImageProxyType(savedDoubanImageProxyType);
@@ -179,7 +175,7 @@ export const UserMenu: React.FC = () => {
         'doubanImageProxyUrl',
       );
       const defaultDoubanImageProxyUrl =
-        (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY || '';
+        window.RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY || '';
       if (savedDoubanImageProxyUrl !== null) {
         setDoubanImageProxyUrl(savedDoubanImageProxyUrl);
       } else if (defaultDoubanImageProxyUrl) {
@@ -193,8 +189,7 @@ export const UserMenu: React.FC = () => {
       }
 
       const savedFluidSearch = localStorage.getItem('fluidSearch');
-      const defaultFluidSearch =
-        (window as any).RUNTIME_CONFIG?.FLUID_SEARCH !== false;
+      const defaultFluidSearch = window.RUNTIME_CONFIG?.FLUID_SEARCH !== false;
       if (savedFluidSearch !== null) {
         setFluidSearch(JSON.parse(savedFluidSearch));
       } else if (defaultFluidSearch !== undefined) {
@@ -293,6 +288,7 @@ export const UserMenu: React.FC = () => {
   const handleChangePassword = () => {
     setIsOpen(false);
     setIsChangePasswordOpen(true);
+    setOldPassword('');
     setNewPassword('');
     setConfirmPassword('');
     setPasswordError('');
@@ -300,6 +296,7 @@ export const UserMenu: React.FC = () => {
 
   const handleCloseChangePassword = () => {
     setIsChangePasswordOpen(false);
+    setOldPassword('');
     setNewPassword('');
     setConfirmPassword('');
     setPasswordError('');
@@ -309,6 +306,11 @@ export const UserMenu: React.FC = () => {
     setPasswordError('');
 
     // 验证密码
+    if (!oldPassword) {
+      setPasswordError('请输入当前密码');
+      return;
+    }
+
     if (!newPassword) {
       setPasswordError('新密码不得为空');
       return;
@@ -328,6 +330,7 @@ export const UserMenu: React.FC = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          oldPassword,
           newPassword,
         }),
       });
@@ -436,17 +439,13 @@ export const UserMenu: React.FC = () => {
 
   const handleResetSettings = () => {
     const defaultDoubanProxyType =
-      (window as any).RUNTIME_CONFIG?.DOUBAN_PROXY_TYPE ||
-      'cmliussss-cdn-tencent';
-    const defaultDoubanProxy =
-      (window as any).RUNTIME_CONFIG?.DOUBAN_PROXY || '';
+      window.RUNTIME_CONFIG?.DOUBAN_PROXY_TYPE || 'cmliussss-cdn-tencent';
+    const defaultDoubanProxy = window.RUNTIME_CONFIG?.DOUBAN_PROXY || '';
     const defaultDoubanImageProxyType =
-      (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE ||
-      'cmliussss-cdn-tencent';
+      window.RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE || 'cmliussss-cdn-tencent';
     const defaultDoubanImageProxyUrl =
-      (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY || '';
-    const defaultFluidSearch =
-      (window as any).RUNTIME_CONFIG?.FLUID_SEARCH !== false;
+      window.RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY || '';
+    const defaultFluidSearch = window.RUNTIME_CONFIG?.FLUID_SEARCH !== false;
 
     setDefaultAggregateSearch(true);
     setEnableOptimization(true);
@@ -1038,6 +1037,21 @@ export const UserMenu: React.FC = () => {
 
           {/* 表单 */}
           <div className='space-y-4'>
+            {/* 当前密码输入 */}
+            <div>
+              <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+                当前密码
+              </label>
+              <input
+                type='password'
+                className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400'
+                placeholder='请输入当前密码'
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+                disabled={passwordLoading}
+              />
+            </div>
+
             {/* 新密码输入 */}
             <div>
               <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
@@ -1088,7 +1102,12 @@ export const UserMenu: React.FC = () => {
             <button
               onClick={handleSubmitChangePassword}
               className='flex-1 px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
-              disabled={passwordLoading || !newPassword || !confirmPassword}
+              disabled={
+                passwordLoading ||
+                !oldPassword ||
+                !newPassword ||
+                !confirmPassword
+              }
             >
               {passwordLoading ? '修改中...' : '确认修改'}
             </button>

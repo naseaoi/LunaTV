@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import { getRuntimeConfig } from '@/lib/runtime-config';
 
 const DEFAULT_UPDATE_REPOS = [
   'naseaoi/LunaTV',
@@ -20,16 +20,8 @@ function normalizeRepos(input: unknown): string[] {
     .filter((repo) => /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(repo));
 }
 
-function getRuntimeConfigValue(key: string): unknown {
-  if (typeof window === 'undefined') {
-    return undefined;
-  }
-
-  return (window as any).RUNTIME_CONFIG?.[key];
-}
-
 export function getUpdateRepos(): string[] {
-  const runtimeRepos = normalizeRepos(getRuntimeConfigValue('UPDATE_REPOS'));
+  const runtimeRepos = normalizeRepos(getRuntimeConfig()?.UPDATE_REPOS);
   if (runtimeRepos.length > 0) {
     return runtimeRepos;
   }
@@ -43,7 +35,7 @@ export function getUpdateRepos(): string[] {
 }
 
 export function getUpdateBranch(): string {
-  const runtimeBranch = getRuntimeConfigValue('UPDATE_BRANCH');
+  const runtimeBranch = getRuntimeConfig()?.UPDATE_BRANCH;
   if (typeof runtimeBranch === 'string' && runtimeBranch.trim()) {
     return runtimeBranch.trim();
   }

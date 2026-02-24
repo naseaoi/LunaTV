@@ -1,27 +1,28 @@
-/* eslint-disable @typescript-eslint/no-explicit-any,no-console */
 import he from 'he';
 import Hls from 'hls.js';
 
+type DoubanImageProxyType =
+  | 'direct'
+  | 'server'
+  | 'img3'
+  | 'cmliussss-cdn-tencent'
+  | 'cmliussss-cdn-ali'
+  | 'custom';
+
 function getDoubanImageProxyConfig(): {
-  proxyType:
-    | 'direct'
-    | 'server'
-    | 'img3'
-    | 'cmliussss-cdn-tencent'
-    | 'cmliussss-cdn-ali'
-    | 'custom';
+  proxyType: DoubanImageProxyType;
   proxyUrl: string;
 } {
   const doubanImageProxyType =
     localStorage.getItem('doubanImageProxyType') ||
-    (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE ||
+    window.RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE ||
     'cmliussss-cdn-tencent';
   const doubanImageProxy =
     localStorage.getItem('doubanImageProxyUrl') ||
-    (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY ||
+    window.RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY ||
     '';
   return {
-    proxyType: doubanImageProxyType,
+    proxyType: doubanImageProxyType as DoubanImageProxyType,
     proxyUrl: doubanImageProxy,
   };
 }

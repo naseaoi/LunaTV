@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { API_CONFIG, ApiSite, getConfig } from '@/lib/config';
 import { getCachedSearchPage, setCachedSearchPage } from '@/lib/search-cache';
 import { SearchResult } from '@/lib/types';
@@ -19,6 +17,39 @@ interface ApiSearchItem {
 }
 
 /**
+ * 从 vod_play_url 中解析出 m3u8 播放链接和对应标题。
+ * 格式: 多播放源用 $$$ 分隔，每个源内集与集之间用 # 分隔，标题与链接用 $ 分隔。
+ * 取集数最多的播放源。
+ */
+function parseVodPlayUrl(vodPlayUrl: string): {
+  episodes: string[];
+  titles: string[];
+} {
+  let episodes: string[] = [];
+  let titles: string[] = [];
+
+  const sources = vodPlayUrl.split('$$$');
+  for (const source of sources) {
+    const matchEpisodes: string[] = [];
+    const matchTitles: string[] = [];
+    const pairs = source.split('#');
+    for (const pair of pairs) {
+      const parts = pair.split('$');
+      if (parts.length === 2 && parts[1].endsWith('.m3u8')) {
+        matchTitles.push(parts[0]);
+        matchEpisodes.push(parts[1]);
+      }
+    }
+    if (matchEpisodes.length > episodes.length) {
+      episodes = matchEpisodes;
+      titles = matchTitles;
+    }
+  }
+
+  return { episodes, titles };
+}
+
+/**
  * 通用的带缓存搜索函数
  */
 async function searchWithCache(
@@ -26,7 +57,7 @@ async function searchWithCache(
   query: string,
   page: number,
   url: string,
-  timeoutMs = 8000
+  timeoutMs = 8000,
 ): Promise<{ results: SearchResult[]; pageCount?: number }> {
   // 先查缓存
   const cached = getCachedSearchPage(apiSite.key, query, page);
@@ -70,34 +101,9 @@ async function searchWithCache(
 
     // 处理结果数据
     const allResults = data.list.map((item: ApiSearchItem) => {
-      let episodes: string[] = [];
-      let titles: string[] = [];
-
-      // 使用正则表达式从 vod_play_url 提取 m3u8 链接
-      if (item.vod_play_url) {
-        // 先用 $$$ 分割
-        const vod_play_url_array = item.vod_play_url.split('$$$');
-        // 分集之间#分割，标题和播放链接 $ 分割
-        vod_play_url_array.forEach((url: string) => {
-          const matchEpisodes: string[] = [];
-          const matchTitles: string[] = [];
-          const title_url_array = url.split('#');
-          title_url_array.forEach((title_url: string) => {
-            const episode_title_url = title_url.split('$');
-            if (
-              episode_title_url.length === 2 &&
-              episode_title_url[1].endsWith('.m3u8')
-            ) {
-              matchTitles.push(episode_title_url[0]);
-              matchEpisodes.push(episode_title_url[1]);
-            }
-          });
-          if (matchEpisodes.length > episodes.length) {
-            episodes = matchEpisodes;
-            titles = matchTitles;
-          }
-        });
-      }
+      const { episodes, titles } = item.vod_play_url
+        ? parseVodPlayUrl(item.vod_play_url)
+        : { episodes: [], titles: [] };
 
       return {
         id: item.vod_id.toString(),
@@ -118,7 +124,9 @@ async function searchWithCache(
     });
 
     // 过滤掉集数为 0 的结果
-    const results = allResults.filter((result: SearchResult) => result.episodes.length > 0);
+    const results = allResults.filter(
+      (result: SearchResult) => result.episodes.length > 0,
+    );
 
     const pageCount = page === 1 ? data.pagecount || 1 : undefined;
     // 写入缓存（成功）
@@ -127,7 +135,10 @@ async function searchWithCache(
   } catch (error: any) {
     clearTimeout(timeoutId);
     // 识别被 AbortController 中止（超时）
-    const aborted = error?.name === 'AbortError' || error?.code === 20 || error?.message?.includes('aborted');
+    const aborted =
+      error?.name === 'AbortError' ||
+      error?.code === 20 ||
+      error?.message?.includes('aborted');
     if (aborted) {
       setCachedSearchPage(apiSite.key, query, page, 'timeout', []);
     }
@@ -137,7 +148,7 @@ async function searchWithCache(
 
 export async function searchFromApi(
   apiSite: ApiSite,
-  query: string
+  query: string,
 ): Promise<SearchResult[]> {
   try {
     const apiBaseUrl = apiSite.api;
@@ -145,7 +156,13 @@ export async function searchFromApi(
       apiBaseUrl + API_CONFIG.search.path + encodeURIComponent(query);
 
     // 使用新的缓存搜索函数处理第一页
-    const firstPageResult = await searchWithCache(apiSite, query, 1, apiUrl, 8000);
+    const firstPageResult = await searchWithCache(
+      apiSite,
+      query,
+      1,
+      apiUrl,
+      8000,
+    );
     const results = firstPageResult.results;
     const pageCountFromFirst = firstPageResult.pageCount;
 
@@ -170,7 +187,13 @@ export async function searchFromApi(
 
         const pagePromise = (async () => {
           // 使用新的缓存搜索函数处理分页
-          const pageResult = await searchWithCache(apiSite, query, page, pageUrl, 8000);
+          const pageResult = await searchWithCache(
+            apiSite,
+            query,
+            page,
+            pageUrl,
+            8000,
+          );
           return pageResult.results;
         })();
 
@@ -199,7 +222,7 @@ const M3U8_PATTERN = /(https?:\/\/[^"'\s]+?\.m3u8)/g;
 
 export async function getDetailFromApi(
   apiSite: ApiSite,
-  id: string
+  id: string,
 ): Promise<SearchResult> {
   if (apiSite.detail) {
     return handleSpecialSourceDetail(id, apiSite);
@@ -233,34 +256,10 @@ export async function getDetailFromApi(
   }
 
   const videoDetail = data.list[0];
-  let episodes: string[] = [];
-  let titles: string[] = [];
-
-  // 处理播放源拆分
-  if (videoDetail.vod_play_url) {
-    // 先用 $$$ 分割
-    const vod_play_url_array = videoDetail.vod_play_url.split('$$$');
-    // 分集之间#分割，标题和播放链接 $ 分割
-    vod_play_url_array.forEach((url: string) => {
-      const matchEpisodes: string[] = [];
-      const matchTitles: string[] = [];
-      const title_url_array = url.split('#');
-      title_url_array.forEach((title_url: string) => {
-        const episode_title_url = title_url.split('$');
-        if (
-          episode_title_url.length === 2 &&
-          episode_title_url[1].endsWith('.m3u8')
-        ) {
-          matchTitles.push(episode_title_url[0]);
-          matchEpisodes.push(episode_title_url[1]);
-        }
-      });
-      if (matchEpisodes.length > episodes.length) {
-        episodes = matchEpisodes;
-        titles = matchTitles;
-      }
-    });
-  }
+  const { episodes: parsedEpisodes, titles } = videoDetail.vod_play_url
+    ? parseVodPlayUrl(videoDetail.vod_play_url)
+    : { episodes: [], titles: [] };
+  let episodes = parsedEpisodes;
 
   // 如果播放源为空，则尝试从内容中解析 m3u8
   if (episodes.length === 0 && videoDetail.vod_content) {
@@ -288,7 +287,7 @@ export async function getDetailFromApi(
 
 async function handleSpecialSourceDetail(
   id: string,
-  apiSite: ApiSite
+  apiSite: ApiSite,
 ): Promise<SearchResult> {
   const detailUrl = `${apiSite.detail}/index.php/vod/detail/id/${id}.html`;
 
@@ -329,7 +328,7 @@ async function handleSpecialSourceDetail(
 
   // 根据 matches 数量生成剧集标题
   const episodes_titles = Array.from({ length: matches.length }, (_, i) =>
-    (i + 1).toString()
+    (i + 1).toString(),
   );
 
   // 提取标题
@@ -338,7 +337,7 @@ async function handleSpecialSourceDetail(
 
   // 提取描述
   const descMatch = html.match(
-    /<div[^>]*class=["']sketch["'][^>]*>([\s\S]*?)<\/div>/
+    /<div[^>]*class=["']sketch["'][^>]*>([\s\S]*?)<\/div>/,
   );
   const descText = descMatch ? cleanHtmlTags(descMatch[1]) : '';
 

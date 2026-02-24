@@ -1,5 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
-
 import { useRouter } from 'next/navigation';
 import React, {
   useCallback,

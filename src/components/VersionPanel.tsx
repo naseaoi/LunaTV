@@ -1,5 +1,3 @@
-/* eslint-disable no-console,react-hooks/exhaustive-deps */
-
 'use client';
 
 import {

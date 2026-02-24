@@ -1,5 +1,3 @@
-/* eslint-disable no-console,@typescript-eslint/no-explicit-any */
-
 import { NextRequest, NextResponse } from 'next/server';
 
 import { isGuardFailure, requireOwner } from '@/lib/api-auth';
@@ -76,12 +74,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('更新配置文件失败:', error);
-    return NextResponse.json(
-      {
-        error: '更新配置文件失败',
-        details: (error as Error).message,
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: '更新配置文件失败' }, { status: 500 });
   }
 }

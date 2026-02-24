@@ -106,3 +106,40 @@ export function getAuthInfoFromBrowserCookie(): AuthMetaPayload | null {
     return null;
   }
 }
+
+/**
+ * 使用 HMAC-SHA256 验证签名。
+ * 用于 session 校验和 middleware 认证。
+ */
+export async function verifySignature(
+  data: string,
+  signature: string,
+  secret: string,
+): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(secret);
+  const messageData = encoder.encode(data);
+
+  try {
+    const key = await crypto.subtle.importKey(
+      'raw',
+      keyData,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['verify'],
+    );
+
+    const signatureBuffer = new Uint8Array(
+      signature.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) || [],
+    );
+
+    return await crypto.subtle.verify(
+      'HMAC',
+      key,
+      signatureBuffer,
+      messageData,
+    );
+  } catch {
+    return false;
+  }
+}

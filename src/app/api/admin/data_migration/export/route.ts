@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any,no-console */
-
 import { NextRequest, NextResponse } from 'next/server';
 import { promisify } from 'util';
 import { gzip } from 'zlib';
@@ -7,7 +5,7 @@ import { gzip } from 'zlib';
 import { isGuardFailure, requireOwner } from '@/lib/api-auth';
 import { SimpleCrypto } from '@/lib/crypto';
 import { db } from '@/lib/db';
-import { getOwnerPassword, getOwnerUsername } from '@/lib/env.server';
+import { getOwnerUsername } from '@/lib/env.server';
 import { CURRENT_VERSION } from '@/lib/version';
 
 export const runtime = 'nodejs';
@@ -17,7 +15,6 @@ const gzipAsync = promisify(gzip);
 export async function POST(req: NextRequest) {
   try {
     const ownerUsername = getOwnerUsername();
-    const ownerPassword = getOwnerPassword();
     // 检查存储类型
     const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
     if (storageType === 'localstorage') {
@@ -73,15 +70,10 @@ export async function POST(req: NextRequest) {
         searchHistory: await db.getSearchHistory(username),
         // 跳过片头片尾配置
         skipConfigs: await db.getAllSkipConfigs(username),
-        // 用户密码（通过验证空密码来检查用户是否存在，然后获取密码）
-        password: await getUserPassword(username),
       };
 
       exportData.data.userData[username] = userData;
     }
-
-    // 覆盖站长密码
-    exportData.data.userData[ownerUsername].password = ownerPassword;
 
     // 将数据转换为JSON字符串
     const jsonData = JSON.stringify(exportData);
@@ -121,22 +113,5 @@ export async function POST(req: NextRequest) {
       { error: error instanceof Error ? error.message : '导出失败' },
       { status: 500 },
     );
-  }
-}
-
-// 辅助函数：获取用户密码（通过数据库直接访问）
-async function getUserPassword(username: string): Promise<string | null> {
-  try {
-    // 使用 Redis 存储的直接访问方法
-    const storage = (db as any).storage;
-    if (storage && typeof storage.client?.get === 'function') {
-      const passwordKey = `u:${username}:pwd`;
-      const password = await storage.client.get(passwordKey);
-      return password;
-    }
-    return null;
-  } catch (error) {
-    console.error(`获取用户 ${username} 密码失败:`, error);
-    return null;
   }
 }

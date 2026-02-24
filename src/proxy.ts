@@ -1,8 +1,6 @@
-/* eslint-disable no-console */
-
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getAuthInfoFromCookie } from '@/lib/auth';
+import { getAuthInfoFromCookie, verifySignature } from '@/lib/auth';
 import { getOwnerPassword } from '@/lib/env.server';
 
 function isSessionExpired(expiresAt?: number): boolean {
@@ -82,44 +80,6 @@ export async function proxy(request: NextRequest) {
 
   // 签名验证失败或不存在签名
   return handleAuthFailure(request, pathname);
-}
-
-// 验证签名
-async function verifySignature(
-  data: string,
-  signature: string,
-  secret: string,
-): Promise<boolean> {
-  const encoder = new TextEncoder();
-  const keyData = encoder.encode(secret);
-  const messageData = encoder.encode(data);
-
-  try {
-    // 导入密钥
-    const key = await crypto.subtle.importKey(
-      'raw',
-      keyData,
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['verify'],
-    );
-
-    // 将十六进制字符串转换为Uint8Array
-    const signatureBuffer = new Uint8Array(
-      signature.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) || [],
-    );
-
-    // 验证签名
-    return await crypto.subtle.verify(
-      'HMAC',
-      key,
-      signatureBuffer,
-      messageData,
-    );
-  } catch (error) {
-    console.error('签名验证失败:', error);
-    return false;
-  }
 }
 
 // 处理认证失败的情况

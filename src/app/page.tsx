@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/exhaustive-deps, no-console */
-
 'use client';
 
 import { Cat, ChevronRight, Film, Sparkles, Star, Tv } from 'lucide-react';

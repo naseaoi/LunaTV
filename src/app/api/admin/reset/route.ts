@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 import { NextRequest, NextResponse } from 'next/server';
 
 import { isGuardFailure, requireOwner } from '@/lib/api-auth';
@@ -35,12 +33,6 @@ export async function GET(request: NextRequest) {
       },
     );
   } catch (error) {
-    return NextResponse.json(
-      {
-        error: '重置管理员配置失败',
-        details: (error as Error).message,
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: '重置管理员配置失败' }, { status: 500 });
   }
 }

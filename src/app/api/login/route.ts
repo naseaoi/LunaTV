@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getConfig } from '@/lib/config';
@@ -22,6 +21,7 @@ const SESSION_TTL_MS = Math.max(1, SESSION_TTL_HOURS) * 60 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 10;
 const LOGIN_WINDOW_MS = 10 * 60 * 1000;
 const LOGIN_LOCK_MS = 15 * 60 * 1000;
+const LOGIN_MAP_MAX_SIZE = 10000;
 
 type LoginAttemptState = {
   failCount: number;
@@ -85,6 +85,35 @@ function getRateLimitState(
 
 function markLoginFailure(key: string): void {
   const now = Date.now();
+
+  // 容量保护：超限时清理过期条目，仍超限则丢弃最旧条目
+  if (loginAttempts.size >= LOGIN_MAP_MAX_SIZE) {
+    const expiredKeys: string[] = [];
+    loginAttempts.forEach((s, k) => {
+      if (
+        now - s.windowStart > LOGIN_WINDOW_MS &&
+        getLockRemainingMs(s, now) <= 0
+      ) {
+        expiredKeys.push(k);
+      }
+    });
+    expiredKeys.forEach((k) => loginAttempts.delete(k));
+
+    // 仍超限：按插入顺序删除最旧的 10%
+    if (loginAttempts.size >= LOGIN_MAP_MAX_SIZE) {
+      const toDelete = Math.max(1, Math.floor(loginAttempts.size * 0.1));
+      let deleted = 0;
+      const keysToRemove: string[] = [];
+      loginAttempts.forEach((_, k) => {
+        if (deleted < toDelete) {
+          keysToRemove.push(k);
+          deleted++;
+        }
+      });
+      keysToRemove.forEach((k) => loginAttempts.delete(k));
+    }
+  }
+
   const state = loginAttempts.get(key);
   if (!state || now - state.windowStart > LOGIN_WINDOW_MS) {
     loginAttempts.set(key, {

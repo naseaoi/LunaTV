@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 import { NextRequest, NextResponse } from 'next/server';
 
 import { AdminConfigResult } from '@/features/admin/types/api';
@@ -38,12 +36,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('获取管理员配置失败:', error);
-    return NextResponse.json(
-      {
-        error: '获取管理员配置失败',
-        details: (error as Error).message,
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: '获取管理员配置失败' }, { status: 500 });
   }
 }

@@ -1,5 +1,3 @@
-/* eslint-disable no-console,@typescript-eslint/no-explicit-any */
-
 import { NextResponse } from 'next/server';
 
 import { getConfig } from '@/lib/config';
@@ -26,7 +24,6 @@ export async function GET(request: Request) {
 
   try {
     const decodedUrl = decodeURIComponent(url);
-    console.log(decodedUrl);
     const response = await fetch(decodedUrl, {
       headers: {
         'User-Agent': ua,

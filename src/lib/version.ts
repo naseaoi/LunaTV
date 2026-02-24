@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 const CURRENT_VERSION =
   process.env.NEXT_PUBLIC_APP_VERSION?.trim() || '100.0.3';
 

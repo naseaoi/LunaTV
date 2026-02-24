@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any,no-console */
-
 import { NextRequest, NextResponse } from 'next/server';
 
 import { isGuardFailure, requireAdmin } from '@/lib/api-auth';
@@ -94,12 +92,6 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error('更新站点配置失败:', error);
-    return NextResponse.json(
-      {
-        error: '更新站点配置失败',
-        details: (error as Error).message,
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: '更新站点配置失败' }, { status: 500 });
   }
 }

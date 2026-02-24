@@ -1,5 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
-
 import { Clapperboard, ExternalLink, Heart } from 'lucide-react';
 import React from 'react';
 

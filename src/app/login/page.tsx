@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 'use client';
 
 import { AlertCircle, CheckCircle, Eye, EyeOff } from 'lucide-react';
@@ -88,12 +86,12 @@ function LoginPageClient() {
   // 在客户端挂载后设置配置
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const storageType = (window as any).RUNTIME_CONFIG?.STORAGE_TYPE;
-      setShouldAskUsername(storageType && storageType !== 'localstorage');
+      const storageType = window.RUNTIME_CONFIG?.STORAGE_TYPE;
+      setShouldAskUsername(!!storageType && storageType !== 'localstorage');
       setRegisterEnabled(
-        storageType &&
+        !!storageType &&
           storageType !== 'localstorage' &&
-          !!(window as any).RUNTIME_CONFIG?.OPEN_REGISTER,
+          !!window.RUNTIME_CONFIG?.OPEN_REGISTER,
       );
     }
   }, []);

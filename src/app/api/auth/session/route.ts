@@ -1,8 +1,6 @@
-/* eslint-disable no-console */
-
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getAuthInfoFromCookie } from '@/lib/auth';
+import { getAuthInfoFromCookie, verifySignature } from '@/lib/auth';
 import { getConfig } from '@/lib/config';
 import { getOwnerPassword, getOwnerUsername } from '@/lib/env.server';
 
@@ -20,40 +18,6 @@ type SessionReason =
   | 'user_banned'
   | 'no_password_config'
   | 'server_error';
-
-async function verifySignature(
-  data: string,
-  signature: string,
-  secret: string,
-): Promise<boolean> {
-  const encoder = new TextEncoder();
-  const keyData = encoder.encode(secret);
-  const messageData = encoder.encode(data);
-
-  try {
-    const key = await crypto.subtle.importKey(
-      'raw',
-      keyData,
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['verify'],
-    );
-
-    const signatureBuffer = new Uint8Array(
-      signature.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) || [],
-    );
-
-    return await crypto.subtle.verify(
-      'HMAC',
-      key,
-      signatureBuffer,
-      messageData,
-    );
-  } catch (error) {
-    console.error('会话签名校验失败:', error);
-    return false;
-  }
-}
 
 function sessionResponse(
   authenticated: boolean,

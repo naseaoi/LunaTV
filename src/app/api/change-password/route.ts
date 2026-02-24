@@ -1,5 +1,3 @@
-/* eslint-disable no-console*/
-
 import { NextRequest, NextResponse } from 'next/server';
 
 import { isGuardFailure, requireActiveUser } from '@/lib/api-auth';
@@ -22,10 +20,15 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { newPassword } = body;
+    const { oldPassword, newPassword } = body;
 
     const guardResult = await requireActiveUser(request);
     if (isGuardFailure(guardResult)) return guardResult.response;
+
+    // 验证旧密码
+    if (!oldPassword || typeof oldPassword !== 'string') {
+      return NextResponse.json({ error: '请输入当前密码' }, { status: 400 });
+    }
 
     // 验证新密码
     if (!newPassword || typeof newPassword !== 'string') {
@@ -42,6 +45,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 验证旧密码是否正确
+    const isOldPasswordValid = await db.verifyUser(username, oldPassword);
+    if (!isOldPasswordValid) {
+      return NextResponse.json({ error: '当前密码错误' }, { status: 401 });
+    }
+
     // 修改密码
     await db.changePassword(username, newPassword);
 
@@ -51,7 +60,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: '修改密码失败',
-        details: (error as Error).message,
       },
       { status: 500 },
     );

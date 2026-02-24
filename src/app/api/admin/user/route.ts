@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any,no-console,@typescript-eslint/no-non-null-assertion */
-
 import { NextRequest, NextResponse } from 'next/server';
 
 import { isGuardFailure, requireAdmin } from '@/lib/api-auth';
@@ -526,7 +524,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: '用户管理操作失败',
-        details: (error as Error).message,
       },
       { status: 500 },
     );

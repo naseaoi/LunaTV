@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any,no-console */
-
 import { NextRequest, NextResponse } from 'next/server';
 import { promisify } from 'util';
 import { gunzip } from 'zlib';
@@ -8,6 +6,7 @@ import { isGuardFailure, requireOwner } from '@/lib/api-auth';
 import { configSelfCheck, setCachedConfig } from '@/lib/config';
 import { SimpleCrypto } from '@/lib/crypto';
 import { db } from '@/lib/db';
+import { Favorite, PlayRecord, SkipConfig } from '@/lib/types';
 
 export const runtime = 'nodejs';
 
@@ -92,22 +91,25 @@ export async function POST(req: NextRequest) {
     for (const username in userData) {
       const user = userData[username];
 
-      // 重新注册用户（包含密码）
-      if (user.password) {
-        await db.registerUser(username, user.password);
+      // 注册用户（不恢复密码，用户需手动重置）
+      const userExists = await db.checkUserExist(username);
+      if (!userExists) {
+        // 为新用户生成随机临时密码，管理员可后续重置
+        const tempPassword = crypto.randomUUID();
+        await db.registerUser(username, tempPassword);
       }
 
       // 导入播放记录
       if (user.playRecords) {
         for (const [key, record] of Object.entries(user.playRecords)) {
-          await (db as any).storage.setPlayRecord(username, key, record);
+          await db.setPlayRecordByKey(username, key, record as PlayRecord);
         }
       }
 
       // 导入收藏夹
       if (user.favorites) {
         for (const [key, favorite] of Object.entries(user.favorites)) {
-          await (db as any).storage.setFavorite(username, key, favorite);
+          await db.setFavoriteByKey(username, key, favorite as Favorite);
         }
       }
 
@@ -124,7 +126,12 @@ export async function POST(req: NextRequest) {
         for (const [key, skipConfig] of Object.entries(user.skipConfigs)) {
           const [source, id] = key.split('+');
           if (source && id) {
-            await db.setSkipConfig(username, source, id, skipConfig as any);
+            await db.setSkipConfig(
+              username,
+              source,
+              id,
+              skipConfig as SkipConfig,
+            );
           }
         }
       }

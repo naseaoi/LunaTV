@@ -1,5 +1,3 @@
-/* eslint-disable no-console,@typescript-eslint/no-explicit-any */
-
 import * as crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -12,8 +10,7 @@ import { SearchResult } from '@/lib/types';
 
 export const runtime = 'nodejs';
 
-export async function GET(request: NextRequest) {
-  console.log(request.url);
+export async function GET(_request: NextRequest) {
   try {
     console.log('Cron job triggered:', new Date().toISOString());
 
@@ -155,8 +152,6 @@ async function refreshRecordAndFavorites() {
     };
 
     for (const user of users) {
-      console.log(`开始处理用户: ${user}`);
-
       // 播放记录
       try {
         const playRecords = await db.getAllPlayRecords(user);

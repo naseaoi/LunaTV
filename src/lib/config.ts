@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, no-console, @typescript-eslint/no-non-null-assertion */
-
 import { db } from '@/lib/db';
 import { getOwnerUsername } from '@/lib/env.server';
 

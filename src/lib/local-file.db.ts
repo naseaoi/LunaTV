@@ -1,9 +1,8 @@
-/* eslint-disable no-console */
-
 import { existsSync, promises as fs } from 'fs';
 import path from 'path';
 
 import { AdminConfig } from './admin.types';
+import { hashPassword, verifyPassword } from './password';
 import { Favorite, IStorage, PlayRecord, SkipConfig } from './types';
 
 const SEARCH_HISTORY_LIMIT = 20;
@@ -226,7 +225,7 @@ export class LocalFileStorage implements IStorage {
   async registerUser(userName: string, password: string): Promise<void> {
     return this.withLock(async () => {
       const db = await this.readDb();
-      db.users[userName] = password;
+      db.users[userName] = await hashPassword(password);
       await this.writeDb(db);
     });
   }
@@ -234,7 +233,16 @@ export class LocalFileStorage implements IStorage {
   async verifyUser(userName: string, password: string): Promise<boolean> {
     return this.withLock(async () => {
       const db = await this.readDb();
-      return db.users[userName] === password;
+      const stored = db.users[userName];
+      if (stored === undefined) return false;
+
+      const { match, needsRehash } = await verifyPassword(password, stored);
+      if (match && needsRehash) {
+        // 旧明文密码验证通过，自动升级为 bcrypt 哈希
+        db.users[userName] = await hashPassword(password);
+        await this.writeDb(db);
+      }
+      return match;
     });
   }
 
@@ -249,7 +257,7 @@ export class LocalFileStorage implements IStorage {
     return this.withLock(async () => {
       const db = await this.readDb();
       if (Object.prototype.hasOwnProperty.call(db.users, userName)) {
-        db.users[userName] = newPassword;
+        db.users[userName] = await hashPassword(newPassword);
         await this.writeDb(db);
       }
     });

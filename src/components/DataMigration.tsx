@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { AlertTriangle, Download, FileCheck, Lock, Upload } from 'lucide-react';

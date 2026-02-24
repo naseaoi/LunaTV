@@ -6,7 +6,7 @@ import unusedImportsPlugin from 'eslint-plugin-unused-imports';
 export default [
   {
     linterOptions: {
-      reportUnusedDisableDirectives: 'off',
+      reportUnusedDisableDirectives: 'warn',
     },
   },
   ...eslintConfigNext,
@@ -42,7 +42,11 @@ export default [
       'react-hooks/immutability': 'off',
       'react-hooks/set-state-in-effect': 'off',
       'react-hooks/unsupported-syntax': 'off',
+      // TODO: 超大文件拆分后重新启用为 'warn'
+      'react-hooks/exhaustive-deps': 'off',
+      'react-hooks/refs': 'off',
       'react/jsx-curly-brace-presence': 'off',
+      '@next/next/no-img-element': 'off',
       '@typescript-eslint/no-unused-vars': 'off',
       'unused-imports/no-unused-imports': 'off',
       'unused-imports/no-unused-vars': 'off',

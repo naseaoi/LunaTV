@@ -1,5 +1,3 @@
-/* eslint-disable no-console,no-case-declarations */
-
 import { NextRequest, NextResponse } from 'next/server';
 
 import { isGuardFailure, requireAdmin } from '@/lib/api-auth';

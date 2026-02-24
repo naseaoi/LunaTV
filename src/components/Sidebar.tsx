@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 'use client';
 
 import {
@@ -176,8 +174,8 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
   ]);
 
   useEffect(() => {
-    const runtimeConfig = (window as any).RUNTIME_CONFIG;
-    if (runtimeConfig?.CUSTOM_CATEGORIES?.length > 0) {
+    const runtimeConfig = window.RUNTIME_CONFIG;
+    if ((runtimeConfig?.CUSTOM_CATEGORIES?.length ?? 0) > 0) {
       setMenuItems((prevItems) => [
         ...prevItems,
         {

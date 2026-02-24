@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 'use client';
 
 import { CURRENT_VERSION } from '@/lib/version';
