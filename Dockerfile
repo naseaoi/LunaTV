@@ -1,12 +1,26 @@
 # ---- 第 1 阶段：安装依赖 ----
 FROM node:20-bookworm-slim AS deps
 
+ARG PNPM_VERSION=10.14.0
+
 # better-sqlite3 等原生 addon 需要 node-gyp 编译工具链
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
+# 固定 corepack 缓存目录，便于跨阶段复用
+ENV COREPACK_HOME=/corepack
+
+# corepack 拉取 pnpm 版本时偶发被 npmjs 403；这里显式指定 registry 并加重试
+ENV COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
+
 # 启用 corepack 并激活 pnpm（版本与 package.json packageManager 字段一致）
-RUN corepack enable && corepack prepare pnpm@10.14.0 --activate
+RUN corepack enable \
+  && for i in 1 2 3 4 5; do \
+       corepack prepare "pnpm@${PNPM_VERSION}" --activate && break; \
+       echo "corepack prepare pnpm retry #$i" >&2; \
+       sleep $((i * 2)); \
+     done \
+  && pnpm -v
 
 WORKDIR /app
 
@@ -21,7 +35,20 @@ RUN pnpm install --frozen-lockfile
 
 # ---- 第 2 阶段：构建项目 ----
 FROM node:20-bookworm-slim AS builder
-RUN corepack enable && corepack prepare pnpm@10.14.0 --activate
+ARG PNPM_VERSION=10.14.0
+ENV COREPACK_HOME=/corepack
+ENV COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
+
+# 复用 deps 阶段已下载的 pnpm
+COPY --from=deps /corepack /corepack
+
+RUN corepack enable \
+  && for i in 1 2 3 4 5; do \
+       corepack prepare "pnpm@${PNPM_VERSION}" --activate && break; \
+       echo "corepack prepare pnpm retry #$i" >&2; \
+       sleep $((i * 2)); \
+     done \
+  && pnpm -v
 WORKDIR /app
 
 ENV HUSKY=0
