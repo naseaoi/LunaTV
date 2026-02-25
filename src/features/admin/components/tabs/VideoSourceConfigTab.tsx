@@ -126,15 +126,38 @@ const VideoSourceConfig = ({
     }),
   );
 
-  // 初始化
+  // 初始化 / 同步后端配置
   useEffect(() => {
-    if (config?.SourceConfig) {
-      setSources(config.SourceConfig);
-      // 进入时重置 orderChanged
-      setOrderChanged(false);
-      // 重置选择状态
-      setSelectedSources(new Set());
-    }
+    if (!config?.SourceConfig) return;
+    const remote = config.SourceConfig;
+
+    setSources((prev) => {
+      // 首次加载或本地列表为空：直接使用后端顺序
+      if (prev.length === 0) {
+        setOrderChanged(false);
+        return remote;
+      }
+
+      // 已有本地数据：保持本地排序，仅同步属性更新和新增/删除
+      const remoteMap = new Map(remote.map((s) => [s.key, s]));
+      const remoteKeys = new Set(remote.map((s) => s.key));
+
+      // 保留本地顺序中仍存在于后端的项，并更新属性
+      const merged = prev
+        .filter((s) => remoteKeys.has(s.key))
+        .map((s) => remoteMap.get(s.key)!);
+
+      // 追加后端新增但本地还没有的项
+      const localKeys = new Set(prev.map((s) => s.key));
+      remote.forEach((s) => {
+        if (!localKeys.has(s.key)) merged.push(s);
+      });
+
+      return merged;
+    });
+
+    // 重置选择状态
+    setSelectedSources(new Set());
   }, [config]);
 
   // 通用 API 请求
@@ -603,58 +626,58 @@ const VideoSourceConfig = ({
         </h4>
         <div className='flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-2'>
           {/* 批量操作按钮 - 移动端显示在下一行，PC端显示在左侧 */}
-          {selectedSources.size > 0 && (
-            <>
-              <div className='flex flex-wrap items-center gap-3 order-2 sm:order-1'>
-                <span className='text-sm text-gray-600 dark:text-gray-400'>
-                  <span className='sm:hidden'>已选 {selectedSources.size}</span>
-                  <span className='hidden sm:inline'>
-                    已选择 {selectedSources.size} 个视频源
-                  </span>
+          <div
+            className={`${selectedSources.size > 0 ? '' : 'invisible'} contents`}
+          >
+            <div className='flex flex-wrap items-center gap-3 order-2 sm:order-1'>
+              <span className='text-sm text-gray-600 dark:text-gray-400'>
+                <span className='sm:hidden'>已选 {selectedSources.size}</span>
+                <span className='hidden sm:inline'>
+                  已选择 {selectedSources.size} 个视频源
                 </span>
-                <button
-                  onClick={() => handleBatchOperation('batch_enable')}
-                  disabled={isLoading('batchSource_batch_enable')}
-                  className={`px-3 py-1 text-sm ${
-                    isLoading('batchSource_batch_enable')
-                      ? buttonStyles.disabled
-                      : buttonStyles.success
-                  }`}
-                >
-                  {isLoading('batchSource_batch_enable')
-                    ? '启用中...'
-                    : '批量启用'}
-                </button>
-                <button
-                  onClick={() => handleBatchOperation('batch_disable')}
-                  disabled={isLoading('batchSource_batch_disable')}
-                  className={`px-3 py-1 text-sm ${
-                    isLoading('batchSource_batch_disable')
-                      ? buttonStyles.disabled
-                      : buttonStyles.warning
-                  }`}
-                >
-                  {isLoading('batchSource_batch_disable')
-                    ? '禁用中...'
-                    : '批量禁用'}
-                </button>
-                <button
-                  onClick={() => handleBatchOperation('batch_delete')}
-                  disabled={isLoading('batchSource_batch_delete')}
-                  className={`px-3 py-1 text-sm ${
-                    isLoading('batchSource_batch_delete')
-                      ? buttonStyles.disabled
-                      : buttonStyles.danger
-                  }`}
-                >
-                  {isLoading('batchSource_batch_delete')
-                    ? '删除中...'
-                    : '批量删除'}
-                </button>
-              </div>
-              <div className='hidden sm:block w-px h-6 bg-gray-300 dark:bg-gray-600 order-2'></div>
-            </>
-          )}
+              </span>
+              <button
+                onClick={() => handleBatchOperation('batch_enable')}
+                disabled={isLoading('batchSource_batch_enable')}
+                className={`px-3 py-1 text-sm ${
+                  isLoading('batchSource_batch_enable')
+                    ? buttonStyles.disabled
+                    : buttonStyles.success
+                }`}
+              >
+                {isLoading('batchSource_batch_enable')
+                  ? '启用中...'
+                  : '批量启用'}
+              </button>
+              <button
+                onClick={() => handleBatchOperation('batch_disable')}
+                disabled={isLoading('batchSource_batch_disable')}
+                className={`px-3 py-1 text-sm ${
+                  isLoading('batchSource_batch_disable')
+                    ? buttonStyles.disabled
+                    : buttonStyles.warning
+                }`}
+              >
+                {isLoading('batchSource_batch_disable')
+                  ? '禁用中...'
+                  : '批量禁用'}
+              </button>
+              <button
+                onClick={() => handleBatchOperation('batch_delete')}
+                disabled={isLoading('batchSource_batch_delete')}
+                className={`px-3 py-1 text-sm ${
+                  isLoading('batchSource_batch_delete')
+                    ? buttonStyles.disabled
+                    : buttonStyles.danger
+                }`}
+              >
+                {isLoading('batchSource_batch_delete')
+                  ? '删除中...'
+                  : '批量删除'}
+              </button>
+            </div>
+            <div className='hidden sm:block w-px h-6 bg-gray-300 dark:bg-gray-600 order-2'></div>
+          </div>
           <div className='flex items-center gap-2 order-1 sm:order-2'>
             <button
               onClick={openValidationModal}

@@ -23,6 +23,8 @@ import {
 } from 'react';
 
 import { useSite } from './SiteProvider';
+import { ThemeToggle } from './ThemeToggle';
+import { UserMenu } from './UserMenu';
 
 interface SidebarContextType {
   isCollapsed: boolean;
@@ -210,16 +212,18 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
         >
           <div className='flex h-full flex-col'>
             {/* 顶部品牌区域 - 完全复制菜单项布局结构以保证对齐 */}
-            <div className='px-2 flex items-center h-16'>
+            <div className='px-2 flex items-center pt-6 pb-4'>
               <Link
                 href='/'
-                className={`flex items-center rounded-lg px-2 py-2 pl-2 w-full select-none hover:opacity-90 transition-opacity duration-200 min-h-[40px] gap-2.5 justify-start overflow-hidden`}
+                className={`flex items-center rounded-lg py-2 select-none hover:opacity-90 transition-[padding,gap] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] min-h-[40px] overflow-hidden w-full justify-start ${
+                  isCollapsed ? 'px-[2px] gap-0' : 'px-2 gap-3'
+                }`}
               >
-                <div className='w-8 h-8 flex-shrink-0'>
+                <div className='w-11 h-11 flex-shrink-0 flex items-center justify-center rounded-xl bg-gray-50 dark:bg-gray-800/50 shadow-sm border border-gray-100 dark:border-gray-700/50 p-1.5'>
                   <SiteIcon />
                 </div>
                 <span
-                  className={`text-base font-bold text-gray-800 dark:text-gray-100 tracking-tight whitespace-nowrap overflow-hidden transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
+                  className={`text-lg font-bold text-gray-800 dark:text-gray-100 tracking-tight whitespace-nowrap overflow-hidden transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
                     isCollapsed
                       ? 'max-w-0 opacity-0'
                       : 'max-w-[140px] opacity-100'
@@ -327,24 +331,28 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
             {/* 底部折叠/展开按钮 */}
             <div className='px-2 pb-4 pt-2'>
               <div className='mx-1 mb-2 h-px bg-gradient-to-r from-transparent via-gray-200 dark:via-gray-700 to-transparent' />
-              <button
-                onClick={handleToggle}
-                className={`group flex items-center rounded-lg px-2 py-2 pl-4 w-full text-sm text-gray-500 hover:bg-gray-100/30 hover:text-green-600 transition-colors duration-200 min-h-[40px] dark:text-gray-400 dark:hover:text-green-400 gap-3 justify-start`}
-                title={isCollapsed ? '展开侧栏' : '折叠侧栏'}
-              >
-                <div className='w-4 h-4 flex-shrink-0 flex items-center justify-center'>
-                  <Menu className='h-4 w-4' />
-                </div>
-                <span
-                  className={`whitespace-nowrap overflow-hidden transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
-                    isCollapsed
-                      ? 'max-w-0 opacity-0'
-                      : 'max-w-[120px] opacity-100'
-                  }`}
+              <div className='space-y-1'>
+                <UserMenu variant='sidebar' isCollapsed={isCollapsed} />
+                <ThemeToggle variant='sidebar' isCollapsed={isCollapsed} />
+                <button
+                  onClick={handleToggle}
+                  className={`group flex items-center rounded-lg px-2 py-2 pl-4 w-full text-sm text-gray-500 hover:bg-gray-100/30 hover:text-green-600 transition-colors duration-200 min-h-[40px] dark:text-gray-400 dark:hover:text-green-400 gap-3 justify-start`}
+                  title={isCollapsed ? '展开侧栏' : '折叠侧栏'}
                 >
-                  折叠
-                </span>
-              </button>
+                  <div className='w-4 h-4 flex-shrink-0 flex items-center justify-center'>
+                    <Menu className='h-4 w-4' />
+                  </div>
+                  <span
+                    className={`whitespace-nowrap overflow-hidden transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
+                      isCollapsed
+                        ? 'max-w-0 opacity-0'
+                        : 'max-w-[120px] opacity-100'
+                    }`}
+                  >
+                    折叠
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
         </aside>

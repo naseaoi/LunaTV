@@ -82,7 +82,7 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
 
     const viewportPadding = 8;
     const sideGap = 10;
-    const estimatedPanelWidth = Math.min(352, window.innerWidth - 16);
+    const estimatedPanelWidth = Math.min(256, window.innerWidth - 16);
     const preferredRightLeft = rect.left + rect.width + sideGap;
     const fallbackLeft = rect.left - estimatedPanelWidth - sideGap;
 
@@ -293,7 +293,20 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
     }
   };
 
-  const getActionHoverColor = (color: ActionItem['color']) => {
+  const getActionHoverColor = (
+    color: ActionItem['color'],
+    compact?: boolean,
+  ) => {
+    if (compact) {
+      switch (color) {
+        case 'danger':
+          return 'hover:bg-rose-50/70 dark:hover:bg-rose-500/10';
+        case 'primary':
+          return 'hover:bg-gray-100/70 dark:hover:bg-white/[0.06]';
+        default:
+          return 'hover:bg-gray-100/70 dark:hover:bg-white/[0.06]';
+      }
+    }
     switch (color) {
       case 'danger':
         return 'hover:bg-red-50/50 dark:hover:bg-red-900/10';
@@ -304,8 +317,19 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
     }
   };
 
-  const actionList = (
-    <div className='px-4 py-2'>
+  const getActionColorCompact = (color: ActionItem['color']) => {
+    switch (color) {
+      case 'danger':
+        return 'text-rose-600 dark:text-rose-300';
+      case 'primary':
+        return 'text-gray-700 dark:text-gray-200';
+      default:
+        return 'text-gray-700 dark:text-gray-200';
+    }
+  };
+
+  const renderActionList = (compact?: boolean) => (
+    <div className={compact ? 'py-2' : 'px-4 py-2'}>
       {actions.map((action, index) => (
         <div key={action.id}>
           <button
@@ -314,22 +338,35 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
               onClose();
             }}
             disabled={action.disabled}
-            className={`
-                  w-full flex items-center gap-4 py-4 px-2 transition-all duration-150 ease-out
-                  ${
+            className={
+              compact
+                ? `w-full px-4 py-2.5 text-left flex items-center gap-3 transition-colors text-sm ${
+                    action.disabled
+                      ? 'opacity-50 cursor-not-allowed'
+                      : getActionHoverColor(action.color, true)
+                  }`
+                : `w-full flex items-center gap-4 py-4 px-2 transition-all duration-150 ease-out ${
                     action.disabled
                       ? 'opacity-50 cursor-not-allowed'
                       : `${getActionHoverColor(action.color)} active:scale-[0.98]`
-                  }
-                `}
-            style={{ willChange: 'transform, background-color' }}
+                  }`
+            }
+            style={
+              compact
+                ? undefined
+                : { willChange: 'transform, background-color' }
+            }
           >
-            <div className='w-6 h-6 flex items-center justify-center flex-shrink-0'>
+            <div
+              className={`flex items-center justify-center flex-shrink-0 ${compact ? 'w-4 h-4' : 'w-6 h-6'}`}
+            >
               <span
                 className={`transition-colors duration-150 ${
                   action.disabled
                     ? 'text-gray-400 dark:text-gray-600'
-                    : getActionColor(action.color)
+                    : compact
+                      ? getActionColorCompact(action.color)
+                      : getActionColor(action.color)
                 }`}
               >
                 {action.icon}
@@ -337,14 +374,21 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
             </div>
 
             <span
-              className={`
-                  text-left font-medium text-base flex-1
-                  ${
-                    action.disabled
-                      ? 'text-gray-400 dark:text-gray-600'
-                      : 'text-gray-900 dark:text-gray-100'
-                  }
-                `}
+              className={
+                compact
+                  ? `text-left font-medium text-sm flex-1 ${
+                      action.disabled
+                        ? 'text-gray-400 dark:text-gray-600'
+                        : action.color === 'danger'
+                          ? 'text-rose-600 dark:text-rose-300'
+                          : 'text-gray-700 dark:text-gray-200'
+                    }`
+                  : `text-left font-medium text-base flex-1 ${
+                      action.disabled
+                        ? 'text-gray-400 dark:text-gray-600'
+                        : 'text-gray-900 dark:text-gray-100'
+                    }`
+              }
             >
               {action.label}
             </span>
@@ -356,17 +400,31 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
             )}
           </button>
 
-          {index < actions.length - 1 && (
-            <div className='border-b border-gray-100 dark:border-gray-800 ml-10'></div>
-          )}
+          {index < actions.length - 1 &&
+            (compact ? (
+              <div className='my-0.5 mx-4 h-px bg-gradient-to-r from-transparent via-gray-200/80 to-transparent dark:via-white/[0.10]' />
+            ) : (
+              <div className='border-b border-gray-100 dark:border-gray-800 ml-10' />
+            ))}
         </div>
       ))}
     </div>
   );
 
-  const sourceInfo =
+  const actionList = renderActionList(false);
+
+  const renderSourceInfo = (compact?: boolean) =>
     isAggregate && sources && sources.length > 0 ? (
-      <div className='px-4 py-3 border-t border-gray-100 dark:border-gray-800'>
+      <div
+        className={
+          compact
+            ? 'px-4 py-3'
+            : 'px-4 py-3 border-t border-gray-100 dark:border-gray-800'
+        }
+      >
+        {compact && (
+          <div className='mb-3 -mt-1 h-px bg-gradient-to-r from-transparent via-gray-200/80 to-transparent dark:via-white/[0.10]' />
+        )}
         <div className='mb-3'>
           <h4 className='text-sm font-medium text-gray-900 dark:text-gray-100 mb-1'>
             可用播放源
@@ -393,6 +451,8 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
         </div>
       </div>
     ) : null;
+
+  const sourceInfo = renderSourceInfo(false);
 
   useEffect(() => {
     if (isVisible) {
@@ -467,7 +527,7 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
       <div className='fixed inset-0 z-[9999] pointer-events-none'>
         <div
           ref={panelRef}
-          className={`absolute pointer-events-auto w-[22rem] max-w-[calc(100vw-16px)] bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200/80 dark:border-gray-700/80 transition-[opacity,transform] duration-150 ease-out ${
+          className={`absolute pointer-events-auto w-64 max-w-[calc(100vw-16px)] select-none rounded-2xl border border-gray-200/70 bg-white/80 shadow-2xl backdrop-blur-xl ring-1 ring-black/10 dark:border-white/10 dark:bg-gray-900/70 dark:ring-white/10 transition-[opacity,transform] duration-150 ease-out origin-top ${
             isAnimating
               ? 'opacity-100 scale-100 translate-y-0'
               : 'opacity-0 scale-95 translate-y-1'
@@ -475,47 +535,51 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
           style={{
             top: `${desktopPosition.top}px`,
             left: `${desktopPosition.left}px`,
-            transformOrigin: 'top center',
           }}
           onMouseDown={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.stopPropagation()}
         >
-          <div className='flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-800'>
-            <div className='flex items-center gap-3 flex-1 min-w-0'>
-              {posterPreview}
-              <div className='min-w-0 flex-1'>
-                <div className='flex items-center gap-2 mb-1'>
-                  <h3 className='text-lg font-semibold text-gray-900 dark:text-gray-100 truncate'>
-                    {title}
-                  </h3>
-                  {sourceName && (
-                    <span className='flex-shrink-0 text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800'>
-                      {origin === 'live' && (
-                        <Radio
-                          size={12}
-                          className='inline-block text-gray-500 dark:text-gray-400 mr-1.5'
-                        />
-                      )}
-                      {sourceName}
-                    </span>
-                  )}
+          {/* 顶部信息 */}
+          <div className='px-4 pt-3 pb-2'>
+            <div className='flex items-start justify-between gap-3'>
+              <div className='flex items-center gap-3 min-w-0 flex-1'>
+                {posterPreview}
+                <div className='min-w-0 flex-1'>
+                  <div className='flex items-center gap-2 min-w-0 mb-0.5'>
+                    <h3 className='font-semibold text-gray-900 dark:text-gray-100 text-sm truncate'>
+                      {title}
+                    </h3>
+                  </div>
+                  <div className='flex items-center gap-2'>
+                    {sourceName && (
+                      <span className='inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'>
+                        {origin === 'live' && (
+                          <Radio
+                            size={10}
+                            className='inline-block text-green-600 dark:text-green-300 mr-1'
+                          />
+                        )}
+                        {sourceName}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <p className='text-sm text-gray-500 dark:text-gray-400'>
-                  选择操作
-                </p>
               </div>
-            </div>
 
-            <button
-              onClick={onClose}
-              className='p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-150'
-            >
-              <X size={20} className='text-gray-500 dark:text-gray-400' />
-            </button>
+              <button
+                onClick={onClose}
+                className='rounded-lg p-1 text-gray-400 hover:bg-gray-100/70 hover:text-gray-600 dark:hover:bg-white/[0.06] dark:hover:text-gray-200 transition-colors'
+                aria-label='关闭菜单'
+              >
+                <X size={18} className='h-5 w-5' />
+              </button>
+            </div>
           </div>
 
-          {actionList}
-          {sourceInfo}
+          <div className='mx-4 h-px bg-gradient-to-r from-transparent via-gray-200/80 to-transparent dark:via-white/[0.10]' />
+
+          {renderActionList(true)}
+          {renderSourceInfo(true)}
         </div>
       </div>
     );
@@ -556,7 +620,7 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
 
       {/* 操作表单 */}
       <div
-        className='relative w-full max-w-lg mx-4 mb-4 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl transition-all duration-200 ease-out'
+        className='relative w-full max-w-lg mx-4 mb-4 bg-white/80 dark:bg-gray-900/70 rounded-2xl shadow-2xl backdrop-blur-xl border border-gray-200/70 ring-1 ring-black/10 dark:border-white/10 dark:ring-white/10 transition-all duration-200 ease-out'
         onTouchMove={(e) => {
           // 允许操作表单内部滚动，阻止事件冒泡到外层
           e.stopPropagation();

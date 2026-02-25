@@ -277,7 +277,7 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
 
       {/* 版本面板 */}
       <div
-        className='fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl max-h-[90vh] bg-white dark:bg-gray-900 rounded-xl shadow-xl z-[1001] overflow-hidden'
+        className='fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl max-h-[90vh] bg-white/80 dark:bg-gray-900/70 rounded-2xl shadow-2xl backdrop-blur-xl border border-gray-200/70 ring-1 ring-black/10 dark:border-white/10 dark:ring-white/10 z-[1001] overflow-hidden'
         onTouchMove={(e) => {
           // 允许版本面板内部滚动，阻止事件冒泡到外层
           e.stopPropagation();

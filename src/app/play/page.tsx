@@ -170,6 +170,7 @@ function PlayPageClient() {
 
   // 换源加载状态
   const [isVideoLoading, setIsVideoLoading] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [videoLoadingStage, setVideoLoadingStage] = useState<
     'initing' | 'sourceChanging'
   >('initing');
@@ -607,6 +608,7 @@ function PlayPageClient() {
     wakeLockRef,
     setError,
     setIsVideoLoading,
+    setIsPlaying,
     setRealtimeLoadSpeed,
     setBlockAdEnabled,
     setCurrentEpisodeIndex,
@@ -657,6 +659,7 @@ function PlayPageClient() {
       setIsEpisodeSelectorCollapsed={setIsEpisodeSelectorCollapsed}
       artRef={artRef}
       isVideoLoading={isVideoLoading}
+      isPlaying={isPlaying}
       videoLoadingStage={videoLoadingStage}
       realtimeLoadSpeed={realtimeLoadSpeed}
       authRecoveryVisible={authRecoveryVisible}

@@ -32,30 +32,28 @@ export default function ConfirmModal({
   return (
     <ModalShell isOpen={isOpen} onClose={onCancel} panelClassName='max-w-md'>
       <div className='p-6 sm:p-7'>
-        <div className='mb-4 flex items-start gap-3'>
-          <span className='mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-300'>
+        <div className='text-center'>
+          <span className='mx-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-300'>
             <AlertTriangle className='h-5 w-5' />
           </span>
-          <div>
-            <h3 className='text-lg font-semibold text-slate-900 dark:text-slate-100'>
-              {title}
-            </h3>
-            <p className='mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300'>
-              {message}
-            </p>
-          </div>
+          <h3 className='mt-4 text-lg font-semibold text-gray-900 dark:text-gray-100'>
+            {title}
+          </h3>
+          <p className='mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300'>
+            {message}
+          </p>
         </div>
 
-        <div className='mt-6 flex justify-end gap-3'>
+        <div className='mt-7 grid grid-cols-1 gap-3 sm:grid-cols-2'>
           <button
             onClick={onCancel}
-            className='rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+            className='rounded-xl border border-gray-200/70 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100/70 dark:border-white/10 dark:bg-gray-800/70 dark:text-gray-200 dark:hover:bg-white/[0.06]'
           >
             {cancelText}
           </button>
           <button
             onClick={onConfirm}
-            className={`rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-colors ${confirmClassName}`}
+            className={`rounded-xl px-4 py-2.5 text-sm font-medium text-white transition-colors ${confirmClassName}`}
           >
             {confirmText}
           </button>

@@ -8,7 +8,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 
 import LoadingStatePanel from '@/components/LoadingStatePanel';
 import PageLayout from '@/components/PageLayout';
@@ -41,25 +41,62 @@ function getLoadingStageIcon(loadingStage: LoadingStage): ReactNode {
   return <CheckCircle2 className='w-10 h-10' />;
 }
 
+/**
+ * 平滑进度 hook：进度条从当前值平滑过渡到目标值，
+ * 使用线性步进确保各阶段视觉增长长度一致。
+ */
+function useSmoothProgress(targetProgress: number) {
+  const [display, setDisplay] = useState(0);
+  const rafRef = useRef(0);
+  const currentRef = useRef(0);
+  const prevTargetRef = useRef(0);
+
+  useEffect(() => {
+    const prevTarget = prevTargetRef.current;
+    prevTargetRef.current = targetProgress;
+
+    // 阶段跳变（目标值大幅变化）时，先快速追到前一个目标附近
+    if (targetProgress - prevTarget > 10) {
+      currentRef.current = Math.max(currentRef.current, prevTarget - 2);
+    }
+
+    const animate = () => {
+      const target = targetProgress;
+      const cur = currentRef.current;
+      if (cur < target) {
+        // 固定步进速度，确保各阶段增长匀速
+        const step = 0.5;
+        currentRef.current = Math.min(cur + step, target);
+        setDisplay(Math.round(currentRef.current));
+      }
+      rafRef.current = requestAnimationFrame(animate);
+    };
+    rafRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [targetProgress]);
+
+  return display;
+}
+
 export function PlayLoadingView({
   loadingStage,
   loadingMessage,
   onBack,
 }: PlayLoadingViewProps) {
-  const loadingStageOrder: LoadingStage[] = [
-    'searching',
-    'preferring',
-    'fetching',
-    'ready',
-  ];
-  const loadingStageIndex = loadingStageOrder.indexOf(loadingStage);
-  const loadingProgress =
-    ((loadingStageIndex + 1) / loadingStageOrder.length) * 100;
+  // 各阶段进度百分比映射，确保进度条每段增量一致（均为 25%）
+  const stageProgressMap: Record<LoadingStage, number> = {
+    searching: 25,
+    preferring: 50,
+    fetching: 75,
+    ready: 100,
+  };
+  const rawProgress = stageProgressMap[loadingStage] ?? 0;
+  const loadingProgress = useSmoothProgress(rawProgress);
 
   return (
     <PageLayout activePath='/play'>
       <div className='fixed inset-0 z-40 flex items-center justify-center bg-white dark:bg-gray-950 overflow-hidden'>
-        <div className='flex flex-col items-center gap-4'>
+        <div className='flex flex-col items-center gap-4 w-full max-w-2xl px-4'>
           <LoadingStatePanel
             icon={getLoadingStageIcon(loadingStage)}
             tone='emerald'

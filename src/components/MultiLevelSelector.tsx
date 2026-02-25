@@ -552,7 +552,7 @@ const MultiLevelSelector: React.FC<MultiLevelSelectorProps> = ({
         createPortal(
           <div
             ref={dropdownRef}
-            className='fixed z-[9999] bg-white/95 dark:bg-gray-800/95 rounded-xl border border-gray-200/50 dark:border-gray-700/50 backdrop-blur-sm'
+            className='fixed z-[9999] bg-white/80 dark:bg-gray-900/70 rounded-2xl border border-gray-200/70 dark:border-white/10 backdrop-blur-xl shadow-2xl ring-1 ring-black/10 dark:ring-white/10'
             style={{
               left: `${dropdownPosition.x}px`,
               top: `${dropdownPosition.y}px`,

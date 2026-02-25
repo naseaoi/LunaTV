@@ -17,6 +17,10 @@ interface VideoInfo {
   hasError?: boolean;
 }
 
+const VIDEO_INFO_TTL_MS = 10 * 60_000;
+const videoInfoCache = new Map<string, { info: VideoInfo; ts: number }>();
+const inFlightVideoInfo = new Map<string, Promise<VideoInfo>>();
+
 interface SourcesTabProps {
   availableSources: SearchResult[];
   sourceSearchLoading: boolean;
@@ -71,40 +75,116 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
     return true;
   });
 
-  const getVideoInfo = useCallback(async (source: SearchResult) => {
-    const sourceKey = `${source.source}-${source.id}`;
-    if (attemptedSourcesRef.current.has(sourceKey)) return;
-    if (testingSourcesRef.current.has(sourceKey)) return;
-    if (!source.episodes || source.episodes.length === 0) return;
+  // 进入换源 Tab 时：用缓存快速回填，确保立即显示已有测速结果
+  useEffect(() => {
+    if (!isActive || availableSources.length === 0) return;
 
-    const episodeUrl = source.episodes[0];
-    testingSourcesRef.current.add(sourceKey);
+    const now = Date.now();
+    const cachedEntries: Array<[string, VideoInfo]> = [];
+    const cachedKeys = new Set<string>();
 
-    try {
-      const info = await getVideoResolutionFromM3u8(episodeUrl);
-      setVideoInfoMap((prev) => new Map(prev).set(sourceKey, info));
-      setAttemptedSources((prev) => new Set(prev).add(sourceKey));
-      attemptedSourcesRef.current.add(sourceKey);
-    } catch {
-      setVideoInfoMap((prev) =>
-        new Map(prev).set(sourceKey, {
+    for (const source of availableSources) {
+      const sourceKey = `${source.source}-${source.id}`;
+      const cached = videoInfoCache.get(sourceKey);
+      if (cached && now - cached.ts < VIDEO_INFO_TTL_MS) {
+        cachedEntries.push([sourceKey, cached.info]);
+        cachedKeys.add(sourceKey);
+      }
+    }
+
+    if (cachedEntries.length === 0) return;
+
+    setVideoInfoMap((prev) => {
+      const next = new Map(prev);
+      for (const [k, v] of cachedEntries) next.set(k, v);
+      return next;
+    });
+    setAttemptedSources((prev) => {
+      const next = new Set(prev);
+      cachedKeys.forEach((k) => next.add(k));
+      return next;
+    });
+    cachedKeys.forEach((k) => attemptedSourcesRef.current.add(k));
+  }, [availableSources, isActive]);
+
+  const getVideoInfo = useCallback(
+    async (source: SearchResult, options?: { force?: boolean }) => {
+      const sourceKey = `${source.source}-${source.id}`;
+      const force = options?.force === true;
+
+      if (force) {
+        videoInfoCache.delete(sourceKey);
+        attemptedSourcesRef.current.delete(sourceKey);
+        setAttemptedSources((prev) => {
+          const next = new Set(prev);
+          next.delete(sourceKey);
+          return next;
+        });
+      }
+
+      const now = Date.now();
+      const cached = force ? undefined : videoInfoCache.get(sourceKey);
+      if (cached && now - cached.ts < VIDEO_INFO_TTL_MS) {
+        setVideoInfoMap((prev) => new Map(prev).set(sourceKey, cached.info));
+        setAttemptedSources((prev) => new Set(prev).add(sourceKey));
+        attemptedSourcesRef.current.add(sourceKey);
+        return;
+      }
+
+      if (!force && attemptedSourcesRef.current.has(sourceKey)) return;
+      if (testingSourcesRef.current.has(sourceKey)) return;
+      if (!source.episodes || source.episodes.length === 0) return;
+
+      const episodeUrl = source.episodes[0];
+      testingSourcesRef.current.add(sourceKey);
+
+      try {
+        const inflight = inFlightVideoInfo.get(sourceKey);
+        if (inflight) {
+          const info = await inflight;
+          videoInfoCache.set(sourceKey, { info, ts: Date.now() });
+          setVideoInfoMap((prev) => new Map(prev).set(sourceKey, info));
+          setAttemptedSources((prev) => new Set(prev).add(sourceKey));
+          attemptedSourcesRef.current.add(sourceKey);
+          return;
+        }
+
+        const probePromise = getVideoResolutionFromM3u8(episodeUrl);
+        inFlightVideoInfo.set(sourceKey, probePromise);
+
+        const info = await probePromise;
+        videoInfoCache.set(sourceKey, { info, ts: Date.now() });
+        setVideoInfoMap((prev) => new Map(prev).set(sourceKey, info));
+        setAttemptedSources((prev) => new Set(prev).add(sourceKey));
+        attemptedSourcesRef.current.add(sourceKey);
+      } catch {
+        const info: VideoInfo = {
           quality: '错误',
           loadSpeed: '未知',
           pingTime: 0,
           hasError: true,
-        }),
-      );
-    } finally {
-      testingSourcesRef.current.delete(sourceKey);
-    }
-  }, []);
+        };
+        videoInfoCache.set(sourceKey, { info, ts: Date.now() });
+        setVideoInfoMap((prev) => new Map(prev).set(sourceKey, info));
+        setAttemptedSources((prev) => new Set(prev).add(sourceKey));
+        attemptedSourcesRef.current.add(sourceKey);
+      } finally {
+        inFlightVideoInfo.delete(sourceKey);
+        testingSourcesRef.current.delete(sourceKey);
+      }
+    },
+    [],
+  );
 
   // 合并预计算结果
   useEffect(() => {
     if (precomputedVideoInfo && precomputedVideoInfo.size > 0) {
       setVideoInfoMap((prev) => {
         const newMap = new Map(prev);
-        precomputedVideoInfo.forEach((v, k) => newMap.set(k, v));
+        precomputedVideoInfo.forEach((v, k) => {
+          newMap.set(k, v);
+          videoInfoCache.set(k, { info: v, ts: Date.now() });
+        });
         return newMap;
       });
       // 无论成功或失败，都标记为已尝试，避免重复测速
@@ -124,7 +204,17 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
   // 异步获取视频信息
   useEffect(() => {
     const fetchVideoInfosInBatches = async () => {
-      if (!optimizationEnabled || availableSources.length === 0) return;
+      if (!isActive) return;
+      if (availableSources.length === 0) return;
+
+      const now = Date.now();
+      for (const source of availableSources) {
+        const sourceKey = `${source.source}-${source.id}`;
+        const cached = videoInfoCache.get(sourceKey);
+        if (cached && now - cached.ts < VIDEO_INFO_TTL_MS) {
+          attemptedSourcesRef.current.add(sourceKey);
+        }
+      }
 
       const pendingSources = availableSources.filter((source) => {
         const sourceKey = `${source.source}-${source.id}`;
@@ -135,11 +225,11 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
       const batchSize = Math.ceil(pendingSources.length / 2);
       for (let start = 0; start < pendingSources.length; start += batchSize) {
         const batch = pendingSources.slice(start, start + batchSize);
-        await Promise.all(batch.map(getVideoInfo));
+        await Promise.all(batch.map((source) => getVideoInfo(source)));
       }
     };
     fetchVideoInfosInBatches();
-  }, [availableSources, getVideoInfo, optimizationEnabled]);
+  }, [availableSources, getVideoInfo, isActive]);
 
   const handleSourceClick = useCallback(
     (source: SearchResult) => {
@@ -308,14 +398,18 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
   }
 
   return (
-    <div ref={listContainerRef} className='flex-1 overflow-y-auto p-2 pb-20'>
-      <div className='grid grid-cols-2 gap-1.5'>
+    <div
+      ref={listContainerRef}
+      className='flex-1 overflow-y-auto p-5 sm:p-6 pb-20'
+    >
+      <div className='grid grid-cols-2 gap-2'>
         {sortedSources.map((source, index) => {
           const isCurrentSource =
             source.source?.toString() === currentSource?.toString() &&
             source.id?.toString() === currentId?.toString();
           const sourceKey = `${source.source}-${source.id}`;
           const videoInfo = videoInfoMap.get(sourceKey);
+          const isTesting = videoInfo?.loadSpeed === '测量中...';
 
           return (
             <div
@@ -395,7 +489,12 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
 
               {/* 网络信息（固定占位，避免测速前后高度跳变） */}
               <div className='flex items-center gap-2 min-h-[16px]'>
-                {videoInfo && !videoInfo.hasError ? (
+                {videoInfo && isTesting ? (
+                  <div className='flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-gray-400 font-medium'>
+                    <span className='inline-block h-3 w-3 border-2 border-gray-300 border-t-green-500 rounded-full animate-spin dark:border-gray-700 dark:border-t-green-400' />
+                    检测中
+                  </div>
+                ) : videoInfo && !videoInfo.hasError ? (
                   <div className='flex items-center gap-1.5 text-[10px]'>
                     <span className='text-green-600 dark:text-green-400 font-medium'>
                       {videoInfo.loadSpeed}
@@ -409,21 +508,24 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
                     className='text-[10px] text-blue-400 dark:text-blue-400 cursor-pointer hover:underline'
                     onClick={(e) => {
                       e.stopPropagation();
+
+                      // 先给用户即时反馈：进入检测中态
                       setVideoInfoMap((prev) => {
                         const newMap = new Map(prev);
-                        newMap.delete(sourceKey);
+                        newMap.set(sourceKey, {
+                          quality: '未知',
+                          loadSpeed: '测量中...',
+                          pingTime: 0,
+                          hasError: true,
+                        });
                         return newMap;
                       });
-                      setAttemptedSources((prev) => {
-                        const newSet = new Set(prev);
-                        newSet.delete(sourceKey);
-                        return newSet;
-                      });
-                      attemptedSourcesRef.current.delete(sourceKey);
-                      getVideoInfo(source);
+                      getVideoInfo(source, { force: true });
                     }}
                   >
-                    未测速 · 重试
+                    {videoInfo.quality === '错误'
+                      ? '检测失败 · 重试'
+                      : '未测速 · 重试'}
                   </span>
                 ) : optimizationEnabled ? (
                   <div className='flex items-center gap-1.5 text-[10px]'>
@@ -448,7 +550,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
         })}
       </div>
 
-      <div className='flex-shrink-0 mt-auto pt-2 border-t border-gray-100 dark:border-white/[0.06]'>
+      <div className='flex-shrink-0 mt-6 pt-4 border-t border-gray-100 dark:border-white/[0.06]'>
         <button
           onClick={() => {
             if (videoTitle) {

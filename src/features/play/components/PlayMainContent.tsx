@@ -7,18 +7,12 @@ import {
   RefreshCw,
   Tv,
 } from 'lucide-react';
-import {
-  RefObject,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { RefObject, useEffect, useMemo, useRef, useState } from 'react';
 
 import EpisodeSelector from '@/components/EpisodeSelector';
 import LoadingStatePanel from '@/components/LoadingStatePanel';
 import PageLayout from '@/components/PageLayout';
+import { BackButton } from '@/components/BackButton';
 import { SearchResult } from '@/lib/types';
 
 interface PlayMainContentProps {
@@ -30,6 +24,7 @@ interface PlayMainContentProps {
   setIsEpisodeSelectorCollapsed: (collapsed: boolean) => void;
   artRef: RefObject<HTMLDivElement>;
   isVideoLoading: boolean;
+  isPlaying: boolean;
   videoLoadingStage: 'initing' | 'sourceChanging';
   realtimeLoadSpeed: string;
   authRecoveryVisible: boolean;
@@ -98,6 +93,7 @@ export function PlayMainContent(props: PlayMainContentProps) {
     setIsEpisodeSelectorCollapsed,
     artRef,
     isVideoLoading,
+    isPlaying,
     videoLoadingStage,
     realtimeLoadSpeed,
     authRecoveryVisible,
@@ -120,41 +116,89 @@ export function PlayMainContent(props: PlayMainContentProps) {
     videoDoubanId,
   } = props;
 
-  // 根据 detail.type_name 选择标题图标
-  const TitleIcon = useMemo(() => {
+  // 根据 detail.type_name 选择标题图标和分类颜色
+  const { TitleIcon, categoryColor } = useMemo(() => {
     const typeName = detail?.type_name || '';
-    if (/电影|Movie/i.test(typeName)) return Film;
+    // 颜色配置：icon(图标色) / glow(光晕) / sub(副标题) / aurora(流光rgba)
+    const colors = {
+      film: {
+        icon: 'text-blue-500 dark:text-blue-400',
+        glow: 'bg-blue-400/10 dark:bg-blue-400/20',
+        sub: 'text-blue-600/80 dark:text-blue-400/70',
+        aurora: ['59,130,246', '96,165,250'],
+        auroraLight: ['147,197,253', '191,219,254'],
+      },
+      tv: {
+        icon: 'text-emerald-500 dark:text-emerald-400',
+        glow: 'bg-emerald-400/10 dark:bg-emerald-400/20',
+        sub: 'text-emerald-600/80 dark:text-emerald-400/70',
+        aurora: ['16,185,129', '52,211,153'],
+        auroraLight: ['110,231,183', '167,243,208'],
+      },
+      anime: {
+        icon: 'text-pink-500 dark:text-pink-400',
+        glow: 'bg-pink-400/10 dark:bg-pink-400/20',
+        sub: 'text-pink-600/80 dark:text-pink-400/70',
+        aurora: ['236,72,153', '244,114,182'],
+        auroraLight: ['249,168,212', '251,207,232'],
+      },
+      variety: {
+        icon: 'text-violet-500 dark:text-violet-400',
+        glow: 'bg-violet-400/10 dark:bg-violet-400/20',
+        sub: 'text-violet-600/80 dark:text-violet-400/70',
+        aurora: ['139,92,246', '167,139,250'],
+        auroraLight: ['196,181,253', '221,214,254'],
+      },
+    };
+    if (/电影|Movie/i.test(typeName))
+      return { TitleIcon: Film, categoryColor: colors.film };
     if (/电视|连续剧|剧集|[国韩美日泰港台]剧|TV|Drama/i.test(typeName))
-      return Tv;
-    if (/动[漫画]|番[剧组]|Anime|OVA/i.test(typeName)) return Cat;
-    if (/综艺|娱乐|Variety|Show/i.test(typeName)) return Clover;
-    // 兜底：根据集数推断
-    if (totalEpisodes <= 1) return Film;
-    return Tv;
+      return { TitleIcon: Tv, categoryColor: colors.tv };
+    if (/动[漫画]|番[剧组]|Anime|OVA/i.test(typeName))
+      return { TitleIcon: Cat, categoryColor: colors.anime };
+    if (/综艺|娱乐|Variety|Show/i.test(typeName))
+      return { TitleIcon: Clover, categoryColor: colors.variety };
+    if (totalEpisodes <= 1)
+      return { TitleIcon: Film, categoryColor: colors.film };
+    return { TitleIcon: Tv, categoryColor: colors.tv };
   }, [detail?.type_name, totalEpisodes]);
 
-  // 锁定播放器高度：首次渲染后读取 16:9 容器的实际高度，
-  // 之后固定为 px 值，切换面板时只改宽度不改高度。
-  const playerWrapRef = useRef<HTMLDivElement>(null);
-  const [lockedHeight, setLockedHeight] = useState<number | null>(null);
+  const currentSourceMeta = useMemo(() => {
+    return availableSources.find(
+      (item) =>
+        item.source?.toString() === currentSource?.toString() &&
+        item.id?.toString() === currentId?.toString(),
+    );
+  }, [availableSources, currentSource, currentId]);
 
-  const lockHeight = useCallback(() => {
+  const headerSourceText =
+    currentSourceMeta?.source_name ||
+    currentSourceMeta?.source?.toString() ||
+    currentSource?.toString() ||
+    '';
+  const headerYearText = (detail?.year || videoYear || '').toString();
+
+  // 播放器容器高度：面板展开时用 aspect-video 自适应，面板折叠时锁定高度
+  const playerWrapRef = useRef<HTMLDivElement>(null);
+  const [playerHeight, setPlayerHeight] = useState<number | null>(null);
+  // 记录面板展开时的播放器高度，面板折叠时用此值锁定
+  const expandedHeightRef = useRef<number | null>(null);
+
+  useEffect(() => {
     const el = playerWrapRef.current;
     if (!el) return;
-    const h = el.getBoundingClientRect().height;
-    if (h > 0) setLockedHeight(h);
-  }, []);
-
-  // 首次布局完成后锁定；窗口 resize 时重新计算
-  useEffect(() => {
-    // 下一帧再读，确保浏览器已完成布局
-    const raf = requestAnimationFrame(lockHeight);
-    window.addEventListener('resize', lockHeight);
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', lockHeight);
-    };
-  }, [lockHeight]);
+    const ro = new ResizeObserver(([entry]) => {
+      const h = entry.contentRect.height;
+      if (h > 0) {
+        setPlayerHeight(h);
+        if (!isEpisodeSelectorCollapsed) {
+          expandedHeightRef.current = h;
+        }
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isEpisodeSelectorCollapsed]);
 
   // 追踪是否为桌面端（md: 768px+），用于面板高度策略切换
   const [isDesktop, setIsDesktop] = useState(false);
@@ -182,37 +226,100 @@ export function PlayMainContent(props: PlayMainContentProps) {
 
   return (
     <PageLayout activePath='/play'>
-      <div className='flex flex-col gap-4 py-4 px-4 sm:px-6 lg:px-[3rem] 2xl:px-20'>
-        {/* 标题栏 + 折叠按钮 */}
-        <div className='flex items-center relative'>
-          {/* 标题居中于播放器区域 */}
+      <div className='relative flex flex-col gap-4 py-2 px-4 sm:px-6 lg:px-[3rem] 2xl:px-20'>
+        {/* 顶部流光背景层：不占高度，四周渐隐形成柔和边界 */}
+        <div className='pointer-events-none absolute inset-x-0 top-0 h-80'>
           <div
-            className={`transition-[width] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] flex justify-center ${
-              isEpisodeSelectorCollapsed ? 'w-full' : 'w-full md:w-3/4'
-            }`}
-          >
-            <h1 className='flex items-center gap-3 text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 min-w-0'>
-              <TitleIcon className='w-6 h-6 text-green-500 flex-shrink-0' />
+            className='absolute inset-0 dark:hidden'
+            style={{
+              background: [
+                `radial-gradient(ellipse 90% 60% at 30% 0%, rgba(${categoryColor.aurora[0]},0.10) 0%, transparent 70%)`,
+                `radial-gradient(ellipse 60% 50% at 70% 5%, rgba(${categoryColor.aurora[1]},0.08) 0%, transparent 70%)`,
+                `radial-gradient(ellipse 50% 45% at 45% 20%, rgba(${categoryColor.aurora[0]},0.06) 0%, transparent 65%)`,
+              ].join(', '),
+              animation: 'aurora-breathe 8s ease-in-out infinite',
+              animationPlayState: isPlaying ? 'running' : 'paused',
+            }}
+          />
+          <div
+            className='absolute inset-0 hidden dark:block'
+            style={{
+              background: [
+                `radial-gradient(ellipse 90% 60% at 30% 0%, rgba(${categoryColor.auroraLight[0]},0.16) 0%, transparent 70%)`,
+                `radial-gradient(ellipse 60% 50% at 70% 5%, rgba(${categoryColor.auroraLight[1]},0.12) 0%, transparent 70%)`,
+                `radial-gradient(ellipse 50% 45% at 45% 20%, rgba(${categoryColor.auroraLight[0]},0.09) 0%, transparent 65%)`,
+              ].join(', '),
+              animation: 'aurora-breathe 8s ease-in-out infinite',
+              animationPlayState: isPlaying ? 'running' : 'paused',
+            }}
+          />
+        </div>
+
+        {/* 顶部间距 */}
+        <div className='h-4' />
+
+        {/* 标题区域 */}
+        <div className='relative pb-3 border-b border-gray-200/60 dark:border-white/[0.06]'>
+          {/* 第一行：标题居中 */}
+          <div className='flex justify-center'>
+            <h1 className='flex items-center gap-2.5 text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 min-w-0'>
+              <span className='relative flex-shrink-0'>
+                <TitleIcon className={`w-6 h-6 ${categoryColor.icon}`} />
+                <span
+                  className={`absolute -inset-1.5 rounded-full ${categoryColor.glow} blur-sm`}
+                />
+              </span>
               <span className='truncate max-w-[60vw] sm:max-w-[50vw]'>
                 {videoTitle || '影片标题'}
               </span>
               {totalEpisodes > 1 && (
-                <span className='text-sm font-medium text-gray-400 dark:text-gray-500 flex-shrink-0'>
-                  {detail?.episodes_titles?.[currentEpisodeIndex] ||
-                    `第 ${currentEpisodeIndex + 1} 集`}
-                </span>
+                <>
+                  <span className='w-px h-4 bg-gray-300 dark:bg-gray-600 flex-shrink-0' />
+                  <span
+                    className={`text-sm font-semibold ${categoryColor.sub} flex-shrink-0 whitespace-nowrap`}
+                  >
+                    {detail?.episodes_titles?.[currentEpisodeIndex] ||
+                      `第 ${currentEpisodeIndex + 1} 集`}
+                  </span>
+                </>
               )}
             </h1>
           </div>
 
-          {/* 折叠/展开按钮 — 始终固定在右侧 */}
-          <div className='hidden lg:block absolute right-0 top-1/2 -translate-y-1/2'>
-            <TogglePanelButton
-              collapsed={isEpisodeSelectorCollapsed}
-              onClick={() =>
-                setIsEpisodeSelectorCollapsed(!isEpisodeSelectorCollapsed)
-              }
-            />
+          {/* 第二行：返回按钮 + 标签 + 折叠按钮 */}
+          <div className='mt-2 relative flex items-center justify-between'>
+            <div className='hidden md:block flex-shrink-0'>
+              <BackButton />
+            </div>
+
+            <div className='absolute inset-0 flex items-center justify-center pointer-events-none'>
+              <div className='flex flex-wrap items-center justify-center gap-2 text-[11px] font-medium'>
+                {headerSourceText && (
+                  <span className='inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-emerald-700 ring-1 ring-emerald-200/60 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-500/20'>
+                    {headerSourceText}
+                  </span>
+                )}
+                {headerYearText && (
+                  <span className='inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-gray-600 ring-1 ring-gray-200/60 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700/60'>
+                    {headerYearText}
+                  </span>
+                )}
+                {totalEpisodes > 1 && (
+                  <span className='inline-flex items-center rounded-full bg-violet-50 px-2.5 py-0.5 text-violet-600 ring-1 ring-violet-200/60 dark:bg-violet-900/30 dark:text-violet-300 dark:ring-violet-500/20'>
+                    共 {totalEpisodes} 集
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className='hidden lg:block flex-shrink-0'>
+              <TogglePanelButton
+                collapsed={isEpisodeSelectorCollapsed}
+                onClick={() =>
+                  setIsEpisodeSelectorCollapsed(!isEpisodeSelectorCollapsed)
+                }
+              />
+            </div>
           </div>
         </div>
 
@@ -232,12 +339,14 @@ export function PlayMainContent(props: PlayMainContentProps) {
           >
             <div
               ref={playerWrapRef}
-              className='relative w-full max-h-[80vh]'
-              style={lockedHeight ? { height: `${lockedHeight}px` } : undefined}
+              className={`relative w-full max-h-[80vh] ${isEpisodeSelectorCollapsed ? '' : 'aspect-video'}`}
+              style={
+                isEpisodeSelectorCollapsed && expandedHeightRef.current
+                  ? { height: `${expandedHeightRef.current}px` }
+                  : undefined
+              }
             >
-              {/* 未锁定高度前，用 aspect-video 撑出 16:9 初始高度 */}
-              {!lockedHeight && <div className='w-full aspect-video' />}
-              {/* 播放器绝对定位填满容器，高度锁定后不随宽度变化 */}
+              {/* 播放器绝对定位填满容器 */}
               <div className='absolute inset-0'>
                 <div
                   ref={artRef}
@@ -410,11 +519,11 @@ export function PlayMainContent(props: PlayMainContentProps) {
             style={
               isEpisodeSelectorCollapsed
                 ? undefined
-                : lockedHeight
+                : playerHeight
                   ? isDesktop
-                    ? { height: `${lockedHeight}px` }
+                    ? { height: `${playerHeight}px` }
                     : {
-                        height: `calc(100dvh - ${lockedHeight}px - 13.5rem - env(safe-area-inset-bottom, 0px))`,
+                        height: `calc(100dvh - ${playerHeight}px - 13.5rem - env(safe-area-inset-bottom, 0px))`,
                       }
                   : { height: '300px' }
             }

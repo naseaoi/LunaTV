@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 interface ModalShellProps {
@@ -22,6 +22,7 @@ export default function ModalShell({
 }: ModalShellProps) {
   const [mounted, setMounted] = useState(false);
   const [visible, setVisible] = useState(false);
+  const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -41,6 +42,12 @@ export default function ModalShell({
       window.clearTimeout(timeout);
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    if (mounted && overlayRef.current) {
+      overlayRef.current.focus();
+    }
+  }, [mounted]);
 
   useEffect(() => {
     if (!mounted) {
@@ -79,7 +86,9 @@ export default function ModalShell({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/55 p-4 backdrop-blur-sm transition-opacity duration-200 ${
+      ref={overlayRef}
+      tabIndex={-1}
+      className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 transition-opacity duration-200 outline-none ${
         visible ? 'opacity-100' : 'opacity-0'
       }`}
       onClick={() => {
@@ -90,7 +99,7 @@ export default function ModalShell({
       role='presentation'
     >
       <div
-        className={`w-full transform rounded-2xl border border-slate-200/70 bg-white shadow-2xl transition-all duration-200 dark:border-slate-700 dark:bg-slate-900 ${
+        className={`w-full transform rounded-2xl border border-gray-200/70 bg-white/80 shadow-2xl backdrop-blur-xl ring-1 ring-black/10 transition-all duration-200 dark:border-white/10 dark:bg-gray-900/70 dark:ring-white/10 ${
           visible ? 'scale-100 translate-y-0' : 'scale-95 translate-y-2'
         } ${panelClassName || ''}`}
         onClick={(event) => event.stopPropagation()}

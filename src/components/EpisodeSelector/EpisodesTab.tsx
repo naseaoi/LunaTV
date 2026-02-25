@@ -24,11 +24,6 @@ export const EpisodesTab: React.FC<EpisodesTabProps> = ({
   const pageCount = Math.ceil(totalEpisodes / episodesPerPage);
   const initialPage = Math.floor((value - 1) / episodesPerPage);
   const [currentPage, setCurrentPage] = useState<number>(initialPage);
-  const [descending, setDescending] = useState(false);
-
-  const displayPage = useMemo(() => {
-    return descending ? pageCount - 1 - currentPage : currentPage;
-  }, [currentPage, descending, pageCount]);
 
   const categoriesAsc = useMemo(() => {
     return Array.from({ length: pageCount }, (_, i) => {
@@ -39,13 +34,8 @@ export const EpisodesTab: React.FC<EpisodesTabProps> = ({
   }, [pageCount, episodesPerPage, totalEpisodes]);
 
   const categories = useMemo(() => {
-    if (descending) {
-      return [...categoriesAsc]
-        .reverse()
-        .map(({ start, end }) => `${end}-${start}`);
-    }
     return categoriesAsc.map(({ start, end }) => `${start}-${end}`);
-  }, [categoriesAsc, descending]);
+  }, [categoriesAsc]);
 
   const categoryContainerRef = useRef<HTMLDivElement>(null);
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -86,7 +76,7 @@ export const EpisodesTab: React.FC<EpisodesTabProps> = ({
   }, [isCategoryHovered, preventPageScroll, handleWheel]);
 
   useEffect(() => {
-    const btn = buttonRefs.current[displayPage];
+    const btn = buttonRefs.current[currentPage];
     const container = categoryContainerRef.current;
     if (btn && container) {
       const containerRect = container.getBoundingClientRect();
@@ -97,14 +87,11 @@ export const EpisodesTab: React.FC<EpisodesTabProps> = ({
         btnLeft - (containerRect.width - btnRect.width) / 2;
       container.scrollTo({ left: targetScrollLeft, behavior: 'smooth' });
     }
-  }, [displayPage, pageCount]);
+  }, [currentPage, pageCount]);
 
-  const handleCategoryClick = useCallback(
-    (index: number) => {
-      setCurrentPage(descending ? pageCount - 1 - index : index);
-    },
-    [descending, pageCount],
-  );
+  const handleCategoryClick = useCallback((index: number) => {
+    setCurrentPage(index);
+  }, []);
 
   const currentStart = currentPage * episodesPerPage + 1;
   const currentEnd = Math.min(
@@ -114,8 +101,8 @@ export const EpisodesTab: React.FC<EpisodesTabProps> = ({
 
   return (
     <>
-      {/* 工具栏：分页标签 + 正/倒序 */}
-      <div className='flex items-center gap-2 px-4 py-2 border-b border-gray-100 dark:border-white/[0.06] flex-shrink-0'>
+      {/* 工具栏：分页标签 */}
+      <div className='flex items-center gap-2 px-5 sm:px-6 py-3 flex-shrink-0'>
         {/* 分页标签（仅多页时显示） */}
         {pageCount > 1 && (
           <div
@@ -126,7 +113,7 @@ export const EpisodesTab: React.FC<EpisodesTabProps> = ({
           >
             <div className='flex gap-1 w-max min-w-full justify-center'>
               {categories.map((label, idx) => {
-                const isActive = idx === displayPage;
+                const isActive = idx === currentPage;
                 return (
                   <button
                     key={label}
@@ -155,35 +142,16 @@ export const EpisodesTab: React.FC<EpisodesTabProps> = ({
             1-{totalEpisodes}
           </span>
         )}
-        {/* 正/倒序按钮（始终显示） */}
-        <button
-          className='flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-gray-400 hover:text-green-600 hover:bg-gray-100 dark:hover:bg-white/10 dark:hover:text-green-400 transition-colors'
-          onClick={() => setDescending((prev) => !prev)}
-          title={descending ? '切换正序' : '切换倒序'}
-        >
-          <svg
-            className={`w-3.5 h-3.5 transition-transform duration-200 ${descending ? 'rotate-180' : ''}`}
-            fill='none'
-            stroke='currentColor'
-            viewBox='0 0 24 24'
-          >
-            <path
-              strokeLinecap='round'
-              strokeLinejoin='round'
-              strokeWidth='2'
-              d='M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4'
-            />
-          </svg>
-        </button>
       </div>
 
+      {/* 分割线：更柔和、左右留白 */}
+      <div className='mx-5 sm:mx-6 h-px bg-gradient-to-r from-transparent via-gray-200/80 to-transparent dark:via-white/[0.10]' />
+
       {/* 集数网格 */}
-      <div className='grid grid-cols-[repeat(auto-fill,minmax(3rem,1fr))] gap-2 overflow-y-auto flex-1 content-start p-4'>
+      <div className='grid grid-cols-[repeat(auto-fill,minmax(3rem,1fr))] gap-2 overflow-y-auto flex-1 content-start p-5 sm:p-6'>
         {(() => {
           const len = currentEnd - currentStart + 1;
-          return Array.from({ length: len }, (_, i) =>
-            descending ? currentEnd - i : currentStart + i,
-          );
+          return Array.from({ length: len }, (_, i) => currentStart + i);
         })().map((episodeNumber) => {
           const isActive = episodeNumber === value;
           const rawTitle = episodes_titles?.[episodeNumber - 1];

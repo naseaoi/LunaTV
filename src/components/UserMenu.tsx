@@ -1,8 +1,6 @@
 'use client';
 
 import {
-  Check,
-  ChevronDown,
   ExternalLink,
   KeyRound,
   LogOut,
@@ -12,9 +10,16 @@ import {
   X,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 
+import AdminSelect from '@/features/admin/components/AdminSelect';
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 import { CURRENT_VERSION } from '@/lib/version';
 import { checkForUpdates, UpdateStatus } from '@/lib/version_check';
@@ -26,13 +31,19 @@ interface AuthInfo {
   role?: 'owner' | 'admin' | 'user';
 }
 
-export const UserMenu: React.FC = () => {
+interface UserMenuProps {
+  variant?: 'icon' | 'sidebar';
+  isCollapsed?: boolean;
+}
+
+export const UserMenu: React.FC<UserMenuProps> = ({
+  variant = 'icon',
+  isCollapsed = false,
+}) => {
   const router = useRouter();
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const [menuPos, setMenuPos] = useState<{ top: number; right: number }>({
-    top: 56,
-    right: 16,
-  });
+  const [menuPlacement, setMenuPlacement] = useState<'up' | 'down'>('down');
+  const [menuPos, setMenuPos] = useState<CSSProperties>({});
   const [isOpen, setIsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
@@ -76,9 +87,6 @@ export const UserMenu: React.FC = () => {
     'cmliussss-cdn-tencent',
   );
   const [doubanImageProxyUrl, setDoubanImageProxyUrl] = useState('');
-  const [isDoubanDropdownOpen, setIsDoubanDropdownOpen] = useState(false);
-  const [isDoubanImageProxyDropdownOpen, setIsDoubanImageProxyDropdownOpen] =
-    useState(false);
 
   // 豆瓣数据源选项
   const doubanDataSourceOptions = [
@@ -219,48 +227,61 @@ export const UserMenu: React.FC = () => {
     checkUpdate();
   }, []);
 
-  // 点击外部区域关闭下拉框
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (isDoubanDropdownOpen) {
-        const target = event.target as Element;
-        if (!target.closest('[data-dropdown="douban-datasource"]')) {
-          setIsDoubanDropdownOpen(false);
+  const computeMenuPos = useMemo(() => {
+    const PANEL_WIDTH_PX = 256;
+    const VIEWPORT_GAP_PX = 8;
+    const ANCHOR_GAP_PX = 8;
+    const MIN_PANEL_HEIGHT_GUESS_PX = 280;
+
+    const clamp = (value: number, min: number, max: number) =>
+      Math.max(min, Math.min(value, max));
+
+    return (rect: DOMRect) => {
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const preferUp = variant === 'sidebar';
+      const shouldOpenUp =
+        preferUp ||
+        (spaceBelow < MIN_PANEL_HEIGHT_GUESS_PX && spaceAbove > spaceBelow);
+
+      setMenuPlacement(shouldOpenUp ? 'up' : 'down');
+
+      if (variant === 'icon') {
+        const right = Math.max(window.innerWidth - rect.right, VIEWPORT_GAP_PX);
+        if (shouldOpenUp) {
+          return {
+            bottom: Math.max(window.innerHeight - rect.top + ANCHOR_GAP_PX, 0),
+            right,
+          };
         }
+        return {
+          top: rect.bottom + ANCHOR_GAP_PX,
+          right,
+        };
       }
-    };
 
-    if (isDoubanDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () =>
-        document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isDoubanDropdownOpen]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (isDoubanImageProxyDropdownOpen) {
-        const target = event.target as Element;
-        if (!target.closest('[data-dropdown="douban-image-proxy"]')) {
-          setIsDoubanImageProxyDropdownOpen(false);
-        }
+      const left = clamp(
+        rect.left,
+        VIEWPORT_GAP_PX,
+        window.innerWidth - PANEL_WIDTH_PX - VIEWPORT_GAP_PX,
+      );
+      if (shouldOpenUp) {
+        return {
+          bottom: Math.max(window.innerHeight - rect.top + ANCHOR_GAP_PX, 0),
+          left,
+        };
       }
+      return {
+        top: rect.bottom + ANCHOR_GAP_PX,
+        left,
+      };
     };
-
-    if (isDoubanImageProxyDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () =>
-        document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isDoubanImageProxyDropdownOpen]);
+  }, [variant]);
 
   const handleMenuClick = () => {
     if (!isOpen && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
-      setMenuPos({
-        top: rect.bottom + 4,
-        right: Math.max(window.innerWidth - rect.right, 8),
-      });
+      setMenuPos(computeMenuPos(rect));
     }
     setIsOpen(!isOpen);
   };
@@ -501,46 +522,60 @@ export const UserMenu: React.FC = () => {
 
       {/* 菜单面板 */}
       <div
-        className='fixed w-56 bg-white dark:bg-gray-900 rounded-lg shadow-xl z-[1001] border border-gray-200/50 dark:border-gray-700/50 overflow-hidden select-none'
-        style={{ top: `${menuPos.top}px`, right: `${menuPos.right}px` }}
+        className={`fixed w-64 max-w-[calc(100vw-16px)] z-[1001] select-none rounded-2xl border border-gray-200/70 bg-white/80 shadow-2xl backdrop-blur-xl ring-1 ring-black/10 dark:border-white/10 dark:bg-gray-900/70 dark:ring-white/10 ${
+          menuPlacement === 'up' ? 'origin-bottom' : 'origin-top'
+        }`}
+        style={menuPos}
       >
-        {/* 用户信息区域 */}
-        <div className='px-3 py-2.5 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-gray-100/50 dark:from-gray-800 dark:to-gray-800/50'>
-          <div className='space-y-1'>
-            <div className='flex items-center justify-between'>
-              <span className='text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'>
-                当前用户
-              </span>
-              <span
-                className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${
-                  (authInfo?.role || 'user') === 'owner'
-                    ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
-                    : (authInfo?.role || 'user') === 'admin'
-                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
-                      : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                }`}
-              >
-                {getRoleText(authInfo?.role || 'user')}
-              </span>
-            </div>
-            <div className='flex items-center justify-between'>
-              <div className='font-semibold text-gray-900 dark:text-gray-100 text-sm truncate'>
-                {authInfo?.username || 'default'}
+        {/* 顶部信息 */}
+        <div className='px-4 pt-3 pb-2'>
+          <div className='flex items-start justify-between gap-3'>
+            <div className='flex items-center gap-3 min-w-0'>
+              <div className='h-9 w-9 flex-shrink-0 rounded-xl bg-gradient-to-br from-emerald-100 to-green-50 text-emerald-700 ring-1 ring-black/5 flex items-center justify-center dark:from-emerald-500/15 dark:to-green-500/10 dark:text-emerald-200 dark:ring-white/10'>
+                <User className='h-5 w-5' />
               </div>
-              <div className='text-[10px] text-gray-400 dark:text-gray-500'>
-                数据存储：
-                {storageType === 'localstorage' ? '本地' : storageType}
+              <div className='min-w-0'>
+                <div className='flex items-center gap-2 min-w-0'>
+                  <div className='font-semibold text-gray-900 dark:text-gray-100 text-sm truncate'>
+                    {authInfo?.username || 'default'}
+                  </div>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                      (authInfo?.role || 'user') === 'owner'
+                        ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200'
+                        : (authInfo?.role || 'user') === 'admin'
+                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200'
+                          : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'
+                    }`}
+                  >
+                    {getRoleText(authInfo?.role || 'user')}
+                  </span>
+                </div>
+                <div className='mt-1 text-[10px] text-gray-400 dark:text-gray-500'>
+                  数据存储：
+                  {storageType === 'localstorage' ? '本地' : storageType}
+                </div>
               </div>
             </div>
+
+            <button
+              onClick={handleCloseMenu}
+              className='rounded-lg p-1 text-gray-400 hover:bg-gray-100/70 hover:text-gray-600 dark:hover:bg-white/[0.06] dark:hover:text-gray-200 transition-colors'
+              aria-label='关闭菜单'
+            >
+              <X className='h-5 w-5' />
+            </button>
           </div>
         </div>
 
+        <div className='mx-4 h-px bg-gradient-to-r from-transparent via-gray-200/80 to-transparent dark:via-white/[0.10]' />
+
         {/* 菜单项 */}
-        <div className='py-1'>
+        <div className='py-2'>
           {/* 设置按钮 */}
           <button
             onClick={handleSettings}
-            className='w-full px-3 py-2 text-left flex items-center gap-2.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm'
+            className='w-full px-4 py-2.5 text-left flex items-center gap-3 text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-white/[0.06] transition-colors text-sm'
           >
             <Settings className='w-4 h-4 text-gray-500 dark:text-gray-400' />
             <span className='font-medium'>设置</span>
@@ -550,10 +585,10 @@ export const UserMenu: React.FC = () => {
           {showAdminPanel && (
             <button
               onClick={handleAdminPanel}
-              className='w-full px-3 py-2 text-left flex items-center gap-2.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm'
+              className='w-full px-4 py-2.5 text-left flex items-center gap-3 text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-white/[0.06] transition-colors text-sm'
             >
               <Shield className='w-4 h-4 text-gray-500 dark:text-gray-400' />
-              <span className='font-medium'>管理面板</span>
+              <span className='font-medium'>管理</span>
             </button>
           )}
 
@@ -561,7 +596,7 @@ export const UserMenu: React.FC = () => {
           {showChangePassword && (
             <button
               onClick={handleChangePassword}
-              className='w-full px-3 py-2 text-left flex items-center gap-2.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm'
+              className='w-full px-4 py-2.5 text-left flex items-center gap-3 text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-white/[0.06] transition-colors text-sm'
             >
               <KeyRound className='w-4 h-4 text-gray-500 dark:text-gray-400' />
               <span className='font-medium'>修改密码</span>
@@ -569,19 +604,16 @@ export const UserMenu: React.FC = () => {
           )}
 
           {/* 分割线 */}
-          <div className='my-1 border-t border-gray-200 dark:border-gray-700'></div>
+          <div className='my-2 mx-4 h-px bg-gradient-to-r from-transparent via-gray-200/80 to-transparent dark:via-white/[0.10]' />
 
           {/* 登出按钮 */}
           <button
             onClick={handleLogout}
-            className='w-full px-3 py-2 text-left flex items-center gap-2.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-sm'
+            className='w-full px-4 py-2.5 text-left flex items-center gap-3 text-rose-600 dark:text-rose-300 hover:bg-rose-50/70 dark:hover:bg-rose-500/10 transition-colors text-sm'
           >
             <LogOut className='w-4 h-4' />
             <span className='font-medium'>登出</span>
           </button>
-
-          {/* 分割线 */}
-          <div className='my-1 border-t border-gray-200 dark:border-gray-700'></div>
 
           {/* 版本信息 */}
           <button
@@ -589,7 +621,7 @@ export const UserMenu: React.FC = () => {
               setIsVersionPanelOpen(true);
               handleCloseMenu();
             }}
-            className='w-full px-3 py-2 text-center flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors text-xs'
+            className='mt-1 w-full px-4 py-2 text-center flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-50/70 dark:hover:bg-white/[0.06] transition-colors text-xs'
           >
             <div className='flex items-center gap-1'>
               <span className='font-mono'>v{CURRENT_VERSION}</span>
@@ -624,7 +656,7 @@ export const UserMenu: React.FC = () => {
       />
 
       {/* 设置面板 */}
-      <div className='fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl max-h-[90vh] bg-white dark:bg-gray-900 rounded-xl shadow-xl z-[1001] flex flex-col'>
+      <div className='fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl max-h-[90vh] bg-white/80 dark:bg-gray-900/70 rounded-2xl shadow-2xl backdrop-blur-xl border border-gray-200/70 ring-1 ring-black/10 dark:border-white/10 dark:ring-white/10 z-[1001] flex flex-col'>
         {/* 内容容器 - 独立的滚动区域 */}
         <div
           className='flex-1 p-6 overflow-y-auto'
@@ -669,55 +701,11 @@ export const UserMenu: React.FC = () => {
                   选择获取豆瓣数据的方式
                 </p>
               </div>
-              <div className='relative' data-dropdown='douban-datasource'>
-                {/* 自定义下拉选择框 */}
-                <button
-                  type='button'
-                  onClick={() => setIsDoubanDropdownOpen(!isDoubanDropdownOpen)}
-                  className='w-full px-3 py-2.5 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm hover:border-gray-400 dark:hover:border-gray-500 text-left'
-                >
-                  {
-                    doubanDataSourceOptions.find(
-                      (option) => option.value === doubanDataSource,
-                    )?.label
-                  }
-                </button>
-
-                {/* 下拉箭头 */}
-                <div className='absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none'>
-                  <ChevronDown
-                    className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${
-                      isDoubanDropdownOpen ? 'rotate-180' : ''
-                    }`}
-                  />
-                </div>
-
-                {/* 下拉选项列表 */}
-                {isDoubanDropdownOpen && (
-                  <div className='absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-auto'>
-                    {doubanDataSourceOptions.map((option) => (
-                      <button
-                        key={option.value}
-                        type='button'
-                        onClick={() => {
-                          handleDoubanDataSourceChange(option.value);
-                          setIsDoubanDropdownOpen(false);
-                        }}
-                        className={`w-full px-3 py-2.5 text-left text-sm transition-colors duration-150 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                          doubanDataSource === option.value
-                            ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
-                            : 'text-gray-900 dark:text-gray-100'
-                        }`}
-                      >
-                        <span className='truncate'>{option.label}</span>
-                        {doubanDataSource === option.value && (
-                          <Check className='w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 ml-2' />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <AdminSelect
+                value={doubanDataSource}
+                onChange={(value) => handleDoubanDataSourceChange(value)}
+                options={doubanDataSourceOptions}
+              />
 
               {/* 感谢信息 */}
               {getThanksInfo(doubanDataSource) && (
@@ -775,59 +763,11 @@ export const UserMenu: React.FC = () => {
                   选择获取豆瓣图片的方式
                 </p>
               </div>
-              <div className='relative' data-dropdown='douban-image-proxy'>
-                {/* 自定义下拉选择框 */}
-                <button
-                  type='button'
-                  onClick={() =>
-                    setIsDoubanImageProxyDropdownOpen(
-                      !isDoubanImageProxyDropdownOpen,
-                    )
-                  }
-                  className='w-full px-3 py-2.5 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm hover:border-gray-400 dark:hover:border-gray-500 text-left'
-                >
-                  {
-                    doubanImageProxyTypeOptions.find(
-                      (option) => option.value === doubanImageProxyType,
-                    )?.label
-                  }
-                </button>
-
-                {/* 下拉箭头 */}
-                <div className='absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none'>
-                  <ChevronDown
-                    className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${
-                      isDoubanDropdownOpen ? 'rotate-180' : ''
-                    }`}
-                  />
-                </div>
-
-                {/* 下拉选项列表 */}
-                {isDoubanImageProxyDropdownOpen && (
-                  <div className='absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-auto'>
-                    {doubanImageProxyTypeOptions.map((option) => (
-                      <button
-                        key={option.value}
-                        type='button'
-                        onClick={() => {
-                          handleDoubanImageProxyTypeChange(option.value);
-                          setIsDoubanImageProxyDropdownOpen(false);
-                        }}
-                        className={`w-full px-3 py-2.5 text-left text-sm transition-colors duration-150 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                          doubanImageProxyType === option.value
-                            ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
-                            : 'text-gray-900 dark:text-gray-100'
-                        }`}
-                      >
-                        <span className='truncate'>{option.label}</span>
-                        {doubanImageProxyType === option.value && (
-                          <Check className='w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 ml-2' />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <AdminSelect
+                value={doubanImageProxyType}
+                onChange={(value) => handleDoubanImageProxyTypeChange(value)}
+                options={doubanImageProxyTypeOptions}
+              />
 
               {/* 感谢信息 */}
               {getThanksInfo(doubanImageProxyType) && (
@@ -1008,7 +948,7 @@ export const UserMenu: React.FC = () => {
       />
 
       {/* 修改密码面板 */}
-      <div className='fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white dark:bg-gray-900 rounded-xl shadow-xl z-[1001] overflow-hidden'>
+      <div className='fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white/80 dark:bg-gray-900/70 rounded-2xl shadow-2xl backdrop-blur-xl border border-gray-200/70 ring-1 ring-black/10 dark:border-white/10 dark:ring-white/10 z-[1001] overflow-hidden'>
         {/* 内容容器 - 独立的滚动区域 */}
         <div
           className='h-full p-6'
@@ -1126,19 +1066,45 @@ export const UserMenu: React.FC = () => {
 
   return (
     <>
-      <div className='relative'>
-        <button
-          ref={buttonRef}
-          onClick={handleMenuClick}
-          className='w-10 h-10 p-2 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200/50 dark:text-gray-300 dark:hover:bg-gray-700/50 transition-colors'
-          aria-label='User Menu'
-        >
-          <User className='w-full h-full' />
-        </button>
-        {updateStatus === UpdateStatus.HAS_UPDATE && (
-          <div className='absolute top-[2px] right-[2px] w-2 h-2 bg-yellow-500 rounded-full'></div>
-        )}
-      </div>
+      {variant === 'sidebar' ? (
+        <div className='relative w-full'>
+          <button
+            ref={buttonRef}
+            onClick={handleMenuClick}
+            className='group flex items-center rounded-lg px-2 py-2 pl-4 w-full text-sm text-gray-500 hover:bg-gray-100/30 hover:text-green-600 transition-colors duration-200 min-h-[40px] dark:text-gray-400 dark:hover:text-green-400 gap-3 justify-start'
+            aria-label='User Menu'
+            title='用户'
+          >
+            <div className='w-4 h-4 flex-shrink-0 flex items-center justify-center relative'>
+              <User className='h-4 w-4' />
+              {updateStatus === UpdateStatus.HAS_UPDATE && (
+                <div className='absolute -top-1 -right-1 w-2 h-2 bg-yellow-500 rounded-full'></div>
+              )}
+            </div>
+            <span
+              className={`whitespace-nowrap overflow-hidden transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
+                isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[120px] opacity-100'
+              }`}
+            >
+              用户
+            </span>
+          </button>
+        </div>
+      ) : (
+        <div className='relative'>
+          <button
+            ref={buttonRef}
+            onClick={handleMenuClick}
+            className='w-10 h-10 p-2 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200/50 dark:text-gray-300 dark:hover:bg-gray-700/50 transition-colors'
+            aria-label='User Menu'
+          >
+            <User className='w-full h-full' />
+          </button>
+          {updateStatus === UpdateStatus.HAS_UPDATE && (
+            <div className='absolute top-[2px] right-[2px] w-2 h-2 bg-yellow-500 rounded-full'></div>
+          )}
+        </div>
+      )}
 
       {/* 使用 Portal 将菜单面板渲染到 document.body */}
       {isOpen && mounted && createPortal(menuPanel, document.body)}

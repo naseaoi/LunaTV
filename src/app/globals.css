@@ -176,3 +176,31 @@ div[data-media-provider] video {
     display: none !important;
   }
 }
+
+/* 播放页顶部流光呼吸动画 */
+@keyframes aurora-breathe {
+  0% {
+    opacity: 0.5;
+    transform: scale(1) translate(0, 0);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1.15) translate(3%, -4%);
+  }
+  40% {
+    opacity: 0.55;
+    transform: scale(0.95) translate(-4%, 3%);
+  }
+  60% {
+    opacity: 0.95;
+    transform: scale(1.1) translate(2%, -2%);
+  }
+  80% {
+    opacity: 0.5;
+    transform: scale(0.97) translate(-2%, 2%);
+  }
+  100% {
+    opacity: 0.5;
+    transform: scale(1) translate(0, 0);
+  }
+}

@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 
 import AdminDialog from '@/features/admin/components/AdminDialog';
+import AdminSelect from '@/features/admin/components/AdminSelect';
 import AlertModal from '@/features/admin/components/AlertModal';
 import ConfirmModal from '@/features/admin/components/ConfirmModal';
 import { buttonStyles } from '@/features/admin/lib/buttonStyles';
@@ -719,27 +720,27 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                 <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
                   用户组（可选）
                 </label>
-                <select
+                <AdminSelect
                   value={newUser.userGroup}
-                  onChange={(e) =>
+                  onChange={(value) =>
                     setNewUser((prev) => ({
                       ...prev,
-                      userGroup: e.target.value,
+                      userGroup: value,
                     }))
                   }
-                  className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
-                >
-                  <option value=''>无用户组（无限制）</option>
-                  {userGroups.map((group) => (
-                    <option key={group.name} value={group.name}>
-                      {group.name} (
-                      {group.enabledApis && group.enabledApis.length > 0
-                        ? `${group.enabledApis.length} 个源`
-                        : '无限制'}
-                      )
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    { label: '无用户组（无限制）', value: '' },
+                    ...userGroups.map((group) => ({
+                      label: `${group.name} (${
+                        group.enabledApis && group.enabledApis.length > 0
+                          ? `${group.enabledApis.length} 个源`
+                          : '无限制'
+                      })`,
+                      value: group.name,
+                    })),
+                  ]}
+                  placeholder='无用户组（无限制）'
+                />
               </div>
               <div className='flex justify-end'>
                 <button
@@ -1527,24 +1528,24 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
             <label className='mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300'>
               选择用户组：
             </label>
-            <select
+            <AdminSelect
               value={selectedUserGroups.length > 0 ? selectedUserGroups[0] : ''}
-              onChange={(e) => {
-                const value = e.target.value;
+              onChange={(value) => {
                 setSelectedUserGroups(value ? [value] : []);
               }}
-              className='w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 transition-colors focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
-            >
-              <option value=''>无用户组（无限制）</option>
-              {userGroups.map((group) => (
-                <option key={group.name} value={group.name}>
-                  {group.name}{' '}
-                  {group.enabledApis && group.enabledApis.length > 0
-                    ? `(${group.enabledApis.length} 个源)`
-                    : ''}
-                </option>
-              ))}
-            </select>
+              options={[
+                { label: '无用户组（无限制）', value: '' },
+                ...userGroups.map((group) => ({
+                  label: `${group.name}${
+                    group.enabledApis && group.enabledApis.length > 0
+                      ? ` (${group.enabledApis.length} 个源)`
+                      : ''
+                  }`,
+                  value: group.name,
+                })),
+              ]}
+              placeholder='无用户组（无限制）'
+            />
             <p className='mt-2 text-xs text-gray-500 dark:text-gray-400'>
               选择"无用户组"为无限制，选择特定用户组将限制用户只能访问该用户组允许的采集源
             </p>
@@ -1765,21 +1766,22 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
             <label className='mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300'>
               选择用户组：
             </label>
-            <select
-              onChange={(e) => setSelectedUserGroup(e.target.value)}
-              className='w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 transition-colors focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
+            <AdminSelect
               value={selectedUserGroup}
-            >
-              <option value=''>无用户组（无限制）</option>
-              {userGroups.map((group) => (
-                <option key={group.name} value={group.name}>
-                  {group.name}{' '}
-                  {group.enabledApis && group.enabledApis.length > 0
-                    ? `(${group.enabledApis.length} 个源)`
-                    : ''}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => setSelectedUserGroup(value)}
+              options={[
+                { label: '无用户组（无限制）', value: '' },
+                ...userGroups.map((group) => ({
+                  label: `${group.name}${
+                    group.enabledApis && group.enabledApis.length > 0
+                      ? ` (${group.enabledApis.length} 个源)`
+                      : ''
+                  }`,
+                  value: group.name,
+                })),
+              ]}
+              placeholder='无用户组（无限制）'
+            />
             <p className='mt-2 text-xs text-gray-500 dark:text-gray-400'>
               选择"无用户组"为无限制，选择特定用户组将限制用户只能访问该用户组允许的采集源
             </p>

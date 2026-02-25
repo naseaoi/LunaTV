@@ -172,7 +172,10 @@ const LoadingStatePanel: React.FC<LoadingStatePanelProps> = ({
         )}
 
         {typeof progress === 'number' && (
-          <div className='mt-6 w-full max-w-[22rem]' dir='ltr'>
+          <div
+            className='mt-6 w-full max-w-[22rem] self-stretch mx-auto'
+            dir='ltr'
+          >
             <div
               className={`relative h-2.5 overflow-hidden rounded-full ${colors.track}`}
             >

@@ -75,11 +75,11 @@ export default function AlertModal({
             {icon}
           </span>
           <div>
-            <h3 className='text-lg font-semibold text-slate-900 dark:text-slate-100'>
+            <h3 className='text-lg font-semibold text-gray-900 dark:text-gray-100'>
               {title}
             </h3>
             {message && (
-              <p className='mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300'>
+              <p className='mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300'>
                 {message}
               </p>
             )}
@@ -88,7 +88,7 @@ export default function AlertModal({
 
         {html && (
           <div
-            className='mb-5 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200'
+            className='mb-5 rounded-xl border border-gray-200/70 bg-gray-50 p-3 text-sm leading-6 text-gray-700 dark:border-white/10 dark:bg-gray-800/70 dark:text-gray-200'
             dangerouslySetInnerHTML={{ __html: html }}
           />
         )}
@@ -98,7 +98,7 @@ export default function AlertModal({
             {showConfirm && onConfirm && (
               <button
                 onClick={onClose}
-                className='rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+                className='rounded-lg border border-gray-200/70 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100/70 dark:border-white/10 dark:bg-gray-800/70 dark:text-gray-200 dark:hover:bg-white/[0.06]'
               >
                 {cancelText}
               </button>

@@ -5,7 +5,15 @@ import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { useEffect, useRef, useState } from 'react';
 
-export function ThemeToggle() {
+interface ThemeToggleProps {
+  variant?: 'icon' | 'sidebar';
+  isCollapsed?: boolean;
+}
+
+export function ThemeToggle({
+  variant = 'icon',
+  isCollapsed = false,
+}: ThemeToggleProps) {
   const [mounted, setMounted] = useState(false);
   const { setTheme, resolvedTheme } = useTheme();
   const pathname = usePathname();
@@ -36,6 +44,9 @@ export function ThemeToggle() {
 
   if (!mounted) {
     // 渲染一个占位符以避免布局偏移
+    if (variant === 'sidebar') {
+      return <div className='h-10 w-full' />;
+    }
     return <div className='w-10 h-10' />;
   }
 
@@ -90,6 +101,33 @@ export function ThemeToggle() {
       })
       .catch(() => undefined);
   };
+
+  if (variant === 'sidebar') {
+    return (
+      <button
+        ref={buttonRef}
+        onClick={toggleTheme}
+        className='group flex items-center rounded-lg px-2 py-2 pl-4 w-full text-sm text-gray-500 hover:bg-gray-100/30 hover:text-green-600 transition-colors duration-200 min-h-[40px] dark:text-gray-400 dark:hover:text-green-400 gap-3 justify-start'
+        aria-label='Toggle theme'
+        title='主题'
+      >
+        <div className='w-4 h-4 flex-shrink-0 flex items-center justify-center'>
+          {resolvedTheme === 'dark' ? (
+            <Sun className='h-4 w-4' />
+          ) : (
+            <Moon className='h-4 w-4' />
+          )}
+        </div>
+        <span
+          className={`whitespace-nowrap overflow-hidden transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
+            isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[120px] opacity-100'
+          }`}
+        >
+          主题
+        </span>
+      </button>
+    );
+  }
 
   return (
     <button

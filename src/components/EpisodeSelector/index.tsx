@@ -79,7 +79,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`flex-1 py-3 text-center text-sm font-medium transition-all duration-200 relative
+            className={`flex-1 py-[18px] min-h-[64px] text-center text-sm font-medium transition-all duration-200 relative
               ${
                 activeTab === tab.key
                   ? 'text-green-600 dark:text-green-400'

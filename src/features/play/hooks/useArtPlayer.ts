@@ -92,6 +92,7 @@ export interface UseArtPlayerParams {
   wakeLockRef: MutableRefObject<WakeLockSentinel | null>;
   setError: Dispatch<SetStateAction<string | null>>;
   setIsVideoLoading: Dispatch<SetStateAction<boolean>>;
+  setIsPlaying: Dispatch<SetStateAction<boolean>>;
   setRealtimeLoadSpeed: Dispatch<SetStateAction<string>>;
   setBlockAdEnabled: Dispatch<SetStateAction<boolean>>;
   setCurrentEpisodeIndex: Dispatch<SetStateAction<number>>;
@@ -131,6 +132,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
     currentEpisodeIndexRef,
     setError,
     setIsVideoLoading,
+    setIsPlaying,
     setRealtimeLoadSpeed,
     setBlockAdEnabled,
     setCurrentEpisodeIndex,
@@ -464,15 +466,18 @@ export function useArtPlayer(params: UseArtPlayerParams) {
 
       artPlayerRef.current.on('play', () => {
         requestWakeLock();
+        setIsPlaying(true);
       });
 
       artPlayerRef.current.on('pause', () => {
         releaseWakeLock();
         saveCurrentPlayProgress();
+        setIsPlaying(false);
       });
 
       artPlayerRef.current.on('video:ended', () => {
         releaseWakeLock();
+        setIsPlaying(false);
       });
 
       if (artPlayerRef.current && artPlayerRef.current.playing) {

@@ -1,15 +1,9 @@
 'use client';
 
-import {
-  Check,
-  ChevronDown,
-  ExternalLink,
-  ImagePlus,
-  Trash2,
-  Upload,
-} from 'lucide-react';
+import { ExternalLink, ImagePlus, Trash2, Upload } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
+import AdminSelect from '@/features/admin/components/AdminSelect';
 import AlertModal from '@/features/admin/components/AlertModal';
 import { useAlertModal } from '@/features/admin/hooks/useAlertModal';
 import { useLoadingState } from '@/features/admin/hooks/useLoadingState';
@@ -42,13 +36,6 @@ const SiteConfigComponent = ({
     FluidSearch: true,
     AdBlockMode: 'player',
   });
-
-  // 豆瓣数据源相关状态
-  const [isDoubanDropdownOpen, setIsDoubanDropdownOpen] = useState(false);
-  const [isDoubanImageProxyDropdownOpen, setIsDoubanImageProxyDropdownOpen] =
-    useState(false);
-  const [isAdBlockModeDropdownOpen, setIsAdBlockModeDropdownOpen] =
-    useState(false);
 
   // 站点图标相关状态
   const [iconPreview, setIconPreview] = useState<string>('');
@@ -124,58 +111,6 @@ const SiteConfigComponent = ({
       }
     }
   }, [config]);
-
-  // 点击外部区域关闭下拉框
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (isDoubanDropdownOpen) {
-        const target = event.target as Element;
-        if (!target.closest('[data-dropdown="douban-datasource"]')) {
-          setIsDoubanDropdownOpen(false);
-        }
-      }
-    };
-
-    if (isDoubanDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () =>
-        document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isDoubanDropdownOpen]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (isDoubanImageProxyDropdownOpen) {
-        const target = event.target as Element;
-        if (!target.closest('[data-dropdown="douban-image-proxy"]')) {
-          setIsDoubanImageProxyDropdownOpen(false);
-        }
-      }
-    };
-
-    if (isDoubanImageProxyDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () =>
-        document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isDoubanImageProxyDropdownOpen]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (isAdBlockModeDropdownOpen) {
-        const target = event.target as Element;
-        if (!target.closest('[data-dropdown="adblock-mode"]')) {
-          setIsAdBlockModeDropdownOpen(false);
-        }
-      }
-    };
-
-    if (isAdBlockModeDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () =>
-        document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isAdBlockModeDropdownOpen]);
 
   // 处理豆瓣数据源变化
   const handleDoubanDataSourceChange = (value: string) => {
@@ -372,57 +307,16 @@ const SiteConfigComponent = ({
           <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
             去广告处理模式
           </label>
-          <div className='relative' data-dropdown='adblock-mode'>
-            <button
-              type='button'
-              onClick={() =>
-                setIsAdBlockModeDropdownOpen(!isAdBlockModeDropdownOpen)
-              }
-              className='w-full px-3 py-2.5 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm hover:border-gray-400 dark:hover:border-gray-500 text-left'
-            >
-              {
-                adBlockModeOptions.find(
-                  (option) =>
-                    option.value === (siteSettings.AdBlockMode || 'player'),
-                )?.label
-              }
-            </button>
-            <div className='absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none'>
-              <ChevronDown
-                className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${
-                  isAdBlockModeDropdownOpen ? 'rotate-180' : ''
-                }`}
-              />
-            </div>
-            {isAdBlockModeDropdownOpen && (
-              <div className='absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-auto'>
-                {adBlockModeOptions.map((option) => (
-                  <button
-                    key={option.value}
-                    type='button'
-                    onClick={() => {
-                      setSiteSettings((prev) => ({
-                        ...prev,
-                        AdBlockMode: option.value as 'player' | 'server',
-                      }));
-                      setIsAdBlockModeDropdownOpen(false);
-                    }}
-                    className={`w-full px-3 py-2.5 text-left text-sm transition-colors duration-150 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                      (siteSettings.AdBlockMode || 'player') === option.value
-                        ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
-                        : 'text-gray-900 dark:text-gray-100'
-                    }`}
-                  >
-                    <span className='truncate'>{option.label}</span>
-                    {(siteSettings.AdBlockMode || 'player') ===
-                      option.value && (
-                      <Check className='w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 ml-2' />
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <AdminSelect
+            value={siteSettings.AdBlockMode || 'player'}
+            onChange={(value) =>
+              setSiteSettings((prev) => ({
+                ...prev,
+                AdBlockMode: value as 'player' | 'server',
+              }))
+            }
+            options={adBlockModeOptions}
+          />
           <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
             仅影响播放页"去广告"开启时的处理方式。
           </p>
@@ -434,50 +328,11 @@ const SiteConfigComponent = ({
             <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
               豆瓣数据代理
             </label>
-            <div className='relative' data-dropdown='douban-datasource'>
-              <button
-                type='button'
-                onClick={() => setIsDoubanDropdownOpen(!isDoubanDropdownOpen)}
-                className='w-full px-3 py-2.5 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm hover:border-gray-400 dark:hover:border-gray-500 text-left'
-              >
-                {
-                  doubanDataSourceOptions.find(
-                    (option) => option.value === siteSettings.DoubanProxyType,
-                  )?.label
-                }
-              </button>
-              <div className='absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none'>
-                <ChevronDown
-                  className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${
-                    isDoubanDropdownOpen ? 'rotate-180' : ''
-                  }`}
-                />
-              </div>
-              {isDoubanDropdownOpen && (
-                <div className='absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-auto'>
-                  {doubanDataSourceOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      type='button'
-                      onClick={() => {
-                        handleDoubanDataSourceChange(option.value);
-                        setIsDoubanDropdownOpen(false);
-                      }}
-                      className={`w-full px-3 py-2.5 text-left text-sm transition-colors duration-150 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                        siteSettings.DoubanProxyType === option.value
-                          ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
-                          : 'text-gray-900 dark:text-gray-100'
-                      }`}
-                    >
-                      <span className='truncate'>{option.label}</span>
-                      {siteSettings.DoubanProxyType === option.value && (
-                        <Check className='w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 ml-2' />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <AdminSelect
+              value={siteSettings.DoubanProxyType}
+              onChange={(value) => handleDoubanDataSourceChange(value)}
+              options={doubanDataSourceOptions}
+            />
             <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
               选择获取豆瓣数据的方式
             </p>
@@ -533,55 +388,11 @@ const SiteConfigComponent = ({
             <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
               豆瓣图片代理
             </label>
-            <div className='relative' data-dropdown='douban-image-proxy'>
-              <button
-                type='button'
-                onClick={() =>
-                  setIsDoubanImageProxyDropdownOpen(
-                    !isDoubanImageProxyDropdownOpen,
-                  )
-                }
-                className='w-full px-3 py-2.5 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm hover:border-gray-400 dark:hover:border-gray-500 text-left'
-              >
-                {
-                  doubanImageProxyTypeOptions.find(
-                    (option) =>
-                      option.value === siteSettings.DoubanImageProxyType,
-                  )?.label
-                }
-              </button>
-              <div className='absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none'>
-                <ChevronDown
-                  className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${
-                    isDoubanImageProxyDropdownOpen ? 'rotate-180' : ''
-                  }`}
-                />
-              </div>
-              {isDoubanImageProxyDropdownOpen && (
-                <div className='absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-auto'>
-                  {doubanImageProxyTypeOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      type='button'
-                      onClick={() => {
-                        handleDoubanImageProxyChange(option.value);
-                        setIsDoubanImageProxyDropdownOpen(false);
-                      }}
-                      className={`w-full px-3 py-2.5 text-left text-sm transition-colors duration-150 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                        siteSettings.DoubanImageProxyType === option.value
-                          ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
-                          : 'text-gray-900 dark:text-gray-100'
-                      }`}
-                    >
-                      <span className='truncate'>{option.label}</span>
-                      {siteSettings.DoubanImageProxyType === option.value && (
-                        <Check className='w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 ml-2' />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <AdminSelect
+              value={siteSettings.DoubanImageProxyType}
+              onChange={(value) => handleDoubanImageProxyChange(value)}
+              options={doubanImageProxyTypeOptions}
+            />
             <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
               选择获取豆瓣图片的方式
             </p>
