@@ -11,6 +11,7 @@ interface PageLayoutProps {
 const PageLayout = ({ children, activePath = '/' }: PageLayoutProps) => {
   const showMobileBack = ['/play', '/live'].includes(activePath);
   const showDesktopBack = activePath === '/live';
+  const isPlayPage = activePath === '/play';
 
   return (
     <div className='w-full min-h-screen'>
@@ -37,10 +38,18 @@ const PageLayout = ({ children, activePath = '/' }: PageLayoutProps) => {
 
           {/* 主内容 */}
           <main
-            className='flex-1 md:min-h-0 mb-14 md:mb-0 md:mt-0 mt-12'
-            style={{
-              paddingBottom: 'calc(3.5rem + env(safe-area-inset-bottom))',
-            }}
+            className={`flex-1 md:min-h-0 md:mb-0 md:mt-0 ${
+              isPlayPage
+                ? 'mt-12 mb-0 h-[calc(100dvh-3rem-3.5rem-env(safe-area-inset-bottom)-4px)] md:h-auto overflow-hidden md:overflow-visible'
+                : 'mb-14 mt-12'
+            }`}
+            style={
+              isPlayPage
+                ? undefined
+                : {
+                    paddingBottom: 'calc(3.5rem + env(safe-area-inset-bottom))',
+                  }
+            }
           >
             {children}
           </main>

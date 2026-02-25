@@ -226,7 +226,7 @@ export function PlayMainContent(props: PlayMainContentProps) {
 
   return (
     <PageLayout activePath='/play'>
-      <div className='relative flex flex-col gap-4 py-2 px-4 sm:px-6 lg:px-[3rem] 2xl:px-20'>
+      <div className='relative flex h-full min-h-0 flex-col gap-3 overflow-hidden md:overflow-visible py-2 px-4 sm:px-6 lg:px-[3rem] 2xl:px-20'>
         {/* 顶部流光背景层：不占高度，四周渐隐形成柔和边界 */}
         <div className='pointer-events-none absolute inset-x-0 top-0 h-80'>
           <div
@@ -256,10 +256,10 @@ export function PlayMainContent(props: PlayMainContentProps) {
         </div>
 
         {/* 顶部间距 */}
-        <div className='h-4' />
+        <div className='h-1 sm:h-4 flex-shrink-0' />
 
         {/* 标题区域 */}
-        <div className='relative pb-3 border-b border-gray-200/60 dark:border-white/[0.06]'>
+        <div className='relative pb-3 border-b border-gray-200/60 dark:border-white/[0.06] flex-shrink-0'>
           {/* 第一行：标题居中 */}
           <div className='flex justify-center'>
             <h1 className='flex items-center gap-2.5 text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 min-w-0'>
@@ -287,12 +287,12 @@ export function PlayMainContent(props: PlayMainContentProps) {
           </div>
 
           {/* 第二行：返回按钮 + 标签 + 折叠按钮 */}
-          <div className='mt-2 relative flex items-center justify-between'>
+          <div className='mt-2 relative flex items-center justify-center md:justify-between min-h-[1.75rem]'>
             <div className='hidden md:block flex-shrink-0'>
               <BackButton />
             </div>
 
-            <div className='absolute inset-0 flex items-center justify-center pointer-events-none'>
+            <div className='flex items-center justify-center md:absolute md:inset-0 md:pointer-events-none'>
               <div className='flex flex-wrap items-center justify-center gap-2 text-[11px] font-medium'>
                 {headerSourceText && (
                   <span className='inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-emerald-700 ring-1 ring-emerald-200/60 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-500/20'>
@@ -325,10 +325,10 @@ export function PlayMainContent(props: PlayMainContentProps) {
 
         {/* 播放器 + 选集面板 */}
         <div
-          className={`grid ${
+          className={`grid flex-1 min-h-0 ${
             isEpisodeSelectorCollapsed
               ? 'grid-cols-1'
-              : 'grid-cols-1 md:grid-cols-4 gap-3'
+              : 'grid-cols-1 grid-rows-[auto_minmax(0,1fr)] gap-3 md:grid-cols-4 md:grid-rows-1'
           }`}
         >
           {/* 播放器 */}
@@ -339,7 +339,7 @@ export function PlayMainContent(props: PlayMainContentProps) {
           >
             <div
               ref={playerWrapRef}
-              className={`relative w-full max-h-[80vh] ${isEpisodeSelectorCollapsed ? '' : 'aspect-video'}`}
+              className={`relative w-full max-h-[38dvh] md:max-h-[80vh] ${isEpisodeSelectorCollapsed ? '' : 'aspect-video'}`}
               style={
                 isEpisodeSelectorCollapsed && expandedHeightRef.current
                   ? { height: `${expandedHeightRef.current}px` }
@@ -511,7 +511,7 @@ export function PlayMainContent(props: PlayMainContentProps) {
 
           {/* 选集面板 */}
           <div
-            className={`overflow-hidden ${
+            className={`min-h-0 overflow-hidden ${
               isEpisodeSelectorCollapsed
                 ? 'h-0 md:col-span-1 lg:max-w-0 lg:opacity-0 lg:pointer-events-none'
                 : 'md:col-span-1 lg:max-w-[100%] lg:opacity-100'
@@ -522,10 +522,10 @@ export function PlayMainContent(props: PlayMainContentProps) {
                 : playerHeight
                   ? isDesktop
                     ? { height: `${playerHeight}px` }
-                    : {
-                        height: `calc(100dvh - ${playerHeight}px - 13.5rem - env(safe-area-inset-bottom, 0px))`,
-                      }
-                  : { height: '300px' }
+                    : { height: '100%' }
+                  : isDesktop
+                    ? { height: '300px' }
+                    : { height: '100%' }
             }
           >
             <EpisodeSelector
