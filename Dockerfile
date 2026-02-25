@@ -31,7 +31,9 @@ ENV HUSKY=0
 COPY package.json pnpm-lock.yaml ./
 
 # 安装所有依赖（含 devDependencies，后续会裁剪）
-RUN pnpm install --frozen-lockfile
+# npmjs.org 对 CI runner IP 偶发 403，使用镜像源规避
+RUN pnpm config set registry https://registry.npmmirror.com \
+  && pnpm install --frozen-lockfile
 
 # ---- 第 2 阶段：构建项目 ----
 FROM node:20-bookworm-slim AS builder
