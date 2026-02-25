@@ -25,6 +25,7 @@ RUN corepack enable && corepack prepare pnpm@10.14.0 --activate
 WORKDIR /app
 
 ENV HUSKY=0
+ENV SQLITE_BUSY_TIMEOUT_MS=20000
 
 # 复制依赖
 COPY --from=deps /app/node_modules ./node_modules

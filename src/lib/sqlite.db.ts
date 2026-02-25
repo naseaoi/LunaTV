@@ -8,6 +8,14 @@ import { Favorite, IStorage, PlayRecord, SkipConfig } from './types';
 
 const SEARCH_HISTORY_LIMIT = 20;
 
+function parseBusyTimeoutMs(raw: string | undefined, fallback: number): number {
+  if (!raw) {
+    return fallback;
+  }
+  const value = Number.parseInt(raw, 10);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
 type LocalDbSchema = {
   users: Record<string, string>;
   playRecords: Record<string, Record<string, PlayRecord>>;
@@ -90,9 +98,15 @@ export class LocalSqliteStorage implements IStorage {
     this.legacyJsonPaths = Array.from(new Set(candidates));
 
     mkdirSync(path.dirname(this.dbPath), { recursive: true });
-    this.db = new Database(this.dbPath);
+
+    const busyTimeoutMs = parseBusyTimeoutMs(
+      process.env.SQLITE_BUSY_TIMEOUT_MS,
+      5000,
+    );
+    this.db = new Database(this.dbPath, { timeout: busyTimeoutMs });
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('synchronous = NORMAL');
+    this.db.pragma(`busy_timeout = ${busyTimeoutMs}`);
 
     this.initializeSchema();
     this.migrateFromLegacyJsonIfNeeded();
