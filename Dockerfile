@@ -10,6 +10,9 @@ RUN corepack enable && corepack prepare pnpm@10.14.0 --activate
 
 WORKDIR /app
 
+# Docker build 环境不需要安装 git hooks；避免 husky 在无 .git / 无 git 时失败
+ENV HUSKY=0
+
 # 仅复制依赖清单，提高构建缓存利用率
 COPY package.json pnpm-lock.yaml ./
 
@@ -20,6 +23,8 @@ RUN pnpm install --frozen-lockfile
 FROM node:20-bookworm-slim AS builder
 RUN corepack enable && corepack prepare pnpm@10.14.0 --activate
 WORKDIR /app
+
+ENV HUSKY=0
 
 # 复制依赖
 COPY --from=deps /app/node_modules ./node_modules
