@@ -201,10 +201,9 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
     }
   }, [precomputedVideoInfo]);
 
-  // 异步获取视频信息
+  // 异步获取视频信息（后台预检测，不依赖 Tab 是否激活）
   useEffect(() => {
     const fetchVideoInfosInBatches = async () => {
-      if (!isActive) return;
       if (availableSources.length === 0) return;
 
       const now = Date.now();
@@ -229,7 +228,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
       }
     };
     fetchVideoInfosInBatches();
-  }, [availableSources, getVideoInfo, isActive]);
+  }, [availableSources, getVideoInfo]);
 
   const handleSourceClick = useCallback(
     (source: SearchResult) => {
@@ -243,7 +242,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
       return 0;
     }
 
-    const match = loadSpeed.match(/^([\d.]+)\s*(Mbps|KB\/s|MB\/s)$/i);
+    const match = loadSpeed.match(/^([\d.]+)\s*(Mbps|Mb\/s|KB\/s|MB\/s)$/);
     if (!match) {
       return 0;
     }
@@ -253,11 +252,11 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
       return 0;
     }
 
-    const unit = match[2].toLowerCase();
-    if (unit === 'mbps') {
+    const unit = match[2];
+    if (unit === 'Mbps' || unit === 'Mb/s') {
       return (value * 1024) / 8;
     }
-    if (unit === 'mb/s') {
+    if (unit === 'MB/s') {
       return value * 1024;
     }
     return value;
@@ -360,8 +359,8 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
 
   if (sourceSearchLoading) {
     return (
-      <div className='flex items-center justify-center py-8 flex-1'>
-        <div className='animate-spin rounded-full h-7 w-7 border-2 border-green-500 border-t-transparent'></div>
+      <div className='flex flex-1 items-center justify-center py-8'>
+        <div className='h-7 w-7 animate-spin rounded-full border-2 border-green-500 border-t-transparent'></div>
         <span className='ml-2.5 text-sm text-gray-500 dark:text-gray-400'>
           搜索中...
         </span>
@@ -371,9 +370,9 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
 
   if (sourceSearchError) {
     return (
-      <div className='flex items-center justify-center py-8 flex-1'>
+      <div className='flex flex-1 items-center justify-center py-8'>
         <div className='text-center'>
-          <div className='text-red-400 text-2xl mb-2'>⚠️</div>
+          <div className='mb-2 text-2xl text-red-400'>⚠️</div>
           <p className='text-sm text-red-500 dark:text-red-400'>
             {sourceSearchError}
           </p>
@@ -384,9 +383,9 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
 
   if (availableSources.length === 0) {
     return (
-      <div className='flex items-center justify-center py-8 flex-1'>
+      <div className='flex flex-1 items-center justify-center py-8'>
         <div className='text-center'>
-          <div className='text-gray-300 dark:text-gray-600 text-2xl mb-2'>
+          <div className='mb-2 text-2xl text-gray-300 dark:text-gray-600'>
             📺
           </div>
           <p className='text-sm text-gray-500 dark:text-gray-400'>
@@ -400,7 +399,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
   return (
     <div
       ref={listContainerRef}
-      className='flex-1 overflow-y-auto p-5 sm:p-6 pb-20'
+      className='flex-1 overflow-y-auto p-5 pb-20 sm:p-6'
     >
       <div className='grid grid-cols-2 gap-2'>
         {sortedSources.map((source, index) => {
@@ -420,30 +419,30 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
                   handleSourceClick(source);
                 }
               }}
-              className={`flex flex-col gap-1.5 px-2.5 py-2 rounded-lg transition-all select-none duration-150 relative
+              className={`relative flex select-none flex-col gap-1.5 rounded-lg px-2.5 py-2 transition-all duration-150
                   ${
                     isCurrentSource
-                      ? 'bg-green-50 dark:bg-green-500/10 ring-1 ring-green-500/30'
-                      : 'bg-gray-50/80 dark:bg-white/[0.04] ring-1 ring-gray-200/60 dark:ring-white/[0.06] hover:bg-gray-100/80 dark:hover:bg-white/[0.08] hover:ring-gray-300/60 dark:hover:ring-white/[0.1] cursor-pointer'
+                      ? 'bg-green-50 ring-1 ring-green-500/30 dark:bg-green-500/10'
+                      : 'cursor-pointer bg-gray-50/80 ring-1 ring-gray-200/60 hover:bg-gray-100/80 hover:ring-gray-300/60 dark:bg-white/[0.04] dark:ring-white/[0.06] dark:hover:bg-white/[0.08] dark:hover:ring-white/[0.1]'
                   }`.trim()}
             >
               {/* 标题行 */}
-              <div className='flex items-center justify-between gap-1 min-w-0'>
-                <div className='flex-1 min-w-0 relative group/title'>
-                  <h3 className='font-medium text-xs truncate text-gray-900 dark:text-gray-100 leading-tight'>
+              <div className='flex min-w-0 items-center justify-between gap-1'>
+                <div className='group/title relative min-w-0 flex-1'>
+                  <h3 className='truncate text-xs font-medium leading-tight text-gray-900 dark:text-gray-100'>
                     {source.title}
                   </h3>
                   {index !== 0 && (
-                    <div className='absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1 bg-gray-800 text-white text-xs rounded-md shadow-lg opacity-0 invisible group-hover/title:opacity-100 group-hover/title:visible transition-all duration-200 ease-out delay-100 whitespace-nowrap z-[500] pointer-events-none'>
+                    <div className='pointer-events-none invisible absolute bottom-full left-1/2 z-[500] mb-2 -translate-x-1/2 transform whitespace-nowrap rounded-md bg-gray-800 px-3 py-1 text-xs text-white opacity-0 shadow-lg transition-all delay-100 duration-200 ease-out group-hover/title:visible group-hover/title:opacity-100'>
                       {source.title}
-                      <div className='absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800'></div>
+                      <div className='absolute left-1/2 top-full h-0 w-0 -translate-x-1/2 transform border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800'></div>
                     </div>
                   )}
                 </div>
                 {/* 分辨率徽章（含占位，保持高度一致） */}
                 {videoInfo && videoInfo.quality !== '未知' ? (
                   videoInfo.hasError ? (
-                    <span className='inline-flex items-center px-1 py-0.5 rounded text-[9px] font-medium bg-red-50 text-red-500 dark:bg-red-900/20 dark:text-red-400 flex-shrink-0'>
+                    <span className='inline-flex flex-shrink-0 items-center rounded bg-red-50 px-1 py-0.5 text-[9px] font-medium text-red-500 dark:bg-red-900/20 dark:text-red-400'>
                       失败
                     </span>
                   ) : (
@@ -461,7 +460,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
                           : 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400';
                       return (
                         <span
-                          className={`inline-flex items-center px-1 py-0.5 rounded text-[9px] font-semibold flex-shrink-0 ${colorClasses}`}
+                          className={`inline-flex flex-shrink-0 items-center rounded px-1 py-0.5 text-[9px] font-semibold ${colorClasses}`}
                         >
                           {videoInfo.quality}
                         </span>
@@ -469,7 +468,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
                     })()
                   )
                 ) : optimizationEnabled ? (
-                  <span className='inline-flex items-center px-1 py-0.5 rounded text-[9px] font-medium text-transparent flex-shrink-0'>
+                  <span className='inline-flex flex-shrink-0 items-center rounded px-1 py-0.5 text-[9px] font-medium text-transparent'>
                     --
                   </span>
                 ) : null}
@@ -477,35 +476,35 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
 
               {/* 源名称 + 集数 */}
               <div className='flex items-center justify-between gap-1'>
-                <span className='text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-white/[0.08] text-gray-600 dark:text-gray-400 font-medium truncate'>
+                <span className='truncate rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-white/[0.08] dark:text-gray-400'>
                   {source.source_name}
                 </span>
                 {source.episodes.length > 1 && (
-                  <span className='text-[10px] text-gray-400 dark:text-gray-500 flex-shrink-0'>
+                  <span className='flex-shrink-0 text-[10px] text-gray-400 dark:text-gray-500'>
                     {source.episodes.length}集
                   </span>
                 )}
               </div>
 
               {/* 网络信息（固定占位，避免测速前后高度跳变） */}
-              <div className='flex items-center gap-2 min-h-[16px]'>
+              <div className='flex min-h-[16px] items-center gap-2'>
                 {videoInfo && isTesting ? (
-                  <div className='flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-gray-400 font-medium'>
-                    <span className='inline-block h-3 w-3 border-2 border-gray-300 border-t-green-500 rounded-full animate-spin dark:border-gray-700 dark:border-t-green-400' />
+                  <div className='flex items-center gap-1.5 text-[10px] font-medium text-gray-500 dark:text-gray-400'>
+                    <span className='inline-block h-3 w-3 animate-spin rounded-full border-2 border-gray-300 border-t-green-500 dark:border-gray-700 dark:border-t-green-400' />
                     检测中
                   </div>
                 ) : videoInfo && !videoInfo.hasError ? (
                   <div className='flex items-center gap-1.5 text-[10px]'>
-                    <span className='text-green-600 dark:text-green-400 font-medium'>
+                    <span className='font-medium text-green-600 dark:text-green-400'>
                       {videoInfo.loadSpeed}
                     </span>
-                    <span className='text-orange-500 dark:text-orange-400 font-medium'>
+                    <span className='font-medium text-orange-500 dark:text-orange-400'>
                       {videoInfo.pingTime}ms
                     </span>
                   </div>
                 ) : videoInfo && videoInfo.hasError ? (
                   <span
-                    className='text-[10px] text-blue-400 dark:text-blue-400 cursor-pointer hover:underline'
+                    className='cursor-pointer text-[10px] text-blue-400 hover:underline dark:text-blue-400'
                     onClick={(e) => {
                       e.stopPropagation();
 
@@ -529,10 +528,10 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
                   </span>
                 ) : optimizationEnabled ? (
                   <div className='flex items-center gap-1.5 text-[10px]'>
-                    <span className='text-gray-300 dark:text-gray-600 font-medium'>
+                    <span className='font-medium text-gray-300 dark:text-gray-600'>
                       --
                     </span>
-                    <span className='text-gray-300 dark:text-gray-600 font-medium'>
+                    <span className='font-medium text-gray-300 dark:text-gray-600'>
                       --
                     </span>
                   </div>
@@ -541,8 +540,8 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
 
               {/* 当前源标记 */}
               {isCurrentSource && (
-                <div className='absolute top-1.5 right-1.5'>
-                  <div className='w-1.5 h-1.5 rounded-full bg-green-500'></div>
+                <div className='absolute right-1.5 top-1.5'>
+                  <div className='h-1.5 w-1.5 rounded-full bg-green-500'></div>
                 </div>
               )}
             </div>
@@ -550,14 +549,14 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
         })}
       </div>
 
-      <div className='flex-shrink-0 mt-6 pt-4 border-t border-gray-100 dark:border-white/[0.06]'>
+      <div className='mt-6 flex-shrink-0 border-t border-gray-100 pt-4 dark:border-white/[0.06]'>
         <button
           onClick={() => {
             if (videoTitle) {
               router.push(`/search?q=${encodeURIComponent(videoTitle)}`);
             }
           }}
-          className='w-full text-center text-xs text-gray-400 dark:text-gray-500 hover:text-green-500 dark:hover:text-green-400 transition-colors py-2'
+          className='w-full py-2 text-center text-xs text-gray-400 transition-colors hover:text-green-500 dark:text-gray-500 dark:hover:text-green-400'
         >
           影片匹配有误？点击去搜索
         </button>

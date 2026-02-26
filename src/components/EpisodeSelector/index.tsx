@@ -72,24 +72,24 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   const visibleTabs = tabs.filter((t) => t.show);
 
   return (
-    <div className='md:ml-1 h-full rounded-xl bg-white/60 dark:bg-white/[0.04] backdrop-blur-sm flex flex-col ring-1 ring-black/[0.06] dark:ring-white/[0.08] overflow-hidden'>
+    <div className='flex h-full flex-col overflow-hidden rounded-xl bg-white/60 ring-1 ring-black/[0.06] backdrop-blur-sm dark:bg-white/[0.04] dark:ring-white/[0.08] md:ml-1'>
       {/* Tab 栏 */}
-      <div className='flex border-b border-gray-200/80 dark:border-white/10 flex-shrink-0'>
+      <div className='flex flex-shrink-0 border-b border-gray-200/80 dark:border-white/10'>
         {visibleTabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`flex-1 py-[18px] min-h-[64px] text-center text-sm font-medium transition-all duration-200 relative
+            className={`relative min-h-[64px] flex-1 py-[18px] text-center text-sm font-medium transition-all duration-200
               ${
                 activeTab === tab.key
                   ? 'text-green-600 dark:text-green-400'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
               }
             `.trim()}
           >
             {tab.label}
             {activeTab === tab.key && (
-              <div className='absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-green-500 dark:bg-green-400 rounded-full' />
+              <div className='absolute bottom-0 left-1/4 right-1/4 h-0.5 rounded-full bg-green-500 dark:bg-green-400' />
             )}
           </button>
         ))}
@@ -119,7 +119,11 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
         />
       )}
 
-      {activeTab === 'sources' && (
+      <div
+        className={
+          activeTab === 'sources' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'
+        }
+      >
         <SourcesTab
           availableSources={availableSources}
           sourceSearchLoading={sourceSearchLoading}
@@ -131,7 +135,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
           onSourceChange={onSourceChange}
           precomputedVideoInfo={precomputedVideoInfo}
         />
-      )}
+      </div>
     </div>
   );
 };

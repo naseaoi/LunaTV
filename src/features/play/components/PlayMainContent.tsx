@@ -59,11 +59,11 @@ const TogglePanelButton = ({
 }) => (
   <button
     onClick={onClick}
-    className='group relative flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/80 hover:bg-white dark:bg-gray-800/80 dark:hover:bg-gray-700 backdrop-blur-sm border border-gray-200/60 dark:border-gray-700/60 shadow-sm hover:shadow transition-all duration-200'
+    className='flex items-center gap-1.5 rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-200/50 dark:text-gray-300 dark:hover:bg-gray-700/50'
     title={collapsed ? '显示选集面板' : '隐藏选集面板'}
   >
     <svg
-      className={`w-3.5 h-3.5 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${
+      className={`h-4 w-4 transition-transform duration-200 ${
         collapsed ? 'rotate-180' : 'rotate-0'
       }`}
       fill='none'
@@ -77,9 +77,7 @@ const TogglePanelButton = ({
         d='M9 5l7 7-7 7'
       />
     </svg>
-    <span className='text-xs font-medium text-gray-600 dark:text-gray-300'>
-      {collapsed ? '显示' : '隐藏'}
-    </span>
+    <span className='text-xs font-medium'>{collapsed ? '显示' : '隐藏'}</span>
   </button>
 );
 
@@ -226,9 +224,9 @@ export function PlayMainContent(props: PlayMainContentProps) {
 
   return (
     <PageLayout activePath='/play'>
-      <div className='relative flex h-full min-h-0 flex-col gap-3 overflow-hidden md:overflow-visible py-2 px-4 sm:px-6 lg:px-[3rem] 2xl:px-20'>
+      <div className='relative flex h-full min-h-0 flex-col gap-3 overflow-hidden px-4 py-2 sm:px-6 md:overflow-visible lg:px-[3rem] 2xl:px-20'>
         {/* 顶部流光背景层：不占高度，四周渐隐形成柔和边界 */}
-        <div className='pointer-events-none absolute inset-x-0 top-0 h-80 overflow-hidden'>
+        <div className='pointer-events-none absolute -inset-x-16 top-0 h-80 overflow-hidden'>
           <div
             className='absolute inset-0 dark:hidden'
             style={{
@@ -240,6 +238,9 @@ export function PlayMainContent(props: PlayMainContentProps) {
               animation: 'aurora-breathe 8s ease-in-out infinite',
               animationPlayState: isPlaying ? 'running' : 'paused',
               transformOrigin: 'top center',
+              mask: 'linear-gradient(to right, transparent, black 4rem, black calc(100% - 4rem), transparent)',
+              WebkitMask:
+                'linear-gradient(to right, transparent, black 4rem, black calc(100% - 4rem), transparent)',
             }}
           />
           <div
@@ -253,30 +254,33 @@ export function PlayMainContent(props: PlayMainContentProps) {
               animation: 'aurora-breathe 8s ease-in-out infinite',
               animationPlayState: isPlaying ? 'running' : 'paused',
               transformOrigin: 'top center',
+              mask: 'linear-gradient(to right, transparent, black 4rem, black calc(100% - 4rem), transparent)',
+              WebkitMask:
+                'linear-gradient(to right, transparent, black 4rem, black calc(100% - 4rem), transparent)',
             }}
           />
         </div>
 
         {/* 顶部间距 */}
-        <div className='h-1 sm:h-4 flex-shrink-0' />
+        <div className='h-1 flex-shrink-0 sm:h-4' />
 
         {/* 标题区域 */}
-        <div className='relative pb-3 border-b border-gray-200/60 dark:border-white/[0.06] flex-shrink-0'>
+        <div className='relative flex-shrink-0 pb-3'>
           {/* 第一行：标题居中 */}
           <div className='flex justify-center'>
-            <h1 className='flex items-center gap-2.5 text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 min-w-0'>
+            <h1 className='flex min-w-0 items-center gap-2.5 text-xl font-bold text-gray-900 dark:text-gray-100 sm:text-2xl'>
               <span className='relative flex-shrink-0'>
-                <TitleIcon className={`w-6 h-6 ${categoryColor.icon}`} />
+                <TitleIcon className={`h-6 w-6 ${categoryColor.icon}`} />
                 <span
                   className={`absolute -inset-1.5 rounded-full ${categoryColor.glow} blur-sm`}
                 />
               </span>
-              <span className='truncate max-w-[60vw] sm:max-w-[50vw]'>
+              <span className='max-w-[60vw] truncate sm:max-w-[50vw]'>
                 {videoTitle || '影片标题'}
               </span>
               {totalEpisodes > 1 && (
                 <>
-                  <span className='w-px h-4 bg-gray-300 dark:bg-gray-600 flex-shrink-0' />
+                  <span className='h-4 w-px flex-shrink-0 bg-gray-300 dark:bg-gray-600' />
                   <span
                     className={`text-sm font-semibold ${categoryColor.sub} flex-shrink-0 whitespace-nowrap`}
                   >
@@ -289,12 +293,12 @@ export function PlayMainContent(props: PlayMainContentProps) {
           </div>
 
           {/* 第二行：返回按钮 + 标签 + 折叠按钮 */}
-          <div className='mt-2 relative flex items-center justify-center md:justify-between min-h-[1.75rem]'>
-            <div className='hidden md:block flex-shrink-0'>
+          <div className='relative mt-2 flex min-h-[1.75rem] items-center justify-center md:justify-between'>
+            <div className='hidden flex-shrink-0 md:block'>
               <BackButton />
             </div>
 
-            <div className='flex items-center justify-center md:absolute md:inset-0 md:pointer-events-none'>
+            <div className='flex items-center justify-center md:pointer-events-none md:absolute md:inset-0'>
               <div className='flex flex-wrap items-center justify-center gap-2 text-[11px] font-medium'>
                 {headerSourceText && (
                   <span className='inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-emerald-700 ring-1 ring-emerald-200/60 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-500/20'>
@@ -314,7 +318,7 @@ export function PlayMainContent(props: PlayMainContentProps) {
               </div>
             </div>
 
-            <div className='hidden lg:block flex-shrink-0'>
+            <div className='hidden flex-shrink-0 lg:block'>
               <TogglePanelButton
                 collapsed={isEpisodeSelectorCollapsed}
                 onClick={() =>
@@ -325,9 +329,12 @@ export function PlayMainContent(props: PlayMainContentProps) {
           </div>
         </div>
 
+        {/* 标题区域分隔线 */}
+        <div className='h-px flex-shrink-0 bg-gradient-to-r from-transparent via-gray-200/80 to-transparent dark:via-white/[0.10]' />
+
         {/* 播放器 + 选集面板 */}
         <div
-          className={`grid flex-1 min-h-0 ${
+          className={`grid min-h-0 flex-1 ${
             isEpisodeSelectorCollapsed
               ? 'grid-cols-1'
               : 'grid-cols-1 grid-rows-[auto_minmax(0,1fr)] gap-3 md:grid-cols-4 md:grid-rows-1'
@@ -335,13 +342,13 @@ export function PlayMainContent(props: PlayMainContentProps) {
         >
           {/* 播放器 */}
           <div
-            className={`rounded-xl overflow-hidden ${
+            className={`overflow-hidden rounded-xl ${
               isEpisodeSelectorCollapsed ? 'col-span-1' : 'md:col-span-3'
             }`}
           >
             <div
               ref={playerWrapRef}
-              className={`relative w-full max-h-[38dvh] md:max-h-[80vh] ${isEpisodeSelectorCollapsed ? '' : 'aspect-video'}`}
+              className={`relative max-h-[38dvh] w-full md:max-h-[80vh] ${isEpisodeSelectorCollapsed ? '' : 'aspect-video'}`}
               style={
                 isEpisodeSelectorCollapsed && expandedHeightRef.current
                   ? { height: `${expandedHeightRef.current}px` }
@@ -352,15 +359,15 @@ export function PlayMainContent(props: PlayMainContentProps) {
               <div className='absolute inset-0'>
                 <div
                   ref={artRef}
-                  className='bg-black w-full h-full rounded-xl overflow-hidden shadow-lg ring-1 ring-black/10 dark:ring-white/10'
+                  className='h-full w-full overflow-hidden rounded-xl bg-black shadow-lg ring-1 ring-black/10 dark:ring-white/10'
                 ></div>
 
                 {isVideoLoading && (
-                  <div className='absolute inset-0 bg-black/85 backdrop-blur-sm rounded-xl flex items-center justify-center z-[500] transition-all duration-300'>
+                  <div className='absolute inset-0 z-[500] flex items-center justify-center rounded-xl bg-black/85 backdrop-blur-sm transition-all duration-300'>
                     {loadingTimedOut ? (
                       <LoadingStatePanel
                         compact
-                        icon={<AlertTriangle className='w-9 h-9' />}
+                        icon={<AlertTriangle className='h-9 w-9' />}
                         tone='red'
                         title={
                           videoLoadingStage === 'sourceChanging'
@@ -369,14 +376,14 @@ export function PlayMainContent(props: PlayMainContentProps) {
                         }
                         titleClassName='text-white'
                       >
-                        <p className='text-sm text-gray-300 text-center mb-3'>
+                        <p className='mb-3 text-center text-sm text-gray-300'>
                           已等待超过 30 秒，可能是网络问题或播放源不可用
                         </p>
                         <button
                           onClick={() => window.location.reload()}
-                          className='flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium transition-colors'
+                          className='flex w-full items-center justify-center gap-2 rounded-lg bg-white/10 px-4 py-2.5 font-medium text-white transition-colors hover:bg-white/20'
                         >
-                          <RefreshCw className='w-4 h-4' />
+                          <RefreshCw className='h-4 w-4' />
                           刷新页面重试
                         </button>
                       </LoadingStatePanel>
@@ -390,14 +397,14 @@ export function PlayMainContent(props: PlayMainContentProps) {
                             <div className='player-ring-outer absolute inset-0 rounded-full border-2 border-transparent bg-gradient-to-r from-emerald-400/70 via-green-500/40 to-emerald-300/20' />
                             <div className='player-ring-inner absolute inset-[10px] rounded-full border border-white/30' />
                             <div className='absolute inset-[2px] rounded-full bg-transparent' />
-                            <div className='player-orb absolute top-2 right-1 h-3 w-3 rounded-full bg-emerald-400/40' />
+                            <div className='player-orb absolute right-1 top-2 h-3 w-3 rounded-full bg-emerald-400/40' />
+                            {videoLoadingStage === 'sourceChanging' && (
+                              <div className='absolute inset-0 z-10 flex items-center justify-center text-xs font-bold text-white/70'>
+                                切换中
+                              </div>
+                            )}
                           </div>
                         </div>
-                        {videoLoadingStage === 'sourceChanging' && (
-                          <div className='mt-3 text-xs font-medium text-white/50'>
-                            切换中
-                          </div>
-                        )}
 
                         <style jsx>{`
                           .player-ripple {
@@ -481,25 +488,25 @@ export function PlayMainContent(props: PlayMainContentProps) {
                 )}
 
                 {authRecoveryVisible && (
-                  <div className='absolute inset-0 bg-black/80 backdrop-blur-sm rounded-xl flex items-center justify-center z-[520]'>
-                    <div className='w-full max-w-md mx-4 bg-zinc-900/95 border border-zinc-700 rounded-2xl shadow-2xl p-6 text-center'>
-                      <div className='text-4xl mb-3'>🔐</div>
-                      <h3 className='text-lg font-semibold text-white mb-2'>
+                  <div className='absolute inset-0 z-[520] flex items-center justify-center rounded-xl bg-black/80 backdrop-blur-sm'>
+                    <div className='mx-4 w-full max-w-md rounded-2xl border border-zinc-700 bg-zinc-900/95 p-6 text-center shadow-2xl'>
+                      <div className='mb-3 text-4xl'>🔐</div>
+                      <h3 className='mb-2 text-lg font-semibold text-white'>
                         登录状态异常
                       </h3>
-                      <p className='text-sm text-zinc-300 leading-6 mb-5'>
+                      <p className='mb-5 text-sm leading-6 text-zinc-300'>
                         {authRecoveryReasonMessage}
                       </p>
                       <div className='space-y-2'>
                         <button
                           onClick={onReloginAndRecover}
-                          className='w-full px-4 py-2.5 rounded-lg bg-green-600 text-white font-medium hover:bg-green-500 transition-colors'
+                          className='w-full rounded-lg bg-green-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-green-500'
                         >
                           去登录并恢复播放
                         </button>
                         <button
                           onClick={onDismissAuthRecovery}
-                          className='w-full px-4 py-2.5 rounded-lg bg-zinc-700 text-zinc-200 font-medium hover:bg-zinc-600 transition-colors'
+                          className='w-full rounded-lg bg-zinc-700 px-4 py-2.5 font-medium text-zinc-200 transition-colors hover:bg-zinc-600'
                         >
                           稍后处理
                         </button>
@@ -515,7 +522,7 @@ export function PlayMainContent(props: PlayMainContentProps) {
           <div
             className={`min-h-0 overflow-hidden ${
               isEpisodeSelectorCollapsed
-                ? 'h-0 md:col-span-1 lg:max-w-0 lg:opacity-0 lg:pointer-events-none'
+                ? 'h-0 md:col-span-1 lg:pointer-events-none lg:max-w-0 lg:opacity-0'
                 : 'md:col-span-1 lg:max-w-[100%] lg:opacity-100'
             }`}
             style={

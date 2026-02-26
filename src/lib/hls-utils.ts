@@ -138,9 +138,9 @@ export async function getVideoResolutionFromM3u8(m3u8Url: string): Promise<{
           if (loadTime > 0 && size > 0) {
             const speedKBps = size / 1024 / (loadTime / 1000);
 
-            // 转换为 Mbps（网络速率单位）：KB/s × 8 / 1024 = Mbps
-            const speedMbps = (speedKBps * 8) / 1024;
-            actualLoadSpeed = `${speedMbps.toFixed(1)} Mbps`;
+            // 转换为 MB/s（网络速率单位）：KB/s / 1024 = MB/s
+            const speedMBps = speedKBps / 1024;
+            actualLoadSpeed = `${speedMBps.toFixed(2)} MB/s`;
             hasSpeedCalculated = true;
             checkAndResolve(); // 尝试返回结果
           }

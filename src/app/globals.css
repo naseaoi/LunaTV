@@ -405,11 +405,6 @@ div[data-media-provider] video {
   box-shadow: 0 0 4px rgba(59, 130, 246, 0.4) !important;
 }
 
-/* --- 隐藏播放器原生 loading 动画（使用自定义加载组件） --- */
-.art-loading {
-  display: none !important;
-}
-
 /* --- 提示文字（notice） --- */
 .art-notice {
   background: none !important;

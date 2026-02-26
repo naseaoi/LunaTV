@@ -2,6 +2,7 @@
 
 import {
   ExternalLink,
+  GitBranch,
   KeyRound,
   LogOut,
   Settings,
@@ -517,14 +518,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
       show: showChangePassword,
     },
     {
-      icon: LogOut,
-      label: '登出',
-      onClick: handleLogout,
-      show: true,
-      danger: true,
-    },
-    {
-      icon: ExternalLink,
+      icon: GitBranch,
       label: `v${CURRENT_VERSION}`,
       onClick: () => {
         setIsVersionPanelOpen(true);
@@ -532,6 +526,13 @@ export const UserMenu: React.FC<UserMenuProps> = ({
       },
       show: true,
       version: true,
+    },
+    {
+      icon: LogOut,
+      label: '登出',
+      onClick: handleLogout,
+      show: true,
+      danger: true,
     },
   ].filter((a) => a.show);
 

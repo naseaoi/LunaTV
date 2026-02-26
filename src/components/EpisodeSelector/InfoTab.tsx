@@ -1,6 +1,8 @@
-import { Clapperboard, ExternalLink, Heart } from 'lucide-react';
-import React, { useMemo } from 'react';
+import { ExternalLink, Heart } from 'lucide-react';
+import Image from 'next/image';
+import React, { useMemo, useState } from 'react';
 
+import NoImageCover from '@/components/NoImageCover';
 import { SearchResult } from '@/lib/types';
 import { processImageUrl } from '@/lib/utils';
 
@@ -45,12 +47,15 @@ export const InfoTab: React.FC<InfoTabProps> = ({
   videoCover,
   videoDoubanId,
 }) => {
+  const [coverError, setCoverError] = useState(false);
+  const hasCover = !!videoCover && !coverError;
+
   const formattedDesc = useMemo(() => {
     const raw = detail?.desc;
     if (!raw) return '';
 
     const paragraphs = raw
-      .split(/\r?\n+/)
+      .split(/\r?\n+|\s{3,}/)
       .map((p) => p.trim())
       .filter(Boolean);
 
@@ -62,17 +67,19 @@ export const InfoTab: React.FC<InfoTabProps> = ({
       {/* 封面 + 基本信息 */}
       <div className='flex gap-5'>
         {/* 封面 */}
-        <div className='aspect-[2/3] w-28 flex-shrink-0 overflow-hidden rounded-xl bg-gray-200 shadow-md shadow-black/10 ring-1 ring-black/10 dark:bg-gray-800 dark:shadow-black/30 dark:ring-white/10'>
-          {videoCover ? (
-            <img
+        <div className='relative aspect-[2/3] w-28 flex-shrink-0 overflow-hidden rounded-xl bg-gray-200 shadow-md shadow-black/10 ring-1 ring-black/10 dark:bg-gray-800 dark:shadow-black/30 dark:ring-white/10'>
+          {hasCover ? (
+            <Image
               src={processImageUrl(videoCover)}
               alt={videoTitle}
-              className='h-full w-full object-cover'
+              fill
+              sizes='112px'
+              className='object-cover'
+              referrerPolicy='no-referrer'
+              onError={() => setCoverError(true)}
             />
           ) : (
-            <div className='flex h-full w-full items-center justify-center text-gray-400 dark:text-gray-600'>
-              <Clapperboard className='h-8 w-8' />
-            </div>
+            <NoImageCover />
           )}
         </div>
 

@@ -394,6 +394,8 @@ function PlayPageClient() {
       if (artPlayerRef.current && !artPlayerRef.current.playing) {
         doSaveCurrentProgress();
       }
+      setIsVideoLoading(true);
+      setVideoLoadingStage('sourceChanging');
       setCurrentEpisodeIndex(episodeNumber);
     }
   };

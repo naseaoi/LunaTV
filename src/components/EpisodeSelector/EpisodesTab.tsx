@@ -102,7 +102,7 @@ export const EpisodesTab: React.FC<EpisodesTabProps> = ({
   return (
     <>
       {/* 工具栏：分页标签 */}
-      <div className='flex items-center gap-2 px-5 sm:px-6 py-3 flex-shrink-0'>
+      <div className='flex flex-shrink-0 items-center gap-2 px-5 py-3 sm:px-6'>
         {/* 分页标签（仅多页时显示） */}
         {pageCount > 1 && (
           <div
@@ -111,7 +111,7 @@ export const EpisodesTab: React.FC<EpisodesTabProps> = ({
             onMouseEnter={() => setIsCategoryHovered(true)}
             onMouseLeave={() => setIsCategoryHovered(false)}
           >
-            <div className='flex gap-1 w-max min-w-full justify-center'>
+            <div className='flex w-max min-w-full justify-center gap-1'>
               {categories.map((label, idx) => {
                 const isActive = idx === currentPage;
                 return (
@@ -121,11 +121,11 @@ export const EpisodesTab: React.FC<EpisodesTabProps> = ({
                       buttonRefs.current[idx] = el;
                     }}
                     onClick={() => handleCategoryClick(idx)}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-150 whitespace-nowrap
+                    className={`whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-150
                       ${
                         isActive
                           ? 'bg-green-500 text-white shadow-sm'
-                          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-gray-200'
+                          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-gray-200'
                       }
                     `.trim()}
                   >
@@ -138,17 +138,17 @@ export const EpisodesTab: React.FC<EpisodesTabProps> = ({
         )}
         {/* 单页时显示集数范围 */}
         {pageCount <= 1 && (
-          <span className='flex-1 text-xs font-medium text-gray-500 dark:text-gray-400 text-center'>
+          <span className='flex-1 text-center text-xs font-medium text-gray-500 dark:text-gray-400'>
             1-{totalEpisodes}
           </span>
         )}
       </div>
 
       {/* 分割线：更柔和、左右留白 */}
-      <div className='mx-5 sm:mx-6 h-px bg-gradient-to-r from-transparent via-gray-200/80 to-transparent dark:via-white/[0.10]' />
+      <div className='mx-5 h-px bg-gradient-to-r from-transparent via-gray-200/80 to-transparent dark:via-white/[0.10] sm:mx-6' />
 
       {/* 集数网格 */}
-      <div className='grid grid-cols-[repeat(auto-fill,minmax(3rem,1fr))] gap-2 overflow-y-auto flex-1 content-start p-5 sm:p-6'>
+      <div className='flex flex-1 flex-wrap content-start justify-center gap-2 overflow-y-auto p-5 sm:p-6'>
         {(() => {
           const len = currentEnd - currentStart + 1;
           return Array.from({ length: len }, (_, i) => currentStart + i);
@@ -180,18 +180,14 @@ export const EpisodesTab: React.FC<EpisodesTabProps> = ({
             <button
               key={episodeNumber}
               onClick={() => onChange?.(episodeNumber - 1)}
-              style={
-                dynamicSpan > 1
-                  ? {
-                      gridColumn: `span ${dynamicSpan} / span ${dynamicSpan}`,
-                    }
-                  : undefined
-              }
-              className={`h-11 ${dynamicSpan > 1 ? 'px-2' : 'px-1'} flex items-center justify-center text-[13px] rounded-lg transition-all duration-150 min-w-0 font-medium
+              style={{
+                width: `calc(${dynamicSpan} * 3rem + ${dynamicSpan - 1} * 0.5rem)`,
+              }}
+              className={`h-11 ${dynamicSpan > 1 ? 'px-2' : 'px-1'} flex shrink-0 items-center justify-center rounded-lg text-[13px] font-medium transition-all duration-150
                 ${
                   isActive
                     ? 'bg-green-500 text-white shadow-md shadow-green-500/20'
-                    : 'bg-gray-100 dark:bg-white/[0.06] text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/[0.12] hover:scale-105'
+                    : 'bg-gray-100 text-gray-700 hover:scale-105 hover:bg-gray-200 dark:bg-white/[0.06] dark:text-gray-300 dark:hover:bg-white/[0.12]'
                 }`.trim()}
               title={rawTitle || `第 ${episodeNumber} 集`}
             >

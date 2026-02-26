@@ -266,13 +266,15 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
   }, [activeMode, isVisible, onClose]);
 
   const posterPreview = (
-    <div className='relative w-12 h-16 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 flex-shrink-0 border border-gray-200/60 dark:border-gray-700/60'>
+    <div className='relative h-16 w-12 flex-shrink-0 overflow-hidden rounded-lg border border-gray-200/60 bg-gray-100 dark:border-gray-700/60 dark:bg-gray-800'>
       {poster && !hasPosterError ? (
         <Image
           src={poster}
           alt={title}
           fill
+          sizes='(max-width: 640px) 96px, 180px'
           className={origin === 'live' ? 'object-contain' : 'object-cover'}
+          referrerPolicy='no-referrer'
           loading='lazy'
           onError={() => setHasPosterError(true)}
         />
@@ -340,14 +342,14 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
             disabled={action.disabled}
             className={
               compact
-                ? `w-full px-4 py-2.5 text-left flex items-center gap-3 transition-colors text-sm ${
+                ? `flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors ${
                     action.disabled
-                      ? 'opacity-50 cursor-not-allowed'
+                      ? 'cursor-not-allowed opacity-50'
                       : getActionHoverColor(action.color, true)
                   }`
-                : `w-full flex items-center gap-4 py-4 px-2 transition-all duration-150 ease-out ${
+                : `flex w-full items-center gap-4 px-2 py-4 transition-all duration-150 ease-out ${
                     action.disabled
-                      ? 'opacity-50 cursor-not-allowed'
+                      ? 'cursor-not-allowed opacity-50'
                       : `${getActionHoverColor(action.color)} active:scale-[0.98]`
                   }`
             }
@@ -358,7 +360,7 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
             }
           >
             <div
-              className={`flex items-center justify-center flex-shrink-0 ${compact ? 'w-4 h-4' : 'w-6 h-6'}`}
+              className={`flex flex-shrink-0 items-center justify-center ${compact ? 'h-4 w-4' : 'h-6 w-6'}`}
             >
               <span
                 className={`transition-colors duration-150 ${
@@ -376,14 +378,14 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
             <span
               className={
                 compact
-                  ? `text-left font-medium text-sm flex-1 ${
+                  ? `flex-1 text-left text-sm font-medium ${
                       action.disabled
                         ? 'text-gray-400 dark:text-gray-600'
                         : action.color === 'danger'
                           ? 'text-rose-600 dark:text-rose-300'
                           : 'text-gray-700 dark:text-gray-200'
                     }`
-                  : `text-left font-medium text-base flex-1 ${
+                  : `flex-1 text-left text-base font-medium ${
                       action.disabled
                         ? 'text-gray-400 dark:text-gray-600'
                         : 'text-gray-900 dark:text-gray-100'
@@ -394,7 +396,7 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
             </span>
 
             {action.id === 'play' && currentEpisode && totalEpisodes && (
-              <span className='text-sm text-gray-500 dark:text-gray-400 font-medium'>
+              <span className='text-sm font-medium text-gray-500 dark:text-gray-400'>
                 {currentEpisode}/{totalEpisodes}
               </span>
             )}
@@ -402,9 +404,9 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
 
           {index < actions.length - 1 &&
             (compact ? (
-              <div className='my-0.5 mx-4 h-px bg-gradient-to-r from-transparent via-gray-200/80 to-transparent dark:via-white/[0.10]' />
+              <div className='mx-4 my-0.5 h-px bg-gradient-to-r from-transparent via-gray-200/80 to-transparent dark:via-white/[0.10]' />
             ) : (
-              <div className='border-b border-gray-100 dark:border-gray-800 ml-10' />
+              <div className='ml-10 border-b border-gray-100 dark:border-gray-800' />
             ))}
         </div>
       ))}
@@ -419,14 +421,14 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
         className={
           compact
             ? 'px-4 py-3'
-            : 'px-4 py-3 border-t border-gray-100 dark:border-gray-800'
+            : 'border-t border-gray-100 px-4 py-3 dark:border-gray-800'
         }
       >
         {compact && (
-          <div className='mb-3 -mt-1 h-px bg-gradient-to-r from-transparent via-gray-200/80 to-transparent dark:via-white/[0.10]' />
+          <div className='-mt-1 mb-3 h-px bg-gradient-to-r from-transparent via-gray-200/80 to-transparent dark:via-white/[0.10]' />
         )}
         <div className='mb-3'>
-          <h4 className='text-sm font-medium text-gray-900 dark:text-gray-100 mb-1'>
+          <h4 className='mb-1 text-sm font-medium text-gray-900 dark:text-gray-100'>
             可用播放源
           </h4>
           <p className='text-xs text-gray-500 dark:text-gray-400'>
@@ -439,10 +441,10 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
             {sources.map((source, index) => (
               <div
                 key={index}
-                className='flex items-center gap-2 py-2 px-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-800/30'
+                className='flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50/30 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/30'
               >
-                <div className='w-1 h-1 bg-gray-400 dark:bg-gray-500 rounded-full flex-shrink-0' />
-                <span className='text-xs text-gray-600 dark:text-gray-400 truncate'>
+                <div className='h-1 w-1 flex-shrink-0 rounded-full bg-gray-400 dark:bg-gray-500' />
+                <span className='truncate text-xs text-gray-600 dark:text-gray-400'>
                   {source}
                 </span>
               </div>
@@ -524,13 +526,13 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
 
   if (activeMode === 'desktop' && desktopAnchorRect) {
     return (
-      <div className='fixed inset-0 z-[9999] pointer-events-none'>
+      <div className='pointer-events-none fixed inset-0 z-[9999]'>
         <div
           ref={panelRef}
-          className={`absolute pointer-events-auto w-64 max-w-[calc(100vw-16px)] select-none rounded-2xl border border-gray-200/70 bg-white/80 shadow-2xl backdrop-blur-xl ring-1 ring-black/10 dark:border-white/10 dark:bg-gray-900/70 dark:ring-white/10 transition-[opacity,transform] duration-150 ease-out origin-top ${
+          className={`pointer-events-auto absolute w-64 max-w-[calc(100vw-16px)] origin-top select-none rounded-2xl border border-gray-200/70 bg-white/80 shadow-2xl ring-1 ring-black/10 backdrop-blur-xl transition-[opacity,transform] duration-150 ease-out dark:border-white/10 dark:bg-gray-900/70 dark:ring-white/10 ${
             isAnimating
-              ? 'opacity-100 scale-100 translate-y-0'
-              : 'opacity-0 scale-95 translate-y-1'
+              ? 'translate-y-0 scale-100 opacity-100'
+              : 'translate-y-1 scale-95 opacity-0'
           }`}
           style={{
             top: `${desktopPosition.top}px`,
@@ -540,23 +542,23 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
           onContextMenu={(e) => e.stopPropagation()}
         >
           {/* 顶部信息 */}
-          <div className='px-4 pt-3 pb-2'>
+          <div className='px-4 pb-2 pt-3'>
             <div className='flex items-start justify-between gap-3'>
-              <div className='flex items-center gap-3 min-w-0 flex-1'>
+              <div className='flex min-w-0 flex-1 items-center gap-3'>
                 {posterPreview}
                 <div className='min-w-0 flex-1'>
-                  <div className='flex items-center gap-2 min-w-0 mb-0.5'>
-                    <h3 className='font-semibold text-gray-900 dark:text-gray-100 text-sm truncate'>
+                  <div className='mb-0.5 flex min-w-0 items-center gap-2'>
+                    <h3 className='truncate text-sm font-semibold text-gray-900 dark:text-gray-100'>
                       {title}
                     </h3>
                   </div>
                   <div className='flex items-center gap-2'>
                     {sourceName && (
-                      <span className='inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'>
+                      <span className='inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-800 dark:bg-green-900/30 dark:text-green-200'>
                         {origin === 'live' && (
                           <Radio
                             size={10}
-                            className='inline-block text-green-600 dark:text-green-300 mr-1'
+                            className='mr-1 inline-block text-green-600 dark:text-green-300'
                           />
                         )}
                         {sourceName}
@@ -568,7 +570,7 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
 
               <button
                 onClick={onClose}
-                className='rounded-lg p-1 text-gray-400 hover:bg-gray-100/70 hover:text-gray-600 dark:hover:bg-white/[0.06] dark:hover:text-gray-200 transition-colors'
+                className='rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100/70 hover:text-gray-600 dark:hover:bg-white/[0.06] dark:hover:text-gray-200'
                 aria-label='关闭菜单'
               >
                 <X size={18} className='h-5 w-5' />
@@ -620,7 +622,7 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
 
       {/* 操作表单 */}
       <div
-        className='relative w-full max-w-lg mx-4 mb-4 bg-white/80 dark:bg-gray-900/70 rounded-2xl shadow-2xl backdrop-blur-xl border border-gray-200/70 ring-1 ring-black/10 dark:border-white/10 dark:ring-white/10 transition-all duration-200 ease-out'
+        className='relative mx-4 mb-4 w-full max-w-lg rounded-2xl border border-gray-200/70 bg-white/80 shadow-2xl ring-1 ring-black/10 backdrop-blur-xl transition-all duration-200 ease-out dark:border-white/10 dark:bg-gray-900/70 dark:ring-white/10'
         onTouchMove={(e) => {
           // 允许操作表单内部滚动，阻止事件冒泡到外层
           e.stopPropagation();
@@ -637,20 +639,20 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
         }}
       >
         {/* 头部 */}
-        <div className='flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-800'>
-          <div className='flex items-center gap-3 flex-1 min-w-0'>
+        <div className='flex items-center justify-between border-b border-gray-100 p-4 dark:border-gray-800'>
+          <div className='flex min-w-0 flex-1 items-center gap-3'>
             {posterPreview}
             <div className='min-w-0 flex-1'>
-              <div className='flex items-center gap-2 mb-1'>
-                <h3 className='text-lg font-semibold text-gray-900 dark:text-gray-100 truncate'>
+              <div className='mb-1 flex items-center gap-2'>
+                <h3 className='truncate text-lg font-semibold text-gray-900 dark:text-gray-100'>
                   {title}
                 </h3>
                 {sourceName && (
-                  <span className='flex-shrink-0 text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800'>
+                  <span className='flex-shrink-0 rounded border border-gray-300 bg-gray-50 px-2 py-1 text-xs text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400'>
                     {origin === 'live' && (
                       <Radio
                         size={12}
-                        className='inline-block text-gray-500 dark:text-gray-400 mr-1.5'
+                        className='mr-1.5 inline-block text-gray-500 dark:text-gray-400'
                       />
                     )}
                     {sourceName}
@@ -665,7 +667,7 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
 
           <button
             onClick={onClose}
-            className='p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-150'
+            className='rounded-full p-2 transition-colors duration-150 hover:bg-gray-100 dark:hover:bg-gray-800'
           >
             <X size={20} className='text-gray-500 dark:text-gray-400' />
           </button>
