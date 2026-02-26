@@ -807,7 +807,7 @@ const VideoSourceConfig = ({
           sensors={sensors}
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}
-          autoScroll={false}
+          autoScroll={true}
           modifiers={[restrictToVerticalAxis, restrictToParentElement]}
         >
           <table className='min-w-full divide-y divide-gray-200 dark:divide-gray-700'>

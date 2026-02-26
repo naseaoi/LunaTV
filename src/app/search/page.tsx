@@ -99,7 +99,7 @@ function SearchPageClient() {
         return JSON.parse(userSetting);
       }
     }
-    return false;
+    return true;
   };
 
   const [viewMode, setViewMode] = useState<'agg' | 'all'>(() => {
