@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+import { validateProxyUrl } from '@/lib/url-guard';
+
 export const runtime = 'nodejs';
 
 // OrionTV 兼容接口
@@ -11,8 +13,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Missing image URL' }, { status: 400 });
   }
 
+  const validation = validateProxyUrl(imageUrl);
+  if (!validation.ok) {
+    return NextResponse.json({ error: validation.reason }, { status: 403 });
+  }
+
   try {
-    const imageResponse = await fetch(imageUrl, {
+    const imageResponse = await fetch(validation.url, {
       headers: {
         Referer: 'https://movie.douban.com/',
         'User-Agent':
@@ -23,7 +30,7 @@ export async function GET(request: Request) {
     if (!imageResponse.ok) {
       return NextResponse.json(
         { error: imageResponse.statusText },
-        { status: imageResponse.status }
+        { status: imageResponse.status },
       );
     }
 
@@ -32,7 +39,7 @@ export async function GET(request: Request) {
     if (!imageResponse.body) {
       return NextResponse.json(
         { error: 'Image response has no body' },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -56,7 +63,7 @@ export async function GET(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { error: 'Error fetching image' },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

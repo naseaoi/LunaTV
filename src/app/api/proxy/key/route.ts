@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { getConfig } from '@/lib/config';
+import { validateProxyUrl } from '@/lib/url-guard';
 
 export const runtime = 'nodejs';
 
@@ -15,6 +16,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Missing url' }, { status: 400 });
   }
 
+  const validation = validateProxyUrl(url);
+  if (!validation.ok) {
+    return NextResponse.json({ error: validation.reason }, { status: 403 });
+  }
+
   const config = await getConfig();
   const liveSource = source
     ? config.LiveConfig?.find((s: any) => s.key === source)
@@ -25,8 +31,7 @@ export async function GET(request: Request) {
   const ua = liveSource?.ua || 'AptvPlayer/1.4.10';
 
   try {
-    const decodedUrl = decodeURIComponent(url);
-    const response = await fetch(decodedUrl, {
+    const response = await fetch(validation.url, {
       headers: {
         'User-Agent': ua,
       },

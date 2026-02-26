@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getAuthInfoFromCookie } from './auth';
+import { getAuthInfoFromCookie, verifySignature } from './auth';
 import { getConfig } from './config';
-import { getOwnerUsername } from './env.server';
+import { getOwnerPassword, getOwnerUsername } from './env.server';
 
 type RequireActiveUserOptions = {
   unauthorizedMessage?: string;
@@ -64,6 +64,32 @@ export async function requireActiveUser(
   }
 
   if (!authInfo.expiresAt || Date.now() > authInfo.expiresAt) {
+    return {
+      response: NextResponse.json(
+        { error: unauthorizedMessage },
+        { status: unauthorizedStatus },
+      ),
+    };
+  }
+
+  // 签名验证：防止 cookie 伪造
+  if (!authInfo.signature) {
+    return {
+      response: NextResponse.json(
+        { error: unauthorizedMessage },
+        { status: unauthorizedStatus },
+      ),
+    };
+  }
+
+  const secret = getOwnerPassword();
+  const signData =
+    authInfo.sessionType === 'localstorage'
+      ? `localstorage:${authInfo.expiresAt}`
+      : `${authInfo.username}:${authInfo.expiresAt}`;
+
+  const isValid = await verifySignature(signData, authInfo.signature, secret);
+  if (!isValid) {
     return {
       response: NextResponse.json(
         { error: unauthorizedMessage },

@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getConfig } from '@/lib/config';
@@ -5,6 +6,20 @@ import { db } from '@/lib/db';
 import { getOwnerPassword, getOwnerUsername } from '@/lib/env.server';
 
 export const runtime = 'nodejs';
+
+/**
+ * 时序安全的字符串比对，防止通过响应时间差推断密码内容。
+ */
+function safeEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, 'utf8');
+  const bufB = Buffer.from(b, 'utf8');
+  if (bufA.length !== bufB.length) {
+    // 长度不同时仍执行一次比对，保持恒定时间
+    crypto.timingSafeEqual(bufA, Buffer.alloc(bufA.length));
+    return false;
+  }
+  return crypto.timingSafeEqual(bufA, bufB);
+}
 
 type AuthRole = 'owner' | 'admin' | 'user';
 
@@ -301,7 +316,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: '密码不能为空' }, { status: 400 });
       }
 
-      if (password !== envPassword) {
+      if (!safeEqual(password, envPassword)) {
         markLoginFailure(rateLimitState.key);
         return NextResponse.json(
           { ok: false, error: '密码错误' },
@@ -329,7 +344,10 @@ export async function POST(req: NextRequest) {
     }
 
     // 可能是站长，直接读环境变量
-    if (username === ownerUsername && password === ownerPassword) {
+    if (
+      safeEqual(username, ownerUsername) &&
+      safeEqual(password, ownerPassword)
+    ) {
       // 验证成功，设置认证cookie
       const response = NextResponse.json({ ok: true });
       const authPayload = await generateAuthCookie(
@@ -341,7 +359,7 @@ export async function POST(req: NextRequest) {
       clearLoginFailures(rateLimitState.key);
 
       return response;
-    } else if (username === ownerUsername) {
+    } else if (safeEqual(username, ownerUsername)) {
       markLoginFailure(rateLimitState.key);
       return NextResponse.json({ error: '用户名或密码错误' }, { status: 401 });
     }

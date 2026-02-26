@@ -4,76 +4,76 @@
   <img src="public/logo.png" alt="IceTV Logo" width="120">
 </div>
 
-> 🎬 **IceTV** 是一个开箱即用的、跨平台的影视聚合播放器。它基于 **Next.js 16** + **Tailwind&nbsp;CSS** + **TypeScript** 构建，支持多资源搜索、在线播放、收藏同步、播放记录、云端存储，让你可以随时随地畅享海量免费影视内容。
+> IceTV 是一个开箱即用的、跨平台的影视聚合播放器。基于 Next.js 16 + Tailwind CSS + TypeScript 构建，支持多资源搜索、在线播放、收藏同步、播放记录、云端存储，随时随地畅享海量免费影视内容。
 
 <div align="center">
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-000?logo=nextdotjs)
 ![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3-38bdf8?logo=tailwindcss)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6?logo=typescript)
-![License](https://img.shields.io/badge/License-MIT-green)
+![License](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-green)
 ![Docker Ready](https://img.shields.io/badge/Docker-ready-blue?logo=docker)
 
 </div>
 
----
+> [!IMPORTANT]
+> 部署后项目为空壳项目，无内置播放源和直播源，需要自行收集。
 
-## ✨ 功能特性
-
-- 🔍 **多源聚合搜索**：一次搜索立刻返回全源结果。
-- 📄 **丰富详情页**：支持剧集列表、演员、年份、简介等完整信息展示。
-- ▶️ **流畅在线播放**：集成 HLS.js & ArtPlayer。
-- ❤️ **收藏 + 继续观看**：支持本机文件存储，多端同步进度。
-- 📱 **PWA**：离线缓存、安装到桌面/主屏，移动端原生体验。
-- 🌗 **响应式布局**：桌面侧边栏 + 移动底部导航，自适应各种屏幕尺寸。
-- 👿 **智能去广告**：自动跳过视频中的切片广告（实验性）。
-
-### 注意：部署后项目为空壳项目，无内置播放源和直播源，需要自行收集
+> [!WARNING]
+> 请不要在 B 站、小红书、微信公众号、抖音、今日头条或其他中国大陆社交平台发布视频或文章宣传本项目，不授权任何"科技周刊/月刊"类项目或站点收录本项目。
 
 <details>
-  <summary>点击查看项目截图</summary>
+  <summary>项目截图</summary>
   <img src="public/screenshot1.png" alt="项目截图" style="max-width:600px">
   <img src="public/screenshot2.png" alt="项目截图" style="max-width:600px">
   <img src="public/screenshot3.png" alt="项目截图" style="max-width:600px">
 </details>
 
-### 请不要在 B 站、小红书、微信公众号、抖音、今日头条或其他中国大陆社交平台发布视频或文章宣传本项目，不授权任何“科技周刊/月刊”类项目或站点收录本项目。
+---
 
-## 🗺 目录
+## 目录
 
+- [功能特性](#功能特性)
 - [技术栈](#技术栈)
-- [Admin 维护约定](docs/admin-maintenance.md)
 - [部署](#部署)
-  - [Docker 部署](#服务器本地-sqlite-存储单机部署推荐)
 - [配置文件](#配置文件)
 - [订阅](#订阅)
-- [自动更新](#自动更新)
 - [环境变量](#环境变量)
 - [客户端](#客户端)
-- [AndroidTV 使用](#AndroidTV-使用)
-- [Roadmap](#roadmap)
+- [AndroidTV 使用](#androidtv-使用)
 - [安全与隐私提醒](#安全与隐私提醒)
 - [License](#license)
 - [致谢](#致谢)
+
+## 功能特性
+
+- **多源聚合搜索** — 一次搜索立刻返回全源结果
+- **丰富详情页** — 支持剧集列表、演员、年份、简介等完整信息展示
+- **流畅在线播放** — 集成 HLS.js & ArtPlayer
+- **收藏 + 继续观看** — 支持本机文件存储，多端同步进度
+- **PWA** — 离线缓存、安装到桌面/主屏，移动端原生体验
+- **响应式布局** — 桌面侧边栏 + 移动底部导航，自适应各种屏幕尺寸
+- **智能去广告** — 自动跳过视频中的切片广告（实验性）
 
 ## 技术栈
 
 | 分类      | 主要依赖                                                                                              |
 | --------- | ----------------------------------------------------------------------------------------------------- |
 | 前端框架  | [Next.js 16](https://nextjs.org/) · App Router                                                        |
-| UI & 样式 | [Tailwind&nbsp;CSS 3](https://tailwindcss.com/)                                                       |
+| UI & 样式 | [Tailwind CSS 3](https://tailwindcss.com/)                                                            |
 | 语言      | TypeScript 5                                                                                          |
 | 播放器    | [ArtPlayer](https://github.com/zhw2590582/ArtPlayer) · [HLS.js](https://github.com/video-dev/hls.js/) |
 | 代码质量  | ESLint · Prettier · Jest                                                                              |
 | 部署      | Docker                                                                                                |
 
-## Admin 维护约定
-
-详细维护约定已迁移到独立文档：`docs/admin-maintenance.md`
-
 ## 部署
 
-本项目**仅支持 Docker 或其他基于 Docker 的平台** 部署。
+本项目**仅支持 Docker 或其他基于 Docker 的平台**部署。
+
+维护相关文档：
+
+- [Admin 模块维护指南](docs/admin-maintenance.md)
+- [API 鉴权维护指南](docs/api-auth-guide.md)
 
 ### 服务器本地 SQLite 存储（单机部署推荐）
 
@@ -121,7 +121,6 @@ volumes:
       "name": "示例资源",
       "detail": "http://xxx.com"
     }
-    // ...更多站点
   },
   "custom_category": [
     {
@@ -149,7 +148,7 @@ custom_category 支持的自定义分类已知如下：
 - movie：热门、最新、经典、豆瓣高分、冷门佳片、华语、欧美、韩国、日本、动作、喜剧、爱情、科幻、悬疑、恐怖、治愈
 - tv：热门、美剧、英剧、韩剧、日剧、国产剧、港剧、日本动画、综艺、纪录片
 
-也可输入如 "哈利波特" 效果等同于豆瓣搜索
+也可输入如 "哈利波特" 效果等同于豆瓣搜索。
 
 IceTV 支持标准的苹果 CMS V10 API 格式。
 
@@ -168,34 +167,30 @@ IceTV 支持标准的苹果 CMS V10 API 格式。
 | NEXT_PUBLIC_STORAGE_TYPE  | 播放记录/收藏的存储方式                | localdb               | 无默认，必填字段                    |
 | LOCAL_DB_PATH             | 本地 SQLite 文件路径（`localdb` 模式） | 绝对路径              | `/data/icetv-data.sqlite`（Docker） |
 | AUTH_SESSION_TTL_HOURS    | 登录态有效期（小时）                   | 正整数                | 168                                 |
-| NEXT_PUBLIC_UPDATE_REPOS  | 版本检查仓库列表（逗号分隔）           | owner/repo,owner/repo | naseaoi/LunaTV                      |
+| NEXT_PUBLIC_UPDATE_REPOS  | 版本检查仓库列表（逗号分隔）           | owner/repo,owner/repo | naseaoi/IceTV                       |
 | NEXT_PUBLIC_UPDATE_BRANCH | 版本检查分支                           | 分支名                | main                                |
 
 - 版本检查由后端接口 `/api/version/latest` 统一获取，前端不再直接请求 GitHub Raw。若仓库改名，更新 `NEXT_PUBLIC_UPDATE_REPOS` 并重启服务即可生效。
 
 ## 客户端
 
-v100.0.0 以上版本可配合 [Selene](https://github.com/MoonTechLab/Selene) 使用，移动端体验更加友好，数据完全同步
+v100.0.0 以上版本可配合 [Selene](https://github.com/MoonTechLab/Selene) 使用，移动端体验更加友好，数据完全同步。
 
 ## AndroidTV 使用
 
-目前该项目可以配合 [OrionTV](https://github.com/zimplexing/OrionTV) 在 Android TV 上使用，可以直接作为 OrionTV 后端
+目前该项目可以配合 [OrionTV](https://github.com/zimplexing/OrionTV) 在 Android TV 上使用，可以直接作为 OrionTV 后端。
 
-已实现播放记录和网页端同步
+已实现播放记录和网页端同步。
 
 ## 安全与隐私提醒
 
-### 请设置密码保护并关闭公网注册
-
-为了您的安全和避免潜在的法律风险，我们要求在部署时**强烈建议关闭公网注册**：
-
-### 部署要求
+为了您的安全和避免潜在的法律风险，部署时**强烈建议关闭公网注册**：
 
 1. **设置环境变量 `ICETV_PASSWORD`**：为您的实例设置一个强密码
 2. **仅供个人使用**：请勿将您的实例链接公开分享或传播
 3. **遵守当地法律**：请确保您的使用行为符合当地法律法规
 
-### 重要声明
+**重要声明**
 
 - 本项目仅供学习和个人使用
 - 请勿将部署的实例用于商业用途或公开服务
@@ -205,18 +200,14 @@ v100.0.0 以上版本可配合 [Selene](https://github.com/MoonTechLab/Selene) �
 
 ## License
 
-[MIT](LICENSE) © 2025 IceTV & Contributors
+[CC BY-NC-SA 4.0](LICENSE) © 2025 IceTV & Contributors
 
 ## 致谢
 
-- [ts-nextjs-tailwind-starter](https://github.com/theodorusclarence/ts-nextjs-tailwind-starter) — 项目最初基于该脚手架。
-- [LibreTV](https://github.com/LibreSpark/LibreTV) — 由此启发，站在巨人的肩膀上。
-- [ArtPlayer](https://github.com/zhw2590582/ArtPlayer) — 提供强大的网页视频播放器。
-- [HLS.js](https://github.com/video-dev/hls.js) — 实现 HLS 流媒体在浏览器中的播放支持。
+- [ts-nextjs-tailwind-starter](https://github.com/theodorusclarence/ts-nextjs-tailwind-starter) — 项目最初基于该脚手架
+- [LibreTV](https://github.com/LibreSpark/LibreTV) — 由此启发，站在巨人的肩膀上
+- [ArtPlayer](https://github.com/zhw2590582/ArtPlayer) — 提供强大的网页视频播放器
+- [HLS.js](https://github.com/video-dev/hls.js) — 实现 HLS 流媒体在浏览器中的播放支持
 - [Zwei](https://github.com/bestzwei) — 提供获取豆瓣数据的 cors proxy
 - [CMLiussss](https://github.com/cmliu) — 提供豆瓣 CDN 服务
-- 感谢所有提供免费影视接口的站点。
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=naseaoi/LunaTV&type=Date)](https://www.star-history.com/#naseaoi/LunaTV&Date)
+- 感谢所有提供免费影视接口的站点

@@ -99,9 +99,7 @@ export default async function RootLayout({
   const runtimeConfig = {
     STORAGE_TYPE: process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage',
     OPEN_REGISTER: openRegister,
-    UPDATE_REPOS:
-      process.env.NEXT_PUBLIC_UPDATE_REPOS ||
-      'naseaoi/LunaTV,MoonTechLab/IceTV,MoonTechLab/MoonTV',
+    UPDATE_REPOS: process.env.NEXT_PUBLIC_UPDATE_REPOS || 'naseaoi/IceTV',
     UPDATE_BRANCH: process.env.NEXT_PUBLIC_UPDATE_BRANCH || 'main',
     DOUBAN_PROXY_TYPE: doubanProxyType,
     DOUBAN_PROXY: doubanProxy,
