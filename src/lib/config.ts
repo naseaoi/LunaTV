@@ -220,7 +220,6 @@ async function getInitConfig(
       DisableYellowFilter:
         process.env.NEXT_PUBLIC_DISABLE_YELLOW_FILTER === 'true',
       FluidSearch: process.env.NEXT_PUBLIC_FLUID_SEARCH !== 'false',
-      AdBlockMode: 'player',
     },
     UserConfig: {
       Users: [],
@@ -364,14 +363,7 @@ export function configSelfCheck(adminConfig: AdminConfig): AdminConfig {
       DisableYellowFilter:
         process.env.NEXT_PUBLIC_DISABLE_YELLOW_FILTER === 'true',
       FluidSearch: process.env.NEXT_PUBLIC_FLUID_SEARCH !== 'false',
-      AdBlockMode: 'player',
     };
-  }
-  if (
-    adminConfig.SiteConfig.AdBlockMode !== 'server' &&
-    adminConfig.SiteConfig.AdBlockMode !== 'player'
-  ) {
-    adminConfig.SiteConfig.AdBlockMode = 'player';
   }
   // 兼容旧配置：补全 SiteIcon 字段
   if (typeof adminConfig.SiteConfig.SiteIcon !== 'string') {

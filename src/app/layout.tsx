@@ -64,7 +64,6 @@ export default async function RootLayout({
   let disableYellowFilter =
     process.env.NEXT_PUBLIC_DISABLE_YELLOW_FILTER === 'true';
   let fluidSearch = process.env.NEXT_PUBLIC_FLUID_SEARCH !== 'false';
-  let playAdBlockMode: 'player' | 'server' = 'player';
   let openRegister = false;
   let customCategories = [] as {
     name: string;
@@ -90,8 +89,6 @@ export default async function RootLayout({
       query: category.query,
     }));
     fluidSearch = config.SiteConfig.FluidSearch;
-    playAdBlockMode =
-      config.SiteConfig.AdBlockMode === 'server' ? 'server' : 'player';
     openRegister = !!config.UserConfig.OpenRegister;
   }
 
@@ -108,7 +105,6 @@ export default async function RootLayout({
     DISABLE_YELLOW_FILTER: disableYellowFilter,
     CUSTOM_CATEGORIES: customCategories,
     FLUID_SEARCH: fluidSearch,
-    PLAY_AD_BLOCK_MODE: playAdBlockMode,
   };
 
   return (
@@ -146,7 +142,7 @@ export default async function RootLayout({
       >
         <ThemeProvider
           attribute='class'
-          defaultTheme='system'
+          defaultTheme='dark'
           enableSystem
           disableTransitionOnChange
         >

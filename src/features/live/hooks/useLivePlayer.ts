@@ -232,7 +232,6 @@ export function useLivePlayer({
         artPlayerRef.current = new Artplayer({
           container: artRef.current,
           url: targetUrl,
-          poster: currentChannel.logo,
           volume: 0.7,
           isLive: true,
           muted: false,

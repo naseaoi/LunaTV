@@ -10,7 +10,6 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const url = searchParams.get('url');
   const allowCORS = searchParams.get('allowCORS') === 'true';
-  const removeAds = searchParams.get('removeAds') === 'true';
   const source =
     searchParams.get('icetv-source') ||
     searchParams.get('moontv-source') ||
@@ -73,7 +72,6 @@ export async function GET(request: Request) {
         baseUrl,
         request,
         allowCORS,
-        removeAds,
         source,
       );
 
@@ -138,7 +136,6 @@ function rewriteM3U8Content(
   baseUrl: string,
   req: Request,
   allowCORS: boolean,
-  removeAds: boolean,
   source: string | null,
 ) {
   // 从 referer 头提取协议信息
@@ -177,10 +174,6 @@ function rewriteM3U8Content(
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i].trim();
 
-    if (removeAds && line.includes('#EXT-X-DISCONTINUITY')) {
-      continue;
-    }
-
     // 处理 TS 片段 URL 和其他媒体文件
     if (line && !line.startsWith('#')) {
       const resolvedUrl = resolveUrl(baseUrl, line);
@@ -210,9 +203,7 @@ function rewriteM3U8Content(
         const nextLine = lines[i].trim();
         if (nextLine && !nextLine.startsWith('#')) {
           const resolvedUrl = resolveUrl(baseUrl, nextLine);
-          const proxyUrl = buildProxyPath('m3u8', resolvedUrl, {
-            removeAds: String(removeAds),
-          });
+          const proxyUrl = buildProxyPath('m3u8', resolvedUrl);
           rewrittenLines.push(proxyUrl);
         } else {
           rewrittenLines.push(nextLine);

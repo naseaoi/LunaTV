@@ -1,8 +1,8 @@
 'use client';
 
 import {
+  ArrowUpRight,
   Bug,
-  CheckCircle,
   ChevronDown,
   ChevronUp,
   Download,
@@ -10,7 +10,7 @@ import {
   RefreshCw,
   X,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { changelog, ChangelogEntry } from '@/lib/changelog';
@@ -23,13 +23,12 @@ interface VersionPanelProps {
   onClose: () => void;
 }
 
-interface RemoteChangelogEntry {
-  version: string;
-  date: string;
-  added: string[];
-  changed: string[];
-  fixed: string[];
+interface TimelineEntry {
+  entry: ChangelogEntry;
+  type: 'current' | 'local' | 'remote' | 'update';
 }
+
+const VISIBLE_COUNT = 5;
 
 export const VersionPanel: React.FC<VersionPanelProps> = ({
   isOpen,
@@ -39,63 +38,50 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
   const [remoteChangelog, setRemoteChangelog] = useState<ChangelogEntry[]>([]);
   const [hasUpdate, setIsHasUpdate] = useState(false);
   const [latestVersion, setLatestVersion] = useState<string>('');
-  const [showRemoteContent, setShowRemoteContent] = useState(false);
+  const [showAllEntries, setShowAllEntries] = useState(false);
   const repoUrl = getPrimaryRepoUrl();
 
-  // 确保组件已挂载
   useEffect(() => {
     setMounted(true);
     return () => setMounted(false);
   }, []);
 
-  // Body 滚动锁定 - 使用 overflow 方式避免布局问题
+  // Body 滚动锁定
   useEffect(() => {
     if (isOpen) {
       const body = document.body;
       const html = document.documentElement;
-
-      // 保存原始样式
       const originalBodyOverflow = body.style.overflow;
       const originalHtmlOverflow = html.style.overflow;
-
-      // 只设置 overflow 来阻止滚动
       body.style.overflow = 'hidden';
       html.style.overflow = 'hidden';
-
       return () => {
-        // 恢复所有原始样式
         body.style.overflow = originalBodyOverflow;
         html.style.overflow = originalHtmlOverflow;
       };
     }
   }, [isOpen]);
 
-  // 获取远程变更日志
   useEffect(() => {
     if (isOpen) {
       fetchRemoteChangelog();
+    } else {
+      setShowAllEntries(false);
     }
   }, [isOpen]);
 
-  // 获取远程变更日志
   const fetchRemoteChangelog = async () => {
     try {
       const response = await fetch('/api/version/latest', {
         method: 'GET',
         cache: 'no-store',
       });
-
-      if (!response.ok) {
-        return;
-      }
-
+      if (!response.ok) return;
       const data = await response.json();
       const parsed = Array.isArray(data?.changelog)
-        ? (data.changelog as RemoteChangelogEntry[])
+        ? (data.changelog as ChangelogEntry[])
         : [];
-
       setRemoteChangelog(parsed);
-
       const remoteVersion =
         typeof data?.latestVersion === 'string'
           ? data.latestVersion
@@ -111,416 +97,251 @@ export const VersionPanel: React.FC<VersionPanelProps> = ({
     }
   };
 
-  const localVersions = changelog.map((entry) => entry.version);
-  const remoteNewEntries = remoteChangelog.filter(
-    (entry) => !localVersions.includes(entry.version),
-  );
-  const shouldInjectLatestFallback =
-    hasUpdate &&
-    !!latestVersion &&
-    !localVersions.includes(latestVersion) &&
-    !remoteNewEntries.some((entry) => entry.version === latestVersion);
+  // 构建统一时间线：远程新版本 + 本地版本，去重
+  const timeline = useMemo<TimelineEntry[]>(() => {
+    const localVersions = new Set(changelog.map((e) => e.version));
 
-  const remoteLatestFallbackEntry: ChangelogEntry | null =
-    shouldInjectLatestFallback
-      ? {
+    // 远程独有的版本
+    const remoteOnly = remoteChangelog
+      .filter((e) => !localVersions.has(e.version))
+      .map(
+        (entry): TimelineEntry => ({
+          entry,
+          type: entry.version === latestVersion ? 'update' : 'remote',
+        }),
+      );
+
+    // 如果有更新但远程日志里没有该版本详情，注入占位
+    if (
+      hasUpdate &&
+      latestVersion &&
+      !localVersions.has(latestVersion) &&
+      !remoteOnly.some((e) => e.entry.version === latestVersion)
+    ) {
+      remoteOnly.unshift({
+        entry: {
           version: latestVersion,
           date: '日期未知',
           added: [],
-          changed: ['已检测到远程最新版本，暂未获取到该版本完整更新日志。'],
+          changed: ['已检测到新版本，暂未获取到详细更新日志。'],
           fixed: [],
-        }
-      : null;
+        },
+        type: 'update',
+      });
+    }
 
-  const remoteDisplayEntries = remoteLatestFallbackEntry
-    ? [remoteLatestFallbackEntry, ...remoteNewEntries]
-    : remoteNewEntries;
+    // 本地版本
+    const local = changelog.map(
+      (entry): TimelineEntry => ({
+        entry,
+        type: entry.version === CURRENT_VERSION ? 'current' : 'local',
+      }),
+    );
 
-  const mergedChangelogEntries = [
-    ...remoteDisplayEntries.map((entry) => ({
-      entry,
-      isRemote: true,
-    })),
-    ...changelog.map((entry) => ({
-      entry,
-      isRemote: false,
-    })),
-  ];
+    return [...remoteOnly, ...local];
+  }, [remoteChangelog, hasUpdate, latestVersion]);
 
-  // 渲染变更日志条目
-  const renderChangelogEntry = (
-    entry: ChangelogEntry | RemoteChangelogEntry,
-    isCurrentVersion = false,
-    isRemote = false,
+  const visibleEntries = showAllEntries
+    ? timeline
+    : timeline.slice(0, VISIBLE_COUNT);
+  const hasMore = timeline.length > VISIBLE_COUNT;
+
+  // 变更分类渲染
+  const renderChanges = (
+    items: string[],
+    icon: React.ReactNode,
+    label: string,
+    dotColor: string,
   ) => {
-    const isUpdate = isRemote && hasUpdate && entry.version === latestVersion;
-
+    if (!items || items.length === 0) return null;
     return (
-      <div
-        key={entry.version}
-        className={`p-4 rounded-lg border ${
-          isCurrentVersion
-            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
-            : isUpdate
-              ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
-              : 'bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700'
-        }`}
-      >
-        {/* 版本标题 */}
-        <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3'>
-          <div className='flex flex-wrap items-center gap-2'>
-            <h4 className='text-lg font-semibold text-gray-900 dark:text-gray-100'>
-              v{entry.version}
-            </h4>
-            {isCurrentVersion && (
-              <span className='px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 rounded-full'>
-                当前版本
-              </span>
-            )}
-            {isUpdate && (
-              <span className='px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 rounded-full flex items-center gap-1'>
-                <Download className='w-3 h-3' />
-                可更新
-              </span>
-            )}
-          </div>
-          <div className='flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400'>
-            {entry.date}
-          </div>
+      <div>
+        <div className='mb-1.5 flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400'>
+          {icon}
+          {label}
         </div>
-
-        {/* 变更内容 */}
-        <div className='space-y-3'>
-          {entry.added.length > 0 && (
-            <div>
-              <h5 className='text-sm font-medium text-green-700 dark:text-green-400 mb-2 flex items-center gap-1'>
-                <Plus className='w-4 h-4' />
-                新增功能
-              </h5>
-              <ul className='space-y-1'>
-                {entry.added.map((item, index) => (
-                  <li
-                    key={index}
-                    className='text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2'
-                  >
-                    <span className='w-1.5 h-1.5 bg-green-500 rounded-full mt-2 flex-shrink-0'></span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {entry.changed.length > 0 && (
-            <div>
-              <h5 className='text-sm font-medium text-blue-700 dark:text-blue-400 mb-2 flex items-center gap-1'>
-                <RefreshCw className='w-4 h-4' />
-                功能改进
-              </h5>
-              <ul className='space-y-1'>
-                {entry.changed.map((item, index) => (
-                  <li
-                    key={index}
-                    className='text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2'
-                  >
-                    <span className='w-1.5 h-1.5 bg-blue-500 rounded-full mt-2 flex-shrink-0'></span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {entry.fixed.length > 0 && (
-            <div>
-              <h5 className='text-sm font-medium text-purple-700 dark:text-purple-400 mb-2 flex items-center gap-1'>
-                <Bug className='w-4 h-4' />
-                问题修复
-              </h5>
-              <ul className='space-y-1'>
-                {entry.fixed.map((item, index) => (
-                  <li
-                    key={index}
-                    className='text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2'
-                  >
-                    <span className='w-1.5 h-1.5 bg-purple-500 rounded-full mt-2 flex-shrink-0'></span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
+        <ul className='space-y-1'>
+          {items.map((item, i) => (
+            <li
+              key={i}
+              className='flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300'
+            >
+              <span
+                className={`mt-[7px] h-1.5 w-1.5 flex-shrink-0 rounded-full ${dotColor}`}
+              />
+              {item}
+            </li>
+          ))}
+        </ul>
       </div>
     );
   };
 
-  // 版本面板内容
-  const versionPanelContent = (
+  if (!mounted || !isOpen) return null;
+
+  return createPortal(
     <>
-      {/* 背景遮罩 */}
+      {/* 遮罩 */}
       <div
-        className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[1000]'
+        className='fixed inset-0 z-[1000] bg-black/50 backdrop-blur-sm'
         onClick={onClose}
-        onTouchMove={(e) => {
-          // 只阻止滚动，允许其他触摸事件
-          e.preventDefault();
-        }}
-        onWheel={(e) => {
-          // 阻止滚轮滚动
-          e.preventDefault();
-        }}
-        style={{
-          touchAction: 'none',
-        }}
+        onTouchMove={(e) => e.preventDefault()}
+        onWheel={(e) => e.preventDefault()}
+        style={{ touchAction: 'none' }}
       />
 
-      {/* 版本面板 */}
+      {/* 面板 */}
       <div
-        className='fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl max-h-[90vh] bg-white/80 dark:bg-gray-900/70 rounded-2xl shadow-2xl backdrop-blur-xl border border-gray-200/70 ring-1 ring-black/10 dark:border-white/10 dark:ring-white/10 z-[1001] overflow-hidden'
-        onTouchMove={(e) => {
-          // 允许版本面板内部滚动，阻止事件冒泡到外层
-          e.stopPropagation();
-        }}
-        style={{
-          touchAction: 'auto', // 允许面板内的正常触摸操作
-        }}
+        className='fixed left-1/2 top-1/2 z-[1001] flex max-h-[90vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-gray-200/70 bg-white/80 shadow-2xl ring-1 ring-black/10 backdrop-blur-xl dark:border-white/10 dark:bg-gray-900/70 dark:ring-white/10'
+        onTouchMove={(e) => e.stopPropagation()}
+        style={{ touchAction: 'auto' }}
       >
         {/* 标题栏 */}
-        <div className='flex items-center justify-between p-3 sm:p-6 border-b border-gray-200 dark:border-gray-700'>
-          <div className='flex items-center gap-2 sm:gap-3'>
-            <h3 className='text-lg sm:text-xl font-bold text-gray-800 dark:text-gray-200'>
+        <div className='flex flex-shrink-0 items-center justify-between border-b border-gray-200/80 px-5 py-4 dark:border-gray-700/80'>
+          <div className='flex items-center gap-3'>
+            <h3 className='text-base font-semibold text-gray-800 dark:text-gray-200'>
               版本信息
             </h3>
-            <div className='flex flex-wrap items-center gap-1 sm:gap-2'>
-              <span className='px-2 sm:px-3 py-1 text-xs sm:text-sm font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 rounded-full'>
-                v{CURRENT_VERSION}
-              </span>
-              {hasUpdate && (
-                <span className='px-2 sm:px-3 py-1 text-xs sm:text-sm font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 rounded-full flex items-center gap-1'>
-                  <Download className='w-3 h-3 sm:w-4 sm:h-4' />
-                  <span className='hidden sm:inline'>有新版本可用</span>
-                  <span className='sm:hidden'>可更新</span>
-                </span>
-              )}
-            </div>
+            <span className='rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400'>
+              v{CURRENT_VERSION}
+            </span>
           </div>
           <button
             onClick={onClose}
-            className='w-6 h-6 sm:w-8 sm:h-8 p-1 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors'
+            className='flex h-7 w-7 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300'
             aria-label='关闭'
           >
-            <X className='w-full h-full' />
+            <X className='h-4 w-4' />
           </button>
         </div>
 
-        {/* 内容区域 */}
-        <div className='p-3 sm:p-6 overflow-y-auto max-h-[calc(95vh-140px)] sm:max-h-[calc(90vh-120px)]'>
-          <div className='space-y-3 sm:space-y-6'>
-            {/* 远程更新信息 */}
+        {/* 可滚动内容 */}
+        <div className='flex-1 overflow-y-auto'>
+          <div className='space-y-4 p-5'>
+            {/* 更新提示卡片 — 仅有更新时显示 */}
             {hasUpdate && (
-              <div className='bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 sm:p-4'>
-                <div className='flex flex-col gap-3'>
-                  <div className='flex items-center gap-2 sm:gap-3'>
-                    <div className='w-8 h-8 sm:w-10 sm:h-10 bg-yellow-100 dark:bg-yellow-800/40 rounded-full flex items-center justify-center flex-shrink-0'>
-                      <Download className='w-4 h-4 sm:w-5 sm:h-5 text-yellow-600 dark:text-yellow-400' />
-                    </div>
-                    <div className='min-w-0 flex-1'>
-                      <h4 className='text-sm sm:text-base font-semibold text-yellow-800 dark:text-yellow-200'>
-                        发现新版本
-                      </h4>
-                      <p className='text-xs sm:text-sm text-yellow-700 dark:text-yellow-300 break-all'>
-                        v{CURRENT_VERSION} → v{latestVersion}
-                      </p>
-                    </div>
+              <div className='flex items-center justify-between gap-3 rounded-xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 dark:border-amber-700/50 dark:bg-amber-900/20'>
+                <div className='flex min-w-0 items-center gap-3'>
+                  <div className='flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-800/40'>
+                    <Download className='h-4 w-4 text-amber-600 dark:text-amber-400' />
                   </div>
+                  <div className='min-w-0'>
+                    <p className='text-sm font-medium text-amber-800 dark:text-amber-200'>
+                      v{latestVersion} 可用
+                    </p>
+                    <p className='text-xs text-amber-600 dark:text-amber-400'>
+                      当前 v{CURRENT_VERSION}
+                    </p>
+                  </div>
+                </div>
+                {repoUrl && (
                   <a
                     href={repoUrl}
                     target='_blank'
                     rel='noopener noreferrer'
-                    className='inline-flex items-center justify-center gap-2 px-3 py-2 bg-yellow-600 hover:bg-yellow-700 text-white text-xs sm:text-sm rounded-lg transition-colors shadow-sm w-full'
+                    className='flex flex-shrink-0 items-center gap-1 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600'
                   >
-                    <Download className='w-3 h-3 sm:w-4 sm:h-4' />
-                    前往仓库
+                    前往更新
+                    <ArrowUpRight className='h-3 w-3' />
                   </a>
-                </div>
+                )}
               </div>
             )}
 
-            {/* 当前为最新版本信息 */}
-            {!hasUpdate && (
-              <div className='bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 sm:p-4'>
-                <div className='flex flex-col gap-3'>
-                  <div className='flex items-center gap-2 sm:gap-3'>
-                    <div className='w-8 h-8 sm:w-10 sm:h-10 bg-green-100 dark:bg-green-800/40 rounded-full flex items-center justify-center flex-shrink-0'>
-                      <CheckCircle className='w-4 h-4 sm:w-5 sm:h-5 text-green-600 dark:text-green-400' />
-                    </div>
-                    <div className='min-w-0 flex-1'>
-                      <h4 className='text-sm sm:text-base font-semibold text-green-800 dark:text-green-200'>
-                        当前为最新版本
-                      </h4>
-                      <p className='text-xs sm:text-sm text-green-700 dark:text-green-300 break-all'>
-                        已是最新版本 v{CURRENT_VERSION}
-                      </p>
-                    </div>
-                  </div>
-                  <a
-                    href={repoUrl}
-                    target='_blank'
-                    rel='noopener noreferrer'
-                    className='inline-flex items-center justify-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-xs sm:text-sm rounded-lg transition-colors shadow-sm w-full'
+            {/* 时间线变更日志 */}
+            <div className='space-y-3'>
+              {visibleEntries.map(({ entry, type }) => {
+                const isCurrent = type === 'current';
+                const isUpdate = type === 'update';
+                const isRemote = type === 'remote' || type === 'update';
+
+                return (
+                  <div
+                    key={entry.version}
+                    className={`rounded-xl border p-4 transition-colors ${
+                      isCurrent
+                        ? 'border-blue-200/80 bg-blue-50/60 dark:border-blue-800/50 dark:bg-blue-900/15'
+                        : isUpdate
+                          ? 'border-amber-200/80 bg-amber-50/40 dark:border-amber-800/50 dark:bg-amber-900/10'
+                          : 'border-gray-200/80 bg-gray-50/50 dark:border-gray-700/60 dark:bg-gray-800/40'
+                    }`}
                   >
-                    <CheckCircle className='w-3 h-3 sm:w-4 sm:h-4' />
-                    前往仓库
-                  </a>
-                </div>
-              </div>
-            )}
-
-            {/* 远程可更新内容 */}
-            {hasUpdate && (
-              <div className='space-y-4'>
-                <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3'>
-                  <h4 className='text-lg font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2'>
-                    <Download className='w-5 h-5 text-yellow-500' />
-                    远程更新内容
-                  </h4>
-                  <button
-                    onClick={() => setShowRemoteContent(!showRemoteContent)}
-                    className='inline-flex items-center justify-center gap-2 px-3 py-1.5 bg-yellow-100 hover:bg-yellow-200 text-yellow-800 dark:bg-yellow-800/30 dark:hover:bg-yellow-800/50 dark:text-yellow-200 rounded-lg transition-colors text-sm w-full sm:w-auto'
-                  >
-                    {showRemoteContent ? (
-                      <>
-                        <ChevronUp className='w-4 h-4' />
-                        收起
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown className='w-4 h-4' />
-                        查看更新内容
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {showRemoteContent && remoteDisplayEntries.length > 0 && (
-                  <div className='space-y-4'>
-                    {remoteDisplayEntries.map((entry) => (
-                      <div
-                        key={entry.version}
-                        className={`p-4 rounded-lg border ${
-                          entry.version === latestVersion
-                            ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
-                            : 'bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700'
-                        }`}
-                      >
-                        <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3'>
-                          <div className='flex flex-wrap items-center gap-2'>
-                            <h4 className='text-lg font-semibold text-gray-900 dark:text-gray-100'>
-                              v{entry.version}
-                            </h4>
-                            {entry.version === latestVersion && (
-                              <span className='px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 rounded-full flex items-center gap-1'>
-                                远程最新
-                              </span>
-                            )}
-                          </div>
-                          <div className='flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400'>
-                            {entry.date}
-                          </div>
-                        </div>
-
-                        {entry.added && entry.added.length > 0 && (
-                          <div className='mb-3'>
-                            <h5 className='text-sm font-medium text-green-600 dark:text-green-400 mb-2 flex items-center gap-1'>
-                              <Plus className='w-4 h-4' />
-                              新增功能
-                            </h5>
-                            <ul className='space-y-1'>
-                              {entry.added.map((item, itemIndex) => (
-                                <li
-                                  key={itemIndex}
-                                  className='text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2'
-                                >
-                                  <span className='w-1.5 h-1.5 bg-green-400 rounded-full mt-2 flex-shrink-0'></span>
-                                  {item}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
+                    {/* 版本头 */}
+                    <div className='mb-3 flex items-center justify-between'>
+                      <div className='flex items-center gap-2'>
+                        <span className='text-sm font-semibold text-gray-800 dark:text-gray-200'>
+                          v{entry.version}
+                        </span>
+                        {isCurrent && (
+                          <span className='rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'>
+                            当前
+                          </span>
                         )}
-
-                        {entry.changed && entry.changed.length > 0 && (
-                          <div className='mb-3'>
-                            <h5 className='text-sm font-medium text-blue-600 dark:text-blue-400 mb-2 flex items-center gap-1'>
-                              <RefreshCw className='w-4 h-4' />
-                              功能改进
-                            </h5>
-                            <ul className='space-y-1'>
-                              {entry.changed.map((item, itemIndex) => (
-                                <li
-                                  key={itemIndex}
-                                  className='text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2'
-                                >
-                                  <span className='w-1.5 h-1.5 bg-blue-400 rounded-full mt-2 flex-shrink-0'></span>
-                                  {item}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
+                        {isUpdate && (
+                          <span className='rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'>
+                            新版本
+                          </span>
                         )}
-
-                        {entry.fixed && entry.fixed.length > 0 && (
-                          <div>
-                            <h5 className='text-sm font-medium text-purple-700 dark:text-purple-400 mb-2 flex items-center gap-1'>
-                              <Bug className='w-4 h-4' />
-                              问题修复
-                            </h5>
-                            <ul className='space-y-1'>
-                              {entry.fixed.map((item, itemIndex) => (
-                                <li
-                                  key={itemIndex}
-                                  className='text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2'
-                                >
-                                  <span className='w-1.5 h-1.5 bg-purple-500 rounded-full mt-2 flex-shrink-0'></span>
-                                  {item}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
+                        {isRemote && !isUpdate && (
+                          <span className='rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-400'>
+                            远程
+                          </span>
                         )}
                       </div>
-                    ))}
+                      <span className='text-xs text-gray-400 dark:text-gray-500'>
+                        {entry.date}
+                      </span>
+                    </div>
+
+                    {/* 变更内容 */}
+                    <div className='space-y-2.5'>
+                      {renderChanges(
+                        entry.added,
+                        <Plus className='h-3 w-3' />,
+                        '新增',
+                        'bg-emerald-500',
+                      )}
+                      {renderChanges(
+                        entry.changed,
+                        <RefreshCw className='h-3 w-3' />,
+                        '改进',
+                        'bg-blue-500',
+                      )}
+                      {renderChanges(
+                        entry.fixed,
+                        <Bug className='h-3 w-3' />,
+                        '修复',
+                        'bg-purple-500',
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
-            )}
+                );
+              })}
 
-            {/* 变更日志标题 */}
-            <div className='border-b border-gray-200 dark:border-gray-700 pb-4'>
-              <h4 className='text-lg font-semibold text-gray-800 dark:text-gray-200 pb-3 sm:pb-4'>
-                变更日志
-              </h4>
-
-              <div className='space-y-4'>
-                {/* 本地变更日志 */}
-                {mergedChangelogEntries.map(({ entry, isRemote }) =>
-                  renderChangelogEntry(
-                    entry,
-                    entry.version === CURRENT_VERSION,
-                    isRemote,
-                  ),
-                )}
-              </div>
+              {/* 查看更多 */}
+              {hasMore && (
+                <button
+                  onClick={() => setShowAllEntries((prev) => !prev)}
+                  className='flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-medium text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-gray-800/60 dark:hover:text-gray-400'
+                >
+                  {showAllEntries ? (
+                    <>
+                      <ChevronUp className='h-3.5 w-3.5' />
+                      收起
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className='h-3.5 w-3.5' />
+                      查看全部 {timeline.length} 个版本
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body,
   );
-
-  // 使用 Portal 渲染到 document.body
-  if (!mounted || !isOpen) return null;
-
-  return createPortal(versionPanelContent, document.body);
 };

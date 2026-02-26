@@ -10,7 +10,6 @@ export interface SiteConfig {
   DoubanImageProxy: string;
   DisableYellowFilter: boolean;
   FluidSearch: boolean;
-  AdBlockMode?: 'player' | 'server';
 }
 
 // 视频源数据类型

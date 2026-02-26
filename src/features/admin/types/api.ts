@@ -17,7 +17,6 @@ export interface AdminConfig {
     DoubanImageProxy: string;
     DisableYellowFilter: boolean;
     FluidSearch: boolean;
-    AdBlockMode?: 'player' | 'server';
   };
   UserConfig: {
     Users: {

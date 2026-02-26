@@ -31,7 +31,7 @@ const FavoriteIcon = ({ filled }: { filled: boolean }) => {
     );
   }
   return (
-    <Heart className='h-5 w-5 stroke-[1.5] text-gray-500 dark:text-gray-400 hover:text-red-400 transition-colors' />
+    <Heart className='h-5 w-5 stroke-[1.5] text-gray-500 transition-colors hover:text-red-400 dark:text-gray-400' />
   );
 };
 
@@ -54,33 +54,33 @@ export const InfoTab: React.FC<InfoTabProps> = ({
       .map((p) => p.trim())
       .filter(Boolean);
 
-    return paragraphs.map((p) => `　　${p}`).join('\n\n');
+    return paragraphs.map((p) => `　　${p}`).join('\n');
   }, [detail?.desc]);
 
   return (
-    <div className='flex-1 overflow-y-auto p-5 sm:p-6 space-y-5'>
+    <div className='flex-1 space-y-5 overflow-y-auto p-5 sm:p-6'>
       {/* 封面 + 基本信息 */}
       <div className='flex gap-5'>
         {/* 封面 */}
-        <div className='flex-shrink-0 w-28 aspect-[2/3] rounded-xl overflow-hidden bg-gray-200 dark:bg-gray-800 ring-1 ring-black/10 dark:ring-white/10 shadow-md shadow-black/10 dark:shadow-black/30'>
+        <div className='aspect-[2/3] w-28 flex-shrink-0 overflow-hidden rounded-xl bg-gray-200 shadow-md shadow-black/10 ring-1 ring-black/10 dark:bg-gray-800 dark:shadow-black/30 dark:ring-white/10'>
           {videoCover ? (
             <img
               src={processImageUrl(videoCover)}
               alt={videoTitle}
-              className='w-full h-full object-cover'
+              className='h-full w-full object-cover'
             />
           ) : (
-            <div className='w-full h-full flex items-center justify-center text-gray-400 dark:text-gray-600'>
-              <Clapperboard className='w-8 h-8' />
+            <div className='flex h-full w-full items-center justify-center text-gray-400 dark:text-gray-600'>
+              <Clapperboard className='h-8 w-8' />
             </div>
           )}
         </div>
 
         {/* 标题 + 标签：紧凑排列，垂直居中对齐封面 */}
-        <div className='flex-1 min-w-0 flex flex-col justify-center gap-2.5'>
+        <div className='flex min-w-0 flex-1 flex-col justify-center gap-2.5'>
           {/* 标题 + 收藏 */}
           <div className='flex items-center gap-2'>
-            <h3 className='text-base font-bold text-gray-900 dark:text-gray-100 leading-snug truncate min-w-0'>
+            <h3 className='min-w-0 truncate text-base font-bold leading-snug text-gray-900 dark:text-gray-100'>
               {videoTitle || '影片标题'}
             </h3>
             <button
@@ -88,7 +88,7 @@ export const InfoTab: React.FC<InfoTabProps> = ({
                 e.stopPropagation();
                 onToggleFavorite();
               }}
-              className='flex-shrink-0 p-1.5 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors active:scale-90'
+              className='flex-shrink-0 rounded-full p-1.5 transition-colors hover:bg-red-50 active:scale-90 dark:hover:bg-red-900/20'
             >
               <FavoriteIcon filled={favorited} />
             </button>
@@ -97,17 +97,17 @@ export const InfoTab: React.FC<InfoTabProps> = ({
           {/* 第一行标签：来源、年份、集数 */}
           <div className='flex flex-wrap gap-1.5'>
             {detail?.source_name && (
-              <span className='inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/60 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-500/20'>
+              <span className='inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200/60 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-500/20'>
                 {detail.source_name}
               </span>
             )}
             {(detail?.year || videoYear) && (
-              <span className='inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'>
+              <span className='inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400'>
                 {detail?.year || videoYear}
               </span>
             )}
             {totalEpisodes > 1 && (
-              <span className='inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400'>
+              <span className='inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-600 dark:bg-violet-900/30 dark:text-violet-400'>
                 共 {totalEpisodes} 集
               </span>
             )}
@@ -117,12 +117,12 @@ export const InfoTab: React.FC<InfoTabProps> = ({
           {(detail?.class || detail?.type_name) && (
             <div className='flex flex-wrap gap-1.5'>
               {detail?.class && (
-                <span className='inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'>
+                <span className='inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'>
                   {detail.class}
                 </span>
               )}
               {detail?.type_name && (
-                <span className='inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400'>
+                <span className='inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:bg-amber-900/30 dark:text-amber-400'>
                   {detail.type_name}
                 </span>
               )}
@@ -135,9 +135,9 @@ export const InfoTab: React.FC<InfoTabProps> = ({
               href={`https://movie.douban.com/subject/${videoDoubanId}`}
               target='_blank'
               rel='noopener noreferrer'
-              className='inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:underline w-fit transition-colors'
+              className='inline-flex w-fit items-center gap-1 text-[11px] font-medium text-emerald-600 transition-colors hover:text-emerald-700 hover:underline dark:text-emerald-400 dark:hover:text-emerald-300'
             >
-              <ExternalLink className='w-3 h-3' />
+              <ExternalLink className='h-3 w-3' />
               豆瓣详情
             </a>
           )}
@@ -147,8 +147,8 @@ export const InfoTab: React.FC<InfoTabProps> = ({
       {/* 简介 */}
       {detail?.desc && (
         <div className='pt-2'>
-          <div className='flex items-center gap-2 mb-3'>
-            <div className='w-[3px] h-4 rounded-full bg-emerald-500/70 dark:bg-emerald-400/60' />
+          <div className='mb-3 flex items-center gap-2'>
+            <div className='h-4 w-[3px] rounded-full bg-emerald-500/70 dark:bg-emerald-400/60' />
             <h4 className='text-sm font-semibold text-gray-700 dark:text-gray-300'>
               简介
             </h4>

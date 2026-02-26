@@ -6,6 +6,7 @@ import type HlsType from 'hls.js';
 import { SearchResult } from '@/lib/types';
 
 import { WakeLockSentinel } from '@/features/play/lib/playTypes';
+import { filterAdsFromM3U8 } from '@/features/play/lib/playUtils';
 
 // ---------------------------------------------------------------------------
 // 内部工具函数
@@ -45,19 +46,6 @@ function formatBytesPerSecond(bytesPerSecond: number): string {
   return `${kb.toFixed(1)} KB/s`;
 }
 
-function filterAdsFromM3U8(m3u8Content: string): string {
-  if (!m3u8Content) return '';
-  const lines = m3u8Content.split('\n');
-  const filteredLines: string[] = [];
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i];
-    if (!line.includes('#EXT-X-DISCONTINUITY')) {
-      filteredLines.push(line);
-    }
-  }
-  return filteredLines.join('\n');
-}
-
 // ---------------------------------------------------------------------------
 // 类型
 // ---------------------------------------------------------------------------
@@ -78,7 +66,6 @@ export interface UseArtPlayerParams {
   detail: SearchResult | null;
   currentEpisodeIndex: number;
   totalEpisodes: number;
-  adBlockMode: 'player' | 'server';
   blockAdEnabled: boolean;
   blockAdEnabledRef: MutableRefObject<boolean>;
   skipConfigRef: MutableRefObject<SkipConfig>;
@@ -119,7 +106,6 @@ export function useArtPlayer(params: UseArtPlayerParams) {
     detail,
     currentEpisodeIndex,
     totalEpisodes,
-    adBlockMode,
     blockAdEnabled,
     blockAdEnabledRef,
     skipConfigRef,
@@ -187,7 +173,6 @@ export function useArtPlayer(params: UseArtPlayerParams) {
         if (!isWebkit && artPlayerRef.current) {
           artPlayerRef.current.switch = videoUrl;
           artPlayerRef.current.title = `${videoTitle} - 第${currentEpisodeIndex + 1}集`;
-          artPlayerRef.current.poster = videoCover;
           if (artPlayerRef.current?.video) {
             ensureVideoSource(
               artPlayerRef.current.video as HTMLVideoElement,
@@ -245,7 +230,6 @@ export function useArtPlayer(params: UseArtPlayerParams) {
           artPlayerRef.current = new Artplayer({
             container: artRef.current,
             url: videoUrl,
-            poster: videoCover,
             volume: 0.7,
             isLive: false,
             muted: false,
@@ -291,16 +275,12 @@ export function useArtPlayer(params: UseArtPlayerParams) {
                   maxBufferLength: 30,
                   backBufferLength: 30,
                   maxBufferSize: 60 * 1000 * 1000,
-                  loader:
-                    blockAdEnabledRef.current && adBlockMode === 'player'
-                      ? (CustomHlsJsLoader as unknown as typeof Hls.DefaultConfig.loader)
-                      : Hls.DefaultConfig.loader,
+                  loader: blockAdEnabledRef.current
+                    ? (CustomHlsJsLoader as unknown as typeof Hls.DefaultConfig.loader)
+                    : Hls.DefaultConfig.loader,
                 });
 
-                const targetUrl =
-                  blockAdEnabledRef.current && adBlockMode === 'server'
-                    ? `/api/proxy/m3u8?url=${encodeURIComponent(url)}&removeAds=true`
-                    : url;
+                const targetUrl = url;
 
                 setRealtimeLoadSpeed('测速中...');
 
@@ -634,5 +614,5 @@ export function useArtPlayer(params: UseArtPlayerParams) {
     return () => {
       cancelled = true;
     };
-  }, [videoUrl, loading, blockAdEnabled, adBlockMode]);
+  }, [videoUrl, loading, blockAdEnabled]);
 }

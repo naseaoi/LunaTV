@@ -231,3 +231,301 @@ div[data-media-provider] video {
   --skeleton-color: #2d2d2d;
   --skeleton-highlight: #3d3d3d;
 }
+
+/* ==========================================================================
+   ArtPlayer 现代化玻璃拟态风格 — 与项目 ModalShell 风格统一
+   ========================================================================== */
+
+/* --- 播放器容器圆角 --- */
+.art-video-player {
+  border-radius: 16px !important;
+  overflow: hidden !important;
+}
+
+/* --- 右键菜单 --- */
+.art-contextmenus {
+  background: rgba(17, 24, 32, 0.75) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 16px !important;
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+  padding: 6px !important;
+  overflow: hidden !important;
+}
+
+.art-contextmenu {
+  color: #e5e7eb !important;
+  border-radius: 10px !important;
+  padding: 8px 14px !important;
+  font-size: 13px !important;
+  transition: background 0.15s ease !important;
+  border-bottom: none !important;
+}
+
+.art-contextmenu:hover {
+  background: rgba(59, 130, 246, 0.18) !important;
+  color: #60a5fa !important;
+}
+
+.art-contextmenu a {
+  color: inherit !important;
+}
+
+/* --- 底部控制栏 --- */
+
+/* 控制栏按钮悬停反馈（不改变布局，仅增加交互感） */
+.art-controls .art-control {
+  border-radius: 8px !important;
+  transition: background 0.15s ease !important;
+}
+
+.art-controls .art-control:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* --- 进度条 --- */
+.art-progress {
+  padding: 0 12px !important;
+}
+
+.art-progress .art-control-progress-inner {
+  height: 4px !important;
+  border-radius: 4px !important;
+  transition: height 0.15s ease !important;
+}
+
+.art-progress:hover .art-control-progress-inner {
+  height: 6px !important;
+}
+
+.art-progress .art-progress-loaded {
+  border-radius: 4px !important;
+  background: rgba(255, 255, 255, 0.25) !important;
+}
+
+.art-progress .art-progress-played {
+  border-radius: 4px !important;
+  background: #3b82f6 !important;
+}
+
+/* 进度条拖拽手柄 */
+.art-progress .art-progress-indicator {
+  border-radius: 50% !important;
+  background: #fff !important;
+  box-shadow: 0 0 6px rgba(59, 130, 246, 0.5) !important;
+  border: 2px solid #3b82f6 !important;
+  transition: transform 0.1s ease !important;
+}
+
+.art-progress:hover .art-progress-indicator {
+  transform: scale(1.3) !important;
+}
+
+/* 进度条时间提示 */
+.art-progress .art-progress-tip {
+  background: rgba(17, 24, 32, 0.8) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  color: #e5e7eb !important;
+  border-radius: 8px !important;
+  padding: 4px 10px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* --- 设置面板 --- */
+.art-settings {
+  background: rgba(17, 24, 32, 0.75) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 16px !important;
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+  padding: 8px !important;
+  padding-bottom: 10px !important;
+  overflow: visible !important;
+  height: auto !important;
+  max-height: none !important;
+}
+
+.art-setting-item {
+  border-radius: 10px !important;
+  padding: 10px 14px !important;
+  margin-bottom: 2px !important;
+  transition: background 0.15s ease !important;
+  color: #e5e7eb !important;
+  font-size: 13px !important;
+  border-bottom: none !important;
+}
+
+.art-setting-item:last-child {
+  margin-bottom: 0 !important;
+}
+
+.art-setting-item:hover {
+  background: rgba(59, 130, 246, 0.18) !important;
+}
+
+/* 设置面板内部项 */
+.art-setting-item-left {
+  color: #d1d5db !important;
+}
+
+.art-setting-item-right {
+  color: #9ca3af !important;
+}
+
+/* 设置面板开关 */
+.art-setting-item .art-setting-item-right-tooltip {
+  color: #60a5fa !important;
+  font-weight: 500 !important;
+}
+
+/* --- 音量面板 --- */
+.art-volume-panel {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.art-volume-panel .art-volume-slider-handle {
+  background: #3b82f6 !important;
+}
+
+.art-volume-panel .art-volume-slider-handle::before {
+  background: #fff !important;
+  border: 2px solid #3b82f6 !important;
+  box-shadow: 0 0 4px rgba(59, 130, 246, 0.4) !important;
+}
+
+/* --- 隐藏播放器原生 loading 动画（使用自定义加载组件） --- */
+.art-loading {
+  display: none !important;
+}
+
+/* --- 提示文字（notice） --- */
+.art-notice {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 12px 0 0 !important;
+  justify-content: center !important;
+}
+
+.art-notice .art-notice-inner {
+  display: inline-block !important;
+  width: auto !important;
+  background: rgba(17, 24, 32, 0.8) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 8px !important;
+  padding: 6px 14px !important;
+  color: #e5e7eb !important;
+  font-size: 13px !important;
+  line-height: 1.4 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* --- 信息面板 --- */
+.art-info {
+  background: rgba(17, 24, 32, 0.75) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.3) !important;
+  color: #e5e7eb !important;
+}
+
+/* --- 字幕样式 --- */
+.art-subtitle {
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* --- 锁定按钮（移动端） --- */
+.art-lock {
+  background: rgba(17, 24, 32, 0.7) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 50% !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+}
+
+.art-lock .art-icon svg {
+  fill: #d1d5db !important;
+}
+
+/* --- 迷你进度条 --- */
+.art-mini-progress {
+  background: rgba(255, 255, 255, 0.15) !important;
+  border-radius: 2px !important;
+}
+
+/* --- 播放速率选择器 --- */
+.art-video-player .art-selector-list {
+  background: rgba(17, 24, 32, 0.75) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+  padding: 4px !important;
+  overflow: hidden !important;
+}
+
+.art-video-player .art-selector-item {
+  border-radius: 8px !important;
+  padding: 6px 14px !important;
+  color: #d1d5db !important;
+  font-size: 13px !important;
+  transition: background 0.15s ease !important;
+}
+
+.art-video-player .art-selector-item:hover,
+.art-video-player .art-selector-item.art-current {
+  background: rgba(59, 130, 246, 0.18) !important;
+  color: #60a5fa !important;
+}
+
+/* --- Tooltip --- */
+.art-video-player [data-balloon]::after {
+  background: rgba(17, 24, 32, 0.85) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  color: #e5e7eb !important;
+  border-radius: 8px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  padding: 4px 10px !important;
+}
+
+.art-video-player [data-balloon]::before {
+  border-top-color: rgba(17, 24, 32, 0.85) !important;
+}
+
+/* --- 设置面板 switch 开关 --- */
+.art-setting-item .art-setting-switch {
+  border-radius: 12px !important;
+}
+
+/* --- 全屏模式下取消圆角 --- */
+.art-video-player[data-fullscreen] {
+  border-radius: 0 !important;
+}
+
+.art-video-player[data-fullscreen-web] {
+  border-radius: 0 !important;
+}

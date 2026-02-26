@@ -34,7 +34,6 @@ const SiteConfigComponent = ({
     DoubanImageProxy: '',
     DisableYellowFilter: false,
     FluidSearch: true,
-    AdBlockMode: 'player',
   });
 
   // 站点图标相关状态
@@ -67,11 +66,6 @@ const SiteConfigComponent = ({
     { value: 'custom', label: '自定义代理' },
   ];
 
-  const adBlockModeOptions = [
-    { value: 'player', label: '播放器侧处理（省服务器流量，可能闪帧）' },
-    { value: 'server', label: '服务器预处理（更无感，消耗服务器流量）' },
-  ];
-
   // 获取感谢信息
   const getThanksInfo = (dataSource: string) => {
     switch (dataSource) {
@@ -102,7 +96,6 @@ const SiteConfigComponent = ({
         DoubanImageProxy: config.SiteConfig.DoubanImageProxy || '',
         DisableYellowFilter: config.SiteConfig.DisableYellowFilter || false,
         FluidSearch: config.SiteConfig.FluidSearch || true,
-        AdBlockMode: config.SiteConfig.AdBlockMode || 'player',
       });
       // 初始化图标预览
       const icon = config.SiteConfig.SiteIcon;
@@ -153,10 +146,10 @@ const SiteConfigComponent = ({
 
   return (
     <div className='space-y-6'>
-      <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+      <div className='grid grid-cols-1 gap-6 md:grid-cols-2'>
         {/* 站点名称 */}
         <div>
-          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+          <label className='mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300'>
             站点名称
           </label>
           <input
@@ -165,27 +158,27 @@ const SiteConfigComponent = ({
             onChange={(e) =>
               setSiteSettings((prev) => ({ ...prev, SiteName: e.target.value }))
             }
-            className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
+            className='w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
           />
         </div>
 
         {/* 站点图标 */}
         <div>
-          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+          <label className='mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300'>
             站点图标
           </label>
           <div className='flex items-start gap-3'>
             {/* 预览 */}
-            <div className='flex-shrink-0 w-10 h-10 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-800 flex items-center justify-center'>
+            <div className='flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border border-gray-300 bg-gray-50 dark:border-gray-600 dark:bg-gray-800'>
               {iconPreview ? (
                 <img
                   src={iconPreview}
                   alt='站点图标'
-                  className='w-full h-full object-contain'
+                  className='h-full w-full object-contain'
                   onError={() => setIconPreview('')}
                 />
               ) : (
-                <ImagePlus className='w-5 h-5 text-gray-400' />
+                <ImagePlus className='h-5 w-5 text-gray-400' />
               )}
             </div>
             <div className='flex-1 space-y-2'>
@@ -200,15 +193,15 @@ const SiteConfigComponent = ({
                     setIconPreview(url);
                   }}
                   placeholder='输入图标 URL 或上传文件'
-                  className='flex-1 min-w-0 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm'
+                  className='min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
                 />
                 <button
                   type='button'
                   disabled={iconUploading}
                   onClick={() => iconFileRef.current?.click()}
-                  className='flex-shrink-0 flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors'
+                  className='flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
                 >
-                  <Upload className='w-3.5 h-3.5' />
+                  <Upload className='h-3.5 w-3.5' />
                   {iconUploading ? '上传中...' : '上传'}
                 </button>
                 {siteSettings.SiteIcon && (
@@ -229,9 +222,9 @@ const SiteConfigComponent = ({
                       setSiteSettings((prev) => ({ ...prev, SiteIcon: '' }));
                       setIconPreview('');
                     }}
-                    className='flex-shrink-0 flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-red-300 dark:border-red-600/50 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors'
+                    className='flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-red-300 px-3 py-2 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-red-600/50 dark:text-red-400 dark:hover:bg-red-900/20'
                   >
-                    <Trash2 className='w-3.5 h-3.5' />
+                    <Trash2 className='h-3.5 w-3.5' />
                     清除
                   </button>
                 )}
@@ -286,7 +279,7 @@ const SiteConfigComponent = ({
 
         {/* 站点公告 */}
         <div>
-          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+          <label className='mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300'>
             站点公告
           </label>
           <textarea
@@ -298,34 +291,14 @@ const SiteConfigComponent = ({
               }))
             }
             rows={1}
-            className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
+            className='w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
           />
-        </div>
-
-        {/* 去广告处理模式 */}
-        <div>
-          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
-            去广告处理模式
-          </label>
-          <AdminSelect
-            value={siteSettings.AdBlockMode || 'player'}
-            onChange={(value) =>
-              setSiteSettings((prev) => ({
-                ...prev,
-                AdBlockMode: value as 'player' | 'server',
-              }))
-            }
-            options={adBlockModeOptions}
-          />
-          <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
-            仅影响播放页"去广告"开启时的处理方式。
-          </p>
         </div>
 
         {/* 豆瓣数据源设置 */}
         <div className='space-y-3'>
           <div>
-            <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+            <label className='mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300'>
               豆瓣数据代理
             </label>
             <AdminSelect
@@ -347,7 +320,7 @@ const SiteConfigComponent = ({
                       '_blank',
                     )
                   }
-                  className='flex items-center justify-center gap-1.5 w-full px-3 text-xs text-gray-500 dark:text-gray-400 cursor-pointer'
+                  className='flex w-full cursor-pointer items-center justify-center gap-1.5 px-3 text-xs text-gray-500 dark:text-gray-400'
                 >
                   <span className='font-medium'>
                     {getThanksInfo(siteSettings.DoubanProxyType)!.text}
@@ -360,7 +333,7 @@ const SiteConfigComponent = ({
 
           {siteSettings.DoubanProxyType === 'custom' && (
             <div>
-              <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+              <label className='mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300'>
                 豆瓣代理地址
               </label>
               <input
@@ -373,7 +346,7 @@ const SiteConfigComponent = ({
                     DoubanProxy: e.target.value,
                   }))
                 }
-                className='w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 shadow-sm hover:border-gray-400 dark:hover:border-gray-500'
+                className='w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-500 shadow-sm transition-all duration-200 hover:border-gray-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400 dark:hover:border-gray-500'
               />
               <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
                 自定义代理服务器地址
@@ -385,7 +358,7 @@ const SiteConfigComponent = ({
         {/* 豆瓣图片代理设置 */}
         <div className='space-y-3'>
           <div>
-            <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+            <label className='mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300'>
               豆瓣图片代理
             </label>
             <AdminSelect
@@ -407,7 +380,7 @@ const SiteConfigComponent = ({
                       '_blank',
                     )
                   }
-                  className='flex items-center justify-center gap-1.5 w-full px-3 text-xs text-gray-500 dark:text-gray-400 cursor-pointer'
+                  className='flex w-full cursor-pointer items-center justify-center gap-1.5 px-3 text-xs text-gray-500 dark:text-gray-400'
                 >
                   <span className='font-medium'>
                     {getThanksInfo(siteSettings.DoubanImageProxyType)!.text}
@@ -420,7 +393,7 @@ const SiteConfigComponent = ({
 
           {siteSettings.DoubanImageProxyType === 'custom' && (
             <div>
-              <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+              <label className='mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300'>
                 豆瓣图片代理地址
               </label>
               <input
@@ -433,7 +406,7 @@ const SiteConfigComponent = ({
                     DoubanImageProxy: e.target.value,
                   }))
                 }
-                className='w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 shadow-sm hover:border-gray-400 dark:hover:border-gray-500'
+                className='w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-500 shadow-sm transition-all duration-200 hover:border-gray-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400 dark:hover:border-gray-500'
               />
               <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
                 自定义图片代理服务器地址
@@ -444,7 +417,7 @@ const SiteConfigComponent = ({
 
         {/* 搜索接口可拉取最大页数 */}
         <div>
-          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+          <label className='mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300'>
             搜索接口可拉取最大页数
           </label>
           <input
@@ -457,13 +430,13 @@ const SiteConfigComponent = ({
                 SearchDownstreamMaxPage: Number(e.target.value),
               }))
             }
-            className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
+            className='w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
           />
         </div>
 
         {/* 站点接口缓存时间 */}
         <div>
-          <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+          <label className='mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300'>
             站点接口缓存时间（秒）
           </label>
           <input
@@ -476,15 +449,15 @@ const SiteConfigComponent = ({
                 SiteInterfaceCacheTime: Number(e.target.value),
               }))
             }
-            className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
+            className='w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
           />
         </div>
       </div>
 
-      <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+      <div className='grid grid-cols-1 gap-6 md:grid-cols-2'>
         <div>
           <div className='flex items-center justify-between'>
-            <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+            <label className='mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300'>
               NSFW模式
             </label>
             <button
@@ -519,7 +492,7 @@ const SiteConfigComponent = ({
 
         <div>
           <div className='flex items-center justify-between'>
-            <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+            <label className='mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300'>
               启用流式搜索
             </label>
             <button

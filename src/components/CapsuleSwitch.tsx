@@ -43,7 +43,7 @@ const CapsuleSwitch: React.FC<CapsuleSwitchProps> = ({
       className={`relative flex items-end ${className || ''}`}
     >
       {/* 底部贯穿分割线 */}
-      <div className='absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-gray-300/60 dark:via-white/20 to-transparent' />
+      <div className='absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-gray-300/60 to-transparent dark:via-white/20' />
 
       {/* 滑动指示器 */}
       {indicator && (
@@ -69,20 +69,17 @@ const CapsuleSwitch: React.FC<CapsuleSwitchProps> = ({
         </div>
       )}
 
-      {options.map((opt, index) => {
+      {options.map((opt) => {
         const isActive = active === opt.value;
         const Icon = opt.icon;
         return (
           <React.Fragment key={opt.value}>
-            {index > 0 && (
-              <div className='relative z-10 mb-3.5 h-4 w-[1px] bg-gray-300/40 dark:bg-white/10' />
-            )}
             <button
               ref={(el) => {
                 if (el) buttonRefs.current.set(opt.value, el);
               }}
               onClick={() => onChange(opt.value)}
-              className={`relative px-6 py-3 text-sm tracking-wider transition-colors duration-500 cursor-pointer select-none ${
+              className={`relative cursor-pointer select-none px-6 py-3 text-sm tracking-wider transition-colors duration-500 ${
                 isActive
                   ? 'text-gray-900 dark:text-white'
                   : 'text-gray-400 hover:text-gray-600 dark:text-white/40 dark:hover:text-white/70'

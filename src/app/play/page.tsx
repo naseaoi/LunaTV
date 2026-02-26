@@ -10,7 +10,6 @@ import {
   getSkipConfig,
   saveSkipConfig,
 } from '@/lib/db.client';
-import { getRuntimeConfig } from '@/lib/runtime-config';
 import { SearchResult } from '@/lib/types';
 
 import { PlayMainContent } from '@/features/play/components/PlayMainContent';
@@ -79,10 +78,6 @@ function PlayPageClient() {
   useEffect(() => {
     blockAdEnabledRef.current = blockAdEnabled;
   }, [blockAdEnabled]);
-  const [adBlockMode] = useState<'player' | 'server'>(() => {
-    const mode = getRuntimeConfig()?.PLAY_AD_BLOCK_MODE;
-    return mode === 'server' ? 'server' : 'player';
-  });
 
   // 视频基本信息
   const [videoTitle, setVideoTitle] = useState(searchParams.get('title') || '');
@@ -594,7 +589,6 @@ function PlayPageClient() {
     detail,
     currentEpisodeIndex,
     totalEpisodes,
-    adBlockMode,
     blockAdEnabled,
     blockAdEnabledRef,
     skipConfigRef,
