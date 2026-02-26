@@ -83,29 +83,7 @@ const DoubanCustomSelector: React.FC<DoubanCustomSelectorProps> = ({
     const scrollContainer = secondaryScrollContainerRef.current;
     const capsuleContainer = secondaryContainerRef.current;
 
-    if (scrollContainer && capsuleContainer) {
-      // 同时监听滚动容器和胶囊容器的滚轮事件
-      scrollContainer.addEventListener('wheel', handleSecondaryWheel, {
-        passive: false,
-      });
-      capsuleContainer.addEventListener('wheel', handleSecondaryWheel, {
-        passive: false,
-      });
-
-      return () => {
-        scrollContainer.removeEventListener('wheel', handleSecondaryWheel);
-        capsuleContainer.removeEventListener('wheel', handleSecondaryWheel);
-      };
-    }
-  }, [handleSecondaryWheel]);
-
-  // 当二级选项变化时重新添加事件监听器
-  useEffect(() => {
-    const scrollContainer = secondaryScrollContainerRef.current;
-    const capsuleContainer = secondaryContainerRef.current;
-
     if (scrollContainer && capsuleContainer && secondaryOptions.length > 0) {
-      // 重新添加事件监听器
       scrollContainer.addEventListener('wheel', handleSecondaryWheel, {
         passive: false,
       });

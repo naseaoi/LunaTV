@@ -1,6 +1,6 @@
 import { MutableRefObject, useEffect } from 'react';
 
-import Artplayer from 'artplayer';
+import type Artplayer from 'artplayer';
 
 interface UseLiveKeyboardParams {
   artPlayerRef: MutableRefObject<Artplayer | null>;

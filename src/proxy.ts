@@ -106,19 +106,20 @@ function handleAuthFailure(
   return NextResponse.redirect(loginUrl);
 }
 
+// 模块级常量，避免每次请求重建数组
+const SKIP_PATHS = [
+  '/_next',
+  '/favicon.ico',
+  '/robots.txt',
+  '/manifest.json',
+  '/icons/',
+  '/logo.png',
+  '/screenshot.png',
+];
+
 // 判断是否需要跳过认证的路径
 function shouldSkipAuth(pathname: string): boolean {
-  const skipPaths = [
-    '/_next',
-    '/favicon.ico',
-    '/robots.txt',
-    '/manifest.json',
-    '/icons/',
-    '/logo.png',
-    '/screenshot.png',
-  ];
-
-  return skipPaths.some((path) => pathname.startsWith(path));
+  return SKIP_PATHS.some((path) => pathname.startsWith(path));
 }
 
 // 配置proxy匹配规则

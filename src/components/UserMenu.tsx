@@ -124,25 +124,18 @@ export const UserMenu: React.FC<UserMenuProps> = ({
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [isChecking, setIsChecking] = useState(true);
 
-  // 确保组件已挂载
+  // 组件挂载：初始化认证信息、读取本地设置、检查版本
   useEffect(() => {
     setMounted(true);
-  }, []);
 
-  // 获取认证信息和存储类型
-  useEffect(() => {
     if (typeof window !== 'undefined') {
+      // 认证信息和存储类型
       const auth = getAuthInfoFromBrowserCookie();
       setAuthInfo(auth);
-
       const type = window.RUNTIME_CONFIG?.STORAGE_TYPE || 'localstorage';
       setStorageType(type);
-    }
-  }, []);
 
-  // 从 localStorage 读取设置
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
+      // 从 localStorage 读取设置
       const savedAggregateSearch = localStorage.getItem(
         'defaultAggregateSearch',
       );
@@ -209,10 +202,8 @@ export const UserMenu: React.FC<UserMenuProps> = ({
         setLiveDirectConnect(JSON.parse(savedLiveDirectConnect));
       }
     }
-  }, []);
 
-  // 版本检查
-  useEffect(() => {
+    // 版本检查
     const checkUpdate = async () => {
       try {
         const status = await checkForUpdates();
@@ -223,7 +214,6 @@ export const UserMenu: React.FC<UserMenuProps> = ({
         setIsChecking(false);
       }
     };
-
     checkUpdate();
   }, []);
 

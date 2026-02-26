@@ -204,3 +204,30 @@ div[data-media-provider] video {
     transform: scale(1) translateX(0);
   }
 }
+
+/* ImagePlaceholder 骨架屏动画 */
+@keyframes shine {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+:root {
+  --skeleton-color: #f0f0f0;
+  --skeleton-highlight: #e0e0e0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --skeleton-color: #2d2d2d;
+    --skeleton-highlight: #3d3d3d;
+  }
+}
+
+.dark {
+  --skeleton-color: #2d2d2d;
+  --skeleton-highlight: #3d3d3d;
+}

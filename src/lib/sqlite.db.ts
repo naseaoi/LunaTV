@@ -69,6 +69,48 @@ export class LocalSqliteStorage implements IStorage {
   private readonly legacyJsonPaths: string[];
   private readonly db: Database.Database;
 
+  // 预编译的 Prepared Statements
+  private readonly stmts: {
+    // play_records
+    getPlayRecord: Database.Statement;
+    setPlayRecord: Database.Statement;
+    getAllPlayRecords: Database.Statement;
+    deletePlayRecord: Database.Statement;
+    // favorites
+    getFavorite: Database.Statement;
+    setFavorite: Database.Statement;
+    getAllFavorites: Database.Statement;
+    deleteFavorite: Database.Statement;
+    // users
+    registerUser: Database.Statement;
+    getPassword: Database.Statement;
+    updatePassword: Database.Statement;
+    checkUserExist: Database.Statement;
+    deleteUserRow: Database.Statement;
+    getAllUsers: Database.Statement;
+    // search_history
+    getSearchHistory: Database.Statement;
+    deleteSearchHistoryAll: Database.Statement;
+    deleteSearchHistoryOne: Database.Statement;
+    deleteSearchHistoryKeyword: Database.Statement;
+    updateSearchHistoryIndex: Database.Statement;
+    insertSearchHistory: Database.Statement;
+    deleteSearchHistoryOverflow: Database.Statement;
+    // skip_configs
+    getSkipConfig: Database.Statement;
+    setSkipConfig: Database.Statement;
+    deleteSkipConfig: Database.Statement;
+    getAllSkipConfigs: Database.Statement;
+    // admin_config
+    getAdminConfig: Database.Statement;
+    setAdminConfig: Database.Statement;
+    // delete by username (for deleteUser transaction)
+    deletePlayRecordsByUser: Database.Statement;
+    deleteFavoritesByUser: Database.Statement;
+    deleteSearchHistoryByUser: Database.Statement;
+    deleteSkipConfigsByUser: Database.Statement;
+  };
+
   constructor(dbPath?: string) {
     const defaultSqlitePath = process.env.DOCKER_ENV
       ? '/data/icetv-data.sqlite'
@@ -109,6 +151,7 @@ export class LocalSqliteStorage implements IStorage {
     this.db.pragma(`busy_timeout = ${busyTimeoutMs}`);
 
     this.initializeSchema();
+    this.stmts = this.prepareStatements();
     this.migrateFromLegacyJsonIfNeeded();
   }
 
@@ -152,6 +195,109 @@ export class LocalSqliteStorage implements IStorage {
         config_json TEXT NOT NULL
       );
     `);
+  }
+
+  private prepareStatements(): typeof this.stmts {
+    return {
+      // play_records
+      getPlayRecord: this.db.prepare(
+        'SELECT record_json FROM play_records WHERE username = ? AND record_key = ?',
+      ),
+      setPlayRecord: this.db.prepare(
+        'INSERT OR REPLACE INTO play_records (username, record_key, record_json) VALUES (?, ?, ?)',
+      ),
+      getAllPlayRecords: this.db.prepare(
+        'SELECT record_key, record_json FROM play_records WHERE username = ?',
+      ),
+      deletePlayRecord: this.db.prepare(
+        'DELETE FROM play_records WHERE username = ? AND record_key = ?',
+      ),
+      // favorites
+      getFavorite: this.db.prepare(
+        'SELECT favorite_json FROM favorites WHERE username = ? AND favorite_key = ?',
+      ),
+      setFavorite: this.db.prepare(
+        'INSERT OR REPLACE INTO favorites (username, favorite_key, favorite_json) VALUES (?, ?, ?)',
+      ),
+      getAllFavorites: this.db.prepare(
+        'SELECT favorite_key, favorite_json FROM favorites WHERE username = ?',
+      ),
+      deleteFavorite: this.db.prepare(
+        'DELETE FROM favorites WHERE username = ? AND favorite_key = ?',
+      ),
+      // users
+      registerUser: this.db.prepare(
+        'INSERT OR REPLACE INTO users (username, password) VALUES (?, ?)',
+      ),
+      getPassword: this.db.prepare(
+        'SELECT password FROM users WHERE username = ?',
+      ),
+      updatePassword: this.db.prepare(
+        'UPDATE users SET password = ? WHERE username = ?',
+      ),
+      checkUserExist: this.db.prepare(
+        'SELECT 1 AS v FROM users WHERE username = ? LIMIT 1',
+      ),
+      deleteUserRow: this.db.prepare('DELETE FROM users WHERE username = ?'),
+      getAllUsers: this.db.prepare(
+        'SELECT username FROM users ORDER BY username ASC',
+      ),
+      // search_history
+      getSearchHistory: this.db.prepare(
+        'SELECT keyword FROM search_history WHERE username = ? ORDER BY sort_index ASC',
+      ),
+      deleteSearchHistoryAll: this.db.prepare(
+        'DELETE FROM search_history WHERE username = ?',
+      ),
+      deleteSearchHistoryOne: this.db.prepare(
+        'DELETE FROM search_history WHERE username = ? AND keyword = ?',
+      ),
+      deleteSearchHistoryKeyword: this.db.prepare(
+        'DELETE FROM search_history WHERE username = ? AND keyword = ?',
+      ),
+      updateSearchHistoryIndex: this.db.prepare(
+        'UPDATE search_history SET sort_index = sort_index + 1 WHERE username = ?',
+      ),
+      insertSearchHistory: this.db.prepare(
+        'INSERT OR REPLACE INTO search_history (username, keyword, sort_index) VALUES (?, ?, ?)',
+      ),
+      deleteSearchHistoryOverflow: this.db.prepare(
+        'DELETE FROM search_history WHERE username = ? AND sort_index >= ?',
+      ),
+      // skip_configs
+      getSkipConfig: this.db.prepare(
+        'SELECT config_json FROM skip_configs WHERE username = ? AND config_key = ?',
+      ),
+      setSkipConfig: this.db.prepare(
+        'INSERT OR REPLACE INTO skip_configs (username, config_key, config_json) VALUES (?, ?, ?)',
+      ),
+      deleteSkipConfig: this.db.prepare(
+        'DELETE FROM skip_configs WHERE username = ? AND config_key = ?',
+      ),
+      getAllSkipConfigs: this.db.prepare(
+        'SELECT config_key, config_json FROM skip_configs WHERE username = ?',
+      ),
+      // admin_config
+      getAdminConfig: this.db.prepare(
+        'SELECT config_json FROM admin_config WHERE id = 1',
+      ),
+      setAdminConfig: this.db.prepare(
+        'INSERT OR REPLACE INTO admin_config (id, config_json) VALUES (1, ?)',
+      ),
+      // delete by username
+      deletePlayRecordsByUser: this.db.prepare(
+        'DELETE FROM play_records WHERE username = ?',
+      ),
+      deleteFavoritesByUser: this.db.prepare(
+        'DELETE FROM favorites WHERE username = ?',
+      ),
+      deleteSearchHistoryByUser: this.db.prepare(
+        'DELETE FROM search_history WHERE username = ?',
+      ),
+      deleteSkipConfigsByUser: this.db.prepare(
+        'DELETE FROM skip_configs WHERE username = ?',
+      ),
+    };
   }
 
   private hasAnyData(): boolean {
@@ -264,11 +410,9 @@ export class LocalSqliteStorage implements IStorage {
     userName: string,
     key: string,
   ): Promise<PlayRecord | null> {
-    const row = this.db
-      .prepare(
-        'SELECT record_json FROM play_records WHERE username = ? AND record_key = ?',
-      )
-      .get(userName, key) as { record_json: string } | undefined;
+    const row = this.stmts.getPlayRecord.get(userName, key) as
+      | { record_json: string }
+      | undefined;
     return parseJsonValue<PlayRecord>(row?.record_json);
   }
 
@@ -277,21 +421,16 @@ export class LocalSqliteStorage implements IStorage {
     key: string,
     record: PlayRecord,
   ): Promise<void> {
-    this.db
-      .prepare(
-        'INSERT OR REPLACE INTO play_records (username, record_key, record_json) VALUES (?, ?, ?)',
-      )
-      .run(userName, key, JSON.stringify(record));
+    this.stmts.setPlayRecord.run(userName, key, JSON.stringify(record));
   }
 
   async getAllPlayRecords(
     userName: string,
   ): Promise<{ [key: string]: PlayRecord }> {
-    const rows = this.db
-      .prepare(
-        'SELECT record_key, record_json FROM play_records WHERE username = ?',
-      )
-      .all(userName) as { record_key: string; record_json: string }[];
+    const rows = this.stmts.getAllPlayRecords.all(userName) as {
+      record_key: string;
+      record_json: string;
+    }[];
 
     const result: Record<string, PlayRecord> = {};
     for (const row of rows) {
@@ -304,17 +443,13 @@ export class LocalSqliteStorage implements IStorage {
   }
 
   async deletePlayRecord(userName: string, key: string): Promise<void> {
-    this.db
-      .prepare('DELETE FROM play_records WHERE username = ? AND record_key = ?')
-      .run(userName, key);
+    this.stmts.deletePlayRecord.run(userName, key);
   }
 
   async getFavorite(userName: string, key: string): Promise<Favorite | null> {
-    const row = this.db
-      .prepare(
-        'SELECT favorite_json FROM favorites WHERE username = ? AND favorite_key = ?',
-      )
-      .get(userName, key) as { favorite_json: string } | undefined;
+    const row = this.stmts.getFavorite.get(userName, key) as
+      | { favorite_json: string }
+      | undefined;
     return parseJsonValue<Favorite>(row?.favorite_json);
   }
 
@@ -323,21 +458,16 @@ export class LocalSqliteStorage implements IStorage {
     key: string,
     favorite: Favorite,
   ): Promise<void> {
-    this.db
-      .prepare(
-        'INSERT OR REPLACE INTO favorites (username, favorite_key, favorite_json) VALUES (?, ?, ?)',
-      )
-      .run(userName, key, JSON.stringify(favorite));
+    this.stmts.setFavorite.run(userName, key, JSON.stringify(favorite));
   }
 
   async getAllFavorites(
     userName: string,
   ): Promise<{ [key: string]: Favorite }> {
-    const rows = this.db
-      .prepare(
-        'SELECT favorite_key, favorite_json FROM favorites WHERE username = ?',
-      )
-      .all(userName) as { favorite_key: string; favorite_json: string }[];
+    const rows = this.stmts.getAllFavorites.all(userName) as {
+      favorite_key: string;
+      favorite_json: string;
+    }[];
 
     const result: Record<string, Favorite> = {};
     for (const row of rows) {
@@ -350,137 +480,95 @@ export class LocalSqliteStorage implements IStorage {
   }
 
   async deleteFavorite(userName: string, key: string): Promise<void> {
-    this.db
-      .prepare('DELETE FROM favorites WHERE username = ? AND favorite_key = ?')
-      .run(userName, key);
+    this.stmts.deleteFavorite.run(userName, key);
   }
 
   async registerUser(userName: string, password: string): Promise<void> {
     const hashed = await hashPassword(password);
-    this.db
-      .prepare(
-        'INSERT OR REPLACE INTO users (username, password) VALUES (?, ?)',
-      )
-      .run(userName, hashed);
+    this.stmts.registerUser.run(userName, hashed);
   }
 
   async verifyUser(userName: string, password: string): Promise<boolean> {
-    const row = this.db
-      .prepare('SELECT password FROM users WHERE username = ?')
-      .get(userName) as { password: string } | undefined;
+    const row = this.stmts.getPassword.get(userName) as
+      | { password: string }
+      | undefined;
     if (!row) return false;
 
     const { match, needsRehash } = await verifyPassword(password, row.password);
     if (match && needsRehash) {
-      // 旧明文密码验证通过，自动升级为 bcrypt 哈希
       const hashed = await hashPassword(password);
-      this.db
-        .prepare('UPDATE users SET password = ? WHERE username = ?')
-        .run(hashed, userName);
+      this.stmts.updatePassword.run(hashed, userName);
     }
     return match;
   }
 
   async checkUserExist(userName: string): Promise<boolean> {
-    return Boolean(
-      this.db
-        .prepare('SELECT 1 AS v FROM users WHERE username = ? LIMIT 1')
-        .get(userName),
-    );
+    return Boolean(this.stmts.checkUserExist.get(userName));
   }
 
   async changePassword(userName: string, newPassword: string): Promise<void> {
     const hashed = await hashPassword(newPassword);
-    this.db
-      .prepare('UPDATE users SET password = ? WHERE username = ?')
-      .run(hashed, userName);
+    this.stmts.updatePassword.run(hashed, userName);
   }
 
   async deleteUser(userName: string): Promise<void> {
     const remove = this.db.transaction((targetUser: string) => {
-      this.db.prepare('DELETE FROM users WHERE username = ?').run(targetUser);
-      this.db
-        .prepare('DELETE FROM play_records WHERE username = ?')
-        .run(targetUser);
-      this.db
-        .prepare('DELETE FROM favorites WHERE username = ?')
-        .run(targetUser);
-      this.db
-        .prepare('DELETE FROM search_history WHERE username = ?')
-        .run(targetUser);
-      this.db
-        .prepare('DELETE FROM skip_configs WHERE username = ?')
-        .run(targetUser);
+      this.stmts.deleteUserRow.run(targetUser);
+      this.stmts.deletePlayRecordsByUser.run(targetUser);
+      this.stmts.deleteFavoritesByUser.run(targetUser);
+      this.stmts.deleteSearchHistoryByUser.run(targetUser);
+      this.stmts.deleteSkipConfigsByUser.run(targetUser);
     });
     remove(userName);
   }
 
   async getSearchHistory(userName: string): Promise<string[]> {
-    const rows = this.db
-      .prepare(
-        'SELECT keyword FROM search_history WHERE username = ? ORDER BY sort_index ASC',
-      )
-      .all(userName) as { keyword: string }[];
+    const rows = this.stmts.getSearchHistory.all(userName) as {
+      keyword: string;
+    }[];
     return rows.map((row) => row.keyword);
   }
 
   async addSearchHistory(userName: string, keyword: string): Promise<void> {
-    const current = await this.getSearchHistory(userName);
-    const next = [keyword, ...current.filter((item) => item !== keyword)].slice(
-      0,
-      SEARCH_HISTORY_LIMIT,
-    );
-
-    const save = this.db.transaction(
-      (targetUser: string, keywords: string[]) => {
-        this.db
-          .prepare('DELETE FROM search_history WHERE username = ?')
-          .run(targetUser);
-        const insert = this.db.prepare(
-          'INSERT INTO search_history (username, keyword, sort_index) VALUES (?, ?, ?)',
-        );
-        keywords.forEach((item, index) => {
-          insert.run(targetUser, item, index);
-        });
-      },
-    );
-
-    save(userName, next);
+    // 纯 SQL 优化：避免先 SELECT 全部再 JS 处理再 DELETE+INSERT 的 N+1 模式
+    const save = this.db.transaction((targetUser: string, kw: string) => {
+      // 1. 删除该关键词（如果已存在）
+      this.stmts.deleteSearchHistoryKeyword.run(targetUser, kw);
+      // 2. 所有现有记录 sort_index + 1
+      this.stmts.updateSearchHistoryIndex.run(targetUser);
+      // 3. 插入新关键词到 sort_index = 0
+      this.stmts.insertSearchHistory.run(targetUser, kw, 0);
+      // 4. 删除超出限制的记录
+      this.stmts.deleteSearchHistoryOverflow.run(
+        targetUser,
+        SEARCH_HISTORY_LIMIT,
+      );
+    });
+    save(userName, keyword);
   }
 
   async deleteSearchHistory(userName: string, keyword?: string): Promise<void> {
     if (!keyword) {
-      this.db
-        .prepare('DELETE FROM search_history WHERE username = ?')
-        .run(userName);
+      this.stmts.deleteSearchHistoryAll.run(userName);
       return;
     }
-
-    this.db
-      .prepare('DELETE FROM search_history WHERE username = ? AND keyword = ?')
-      .run(userName, keyword);
+    this.stmts.deleteSearchHistoryOne.run(userName, keyword);
   }
 
   async getAllUsers(): Promise<string[]> {
-    const rows = this.db
-      .prepare('SELECT username FROM users ORDER BY username ASC')
-      .all() as { username: string }[];
+    const rows = this.stmts.getAllUsers.all() as { username: string }[];
     return rows.map((row) => row.username);
   }
 
   async getAdminConfig(): Promise<AdminConfig | null> {
-    const row = this.db
-      .prepare('SELECT config_json FROM admin_config WHERE id = 1')
-      .get() as { config_json: string } | undefined;
+    const row = this.stmts.getAdminConfig.get() as
+      | { config_json: string }
+      | undefined;
     return parseJsonValue<AdminConfig>(row?.config_json);
   }
 
   async setAdminConfig(config: AdminConfig): Promise<void> {
-    this.db
-      .prepare(
-        'INSERT OR REPLACE INTO admin_config (id, config_json) VALUES (1, ?)',
-      )
-      .run(JSON.stringify(config));
+    this.stmts.setAdminConfig.run(JSON.stringify(config));
   }
 
   async getSkipConfig(
@@ -489,11 +577,9 @@ export class LocalSqliteStorage implements IStorage {
     id: string,
   ): Promise<SkipConfig | null> {
     const key = `${source}+${id}`;
-    const row = this.db
-      .prepare(
-        'SELECT config_json FROM skip_configs WHERE username = ? AND config_key = ?',
-      )
-      .get(userName, key) as { config_json: string } | undefined;
+    const row = this.stmts.getSkipConfig.get(userName, key) as
+      | { config_json: string }
+      | undefined;
     return parseJsonValue<SkipConfig>(row?.config_json);
   }
 
@@ -504,11 +590,7 @@ export class LocalSqliteStorage implements IStorage {
     config: SkipConfig,
   ): Promise<void> {
     const key = `${source}+${id}`;
-    this.db
-      .prepare(
-        'INSERT OR REPLACE INTO skip_configs (username, config_key, config_json) VALUES (?, ?, ?)',
-      )
-      .run(userName, key, JSON.stringify(config));
+    this.stmts.setSkipConfig.run(userName, key, JSON.stringify(config));
   }
 
   async deleteSkipConfig(
@@ -517,19 +599,16 @@ export class LocalSqliteStorage implements IStorage {
     id: string,
   ): Promise<void> {
     const key = `${source}+${id}`;
-    this.db
-      .prepare('DELETE FROM skip_configs WHERE username = ? AND config_key = ?')
-      .run(userName, key);
+    this.stmts.deleteSkipConfig.run(userName, key);
   }
 
   async getAllSkipConfigs(
     userName: string,
   ): Promise<{ [key: string]: SkipConfig }> {
-    const rows = this.db
-      .prepare(
-        'SELECT config_key, config_json FROM skip_configs WHERE username = ?',
-      )
-      .all(userName) as { config_key: string; config_json: string }[];
+    const rows = this.stmts.getAllSkipConfigs.all(userName) as {
+      config_key: string;
+      config_json: string;
+    }[];
 
     const result: Record<string, SkipConfig> = {};
     for (const row of rows) {

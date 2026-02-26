@@ -1,7 +1,6 @@
 'use client';
 
-import React from 'react';
-import { motion } from 'framer-motion';
+import React, { useEffect, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
 interface CapsuleSwitchProps {
@@ -17,10 +16,58 @@ const CapsuleSwitch: React.FC<CapsuleSwitchProps> = ({
   onChange,
   className,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const [indicator, setIndicator] = useState<{
+    left: number;
+    width: number;
+  } | null>(null);
+
+  // 计算活跃 tab 的位置和宽度
+  useEffect(() => {
+    const btn = buttonRefs.current.get(active);
+    const container = containerRef.current;
+    if (!btn || !container) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const btnRect = btn.getBoundingClientRect();
+    setIndicator({
+      left: btnRect.left - containerRect.left,
+      width: btnRect.width,
+    });
+  }, [active, options]);
+
   return (
-    <div className={`relative flex items-end ${className || ''}`}>
+    <div
+      ref={containerRef}
+      className={`relative flex items-end ${className || ''}`}
+    >
       {/* 底部贯穿分割线 */}
       <div className='absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-gray-300/60 dark:via-white/20 to-transparent' />
+
+      {/* 滑动指示器 */}
+      {indicator && (
+        <div
+          className='pointer-events-none absolute inset-y-0 z-0 transition-all duration-300 ease-out'
+          style={{
+            left: indicator.left,
+            width: indicator.width,
+          }}
+        >
+          {/* 玻璃质感背景 */}
+          <div
+            className='absolute inset-0 bg-gradient-to-t from-blue-500/[0.08] to-transparent backdrop-blur-[4px] dark:from-white/[0.12] dark:to-transparent'
+            style={{
+              maskImage:
+                'linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0,1) 20%, rgba(0,0,0,1) 80%, rgba(0,0,0,0))',
+              WebkitMaskImage:
+                'linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0,1) 20%, rgba(0,0,0,1) 80%, rgba(0,0,0,0))',
+            }}
+          />
+          {/* 底部高亮指示线 */}
+          <div className='absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-blue-500 to-transparent drop-shadow-[0_0_6px_rgba(59,130,246,0.5)] dark:via-white dark:drop-shadow-[0_0_6px_rgba(255,255,255,0.8)]' />
+        </div>
+      )}
 
       {options.map((opt, index) => {
         const isActive = active === opt.value;
@@ -31,6 +78,9 @@ const CapsuleSwitch: React.FC<CapsuleSwitchProps> = ({
               <div className='relative z-10 mb-3.5 h-4 w-[1px] bg-gray-300/40 dark:bg-white/10' />
             )}
             <button
+              ref={(el) => {
+                if (el) buttonRefs.current.set(opt.value, el);
+              }}
               onClick={() => onChange(opt.value)}
               className={`relative px-6 py-3 text-sm tracking-wider transition-colors duration-500 cursor-pointer select-none ${
                 isActive
@@ -42,28 +92,6 @@ const CapsuleSwitch: React.FC<CapsuleSwitchProps> = ({
                 {Icon && <Icon className='h-4 w-4' />}
                 <span>{opt.label}</span>
               </span>
-
-              {isActive && (
-                <motion.div
-                  layoutId='capsule-active-tab'
-                  className='pointer-events-none absolute inset-0 z-0'
-                  initial={false}
-                  transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-                >
-                  {/* 玻璃质感背景 */}
-                  <div
-                    className='absolute inset-0 bg-gradient-to-t from-blue-500/[0.08] to-transparent backdrop-blur-[4px] dark:from-white/[0.12] dark:to-transparent'
-                    style={{
-                      maskImage:
-                        'linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0,1) 20%, rgba(0,0,0,1) 80%, rgba(0,0,0,0))',
-                      WebkitMaskImage:
-                        'linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0,1) 20%, rgba(0,0,0,1) 80%, rgba(0,0,0,0))',
-                    }}
-                  />
-                  {/* 底部高亮指示线 */}
-                  <div className='absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-blue-500 to-transparent drop-shadow-[0_0_6px_rgba(59,130,246,0.5)] dark:via-white dark:drop-shadow-[0_0_6px_rgba(255,255,255,0.8)]' />
-                </motion.div>
-              )}
             </button>
           </React.Fragment>
         );

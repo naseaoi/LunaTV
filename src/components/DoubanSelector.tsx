@@ -137,163 +137,105 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
     }
   };
 
+  // 按 type 获取对应的选项配置
+  const getOptionsForType = (t: string) => {
+    const map: Record<
+      string,
+      {
+        primary: SelectorOption[];
+        secondary: SelectorOption[];
+        primaryDefault: string;
+        secondaryDefault: string;
+      }
+    > = {
+      movie: {
+        primary: moviePrimaryOptions,
+        secondary: movieSecondaryOptions,
+        primaryDefault: moviePrimaryOptions[0].value,
+        secondaryDefault: movieSecondaryOptions[0].value,
+      },
+      tv: {
+        primary: tvPrimaryOptions,
+        secondary: tvSecondaryOptions,
+        primaryDefault: tvPrimaryOptions[1].value,
+        secondaryDefault: tvSecondaryOptions[0].value,
+      },
+      anime: {
+        primary: animePrimaryOptions,
+        secondary: [],
+        primaryDefault: animePrimaryOptions[0].value,
+        secondaryDefault: '',
+      },
+      show: {
+        primary: showPrimaryOptions,
+        secondary: showSecondaryOptions,
+        primaryDefault: showPrimaryOptions[1].value,
+        secondaryDefault: showSecondaryOptions[0].value,
+      },
+    };
+    return (
+      map[t] || {
+        primary: [],
+        secondary: [],
+        primaryDefault: '',
+        secondaryDefault: '',
+      }
+    );
+  };
+
   // 组件挂载时立即计算初始位置
   useEffect(() => {
-    // 主选择器初始位置
-    if (type === 'movie') {
-      const activeIndex = moviePrimaryOptions.findIndex(
-        (opt) =>
-          opt.value === (primarySelection || moviePrimaryOptions[0].value),
-      );
-      updateIndicatorPosition(
-        activeIndex,
-        primaryContainerRef,
-        primaryButtonRefs,
-        setPrimaryIndicatorStyle,
-      );
-    } else if (type === 'tv') {
-      const activeIndex = tvPrimaryOptions.findIndex(
-        (opt) => opt.value === (primarySelection || tvPrimaryOptions[1].value),
-      );
-      updateIndicatorPosition(
-        activeIndex,
-        primaryContainerRef,
-        primaryButtonRefs,
-        setPrimaryIndicatorStyle,
-      );
-    } else if (type === 'anime') {
-      const activeIndex = animePrimaryOptions.findIndex(
-        (opt) =>
-          opt.value === (primarySelection || animePrimaryOptions[0].value),
-      );
-      updateIndicatorPosition(
-        activeIndex,
-        primaryContainerRef,
-        primaryButtonRefs,
-        setPrimaryIndicatorStyle,
-      );
-    } else if (type === 'show') {
-      const activeIndex = showPrimaryOptions.findIndex(
-        (opt) =>
-          opt.value === (primarySelection || showPrimaryOptions[1].value),
-      );
-      updateIndicatorPosition(
-        activeIndex,
-        primaryContainerRef,
-        primaryButtonRefs,
-        setPrimaryIndicatorStyle,
-      );
-    }
+    const opts = getOptionsForType(type);
+    const primaryIndex = opts.primary.findIndex(
+      (opt) => opt.value === (primarySelection || opts.primaryDefault),
+    );
+    updateIndicatorPosition(
+      primaryIndex,
+      primaryContainerRef,
+      primaryButtonRefs,
+      setPrimaryIndicatorStyle,
+    );
 
-    // 副选择器初始位置
-    let secondaryActiveIndex = -1;
-    if (type === 'movie') {
-      secondaryActiveIndex = movieSecondaryOptions.findIndex(
-        (opt) =>
-          opt.value === (secondarySelection || movieSecondaryOptions[0].value),
+    if (opts.secondary.length > 0) {
+      const secondaryIndex = opts.secondary.findIndex(
+        (opt) => opt.value === (secondarySelection || opts.secondaryDefault),
       );
-    } else if (type === 'tv') {
-      secondaryActiveIndex = tvSecondaryOptions.findIndex(
-        (opt) =>
-          opt.value === (secondarySelection || tvSecondaryOptions[0].value),
-      );
-    } else if (type === 'show') {
-      secondaryActiveIndex = showSecondaryOptions.findIndex(
-        (opt) =>
-          opt.value === (secondarySelection || showSecondaryOptions[0].value),
-      );
-    }
-
-    if (secondaryActiveIndex >= 0) {
       updateIndicatorPosition(
-        secondaryActiveIndex,
+        secondaryIndex,
         secondaryContainerRef,
         secondaryButtonRefs,
         setSecondaryIndicatorStyle,
       );
     }
-  }, [type]); // 只在type变化时重新计算
+  }, [type]);
 
   // 监听主选择器变化
   useEffect(() => {
-    if (type === 'movie') {
-      const activeIndex = moviePrimaryOptions.findIndex(
-        (opt) => opt.value === primarySelection,
-      );
-      const cleanup = updateIndicatorPosition(
-        activeIndex,
-        primaryContainerRef,
-        primaryButtonRefs,
-        setPrimaryIndicatorStyle,
-      );
-      return cleanup;
-    } else if (type === 'tv') {
-      const activeIndex = tvPrimaryOptions.findIndex(
-        (opt) => opt.value === primarySelection,
-      );
-      const cleanup = updateIndicatorPosition(
-        activeIndex,
-        primaryContainerRef,
-        primaryButtonRefs,
-        setPrimaryIndicatorStyle,
-      );
-      return cleanup;
-    } else if (type === 'anime') {
-      const activeIndex = animePrimaryOptions.findIndex(
-        (opt) => opt.value === primarySelection,
-      );
-      const cleanup = updateIndicatorPosition(
-        activeIndex,
-        primaryContainerRef,
-        primaryButtonRefs,
-        setPrimaryIndicatorStyle,
-      );
-      return cleanup;
-    } else if (type === 'show') {
-      const activeIndex = showPrimaryOptions.findIndex(
-        (opt) => opt.value === primarySelection,
-      );
-      const cleanup = updateIndicatorPosition(
-        activeIndex,
-        primaryContainerRef,
-        primaryButtonRefs,
-        setPrimaryIndicatorStyle,
-      );
-      return cleanup;
-    }
+    const opts = getOptionsForType(type);
+    const activeIndex = opts.primary.findIndex(
+      (opt) => opt.value === primarySelection,
+    );
+    return updateIndicatorPosition(
+      activeIndex,
+      primaryContainerRef,
+      primaryButtonRefs,
+      setPrimaryIndicatorStyle,
+    );
   }, [primarySelection]);
 
   // 监听副选择器变化
   useEffect(() => {
-    let activeIndex = -1;
-    let options: SelectorOption[] = [];
-
-    if (type === 'movie') {
-      activeIndex = movieSecondaryOptions.findIndex(
-        (opt) => opt.value === secondarySelection,
-      );
-      options = movieSecondaryOptions;
-    } else if (type === 'tv') {
-      activeIndex = tvSecondaryOptions.findIndex(
-        (opt) => opt.value === secondarySelection,
-      );
-      options = tvSecondaryOptions;
-    } else if (type === 'show') {
-      activeIndex = showSecondaryOptions.findIndex(
-        (opt) => opt.value === secondarySelection,
-      );
-      options = showSecondaryOptions;
-    }
-
-    if (options.length > 0) {
-      const cleanup = updateIndicatorPosition(
-        activeIndex,
-        secondaryContainerRef,
-        secondaryButtonRefs,
-        setSecondaryIndicatorStyle,
-      );
-      return cleanup;
-    }
+    const opts = getOptionsForType(type);
+    if (opts.secondary.length === 0) return;
+    const activeIndex = opts.secondary.findIndex(
+      (opt) => opt.value === secondarySelection,
+    );
+    return updateIndicatorPosition(
+      activeIndex,
+      secondaryContainerRef,
+      secondaryButtonRefs,
+      setSecondaryIndicatorStyle,
+    );
   }, [secondarySelection]);
 
   // 渲染胶囊式选择器

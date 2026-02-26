@@ -2,7 +2,7 @@ import { Dispatch, MutableRefObject, SetStateAction, useEffect } from 'react';
 
 import { filterSourcesForPlayback } from '@/lib/source_match';
 import { SearchResult } from '@/lib/types';
-import { getVideoResolutionFromM3u8 } from '@/lib/utils';
+import { getVideoResolutionFromM3u8 } from '@/lib/hls-utils';
 
 import { calculateSourceScore } from '@/features/play/lib/playUtils';
 

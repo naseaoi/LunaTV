@@ -50,8 +50,8 @@ export async function GET(request: NextRequest) {
     const results = await searchFromApi(targetSite, query);
     let result = results.filter((r) => r.title === query);
     if (!config.SiteConfig.DisableYellowFilter) {
-      result = result.filter((result) => {
-        const typeName = result.type_name || '';
+      result = result.filter((item) => {
+        const typeName = item.type_name || '';
         return !yellowWords.some((word: string) => typeName.includes(word));
       });
     }

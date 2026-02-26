@@ -14,7 +14,8 @@ export async function GET(_request: NextRequest) {
   try {
     console.log('Cron job triggered:', new Date().toISOString());
 
-    cronJob();
+    // fire-and-forget：避免 cron 任务超时，后台异步执行
+    cronJob().catch((err) => console.error('Cron job background error:', err));
 
     return NextResponse.json({
       success: true,

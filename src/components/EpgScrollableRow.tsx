@@ -1,5 +1,5 @@
 import { Clock, Target, Tv } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { formatTimeToHHMM, parseCustomTimeFormat } from '@/lib/time';
 
@@ -24,28 +24,16 @@ export default function EpgScrollableRow({
   const [isHovered, setIsHovered] = useState(false);
   const [currentPlayingIndex, setCurrentPlayingIndex] = useState<number>(-1);
 
-  // 处理滚轮事件，实现横向滚动
-  const handleWheel = (e: WheelEvent) => {
-    if (isHovered && containerRef.current) {
-      e.preventDefault(); // 阻止默认的竖向滚动
-
-      const container = containerRef.current;
-      const scrollAmount = e.deltaY * 4; // 增加滚动速度
-
-      // 根据滚轮方向进行横向滚动
-      container.scrollBy({
-        left: scrollAmount,
+  // 处理滚轮事件，实现横向滚动并阻止页面竖向滚动
+  const handleWheel = useCallback((e: WheelEvent) => {
+    e.preventDefault();
+    if (containerRef.current) {
+      containerRef.current.scrollBy({
+        left: e.deltaY * 4,
         behavior: 'smooth',
       });
     }
-  };
-
-  // 阻止页面竖向滚动
-  const preventPageScroll = (e: WheelEvent) => {
-    if (isHovered) {
-      e.preventDefault();
-    }
-  };
+  }, []);
 
   // 自动滚动到正在播放的节目
   const scrollToCurrentProgram = () => {
@@ -78,20 +66,13 @@ export default function EpgScrollableRow({
 
   useEffect(() => {
     if (isHovered) {
-      // 鼠标悬停时阻止页面滚动
-      document.addEventListener('wheel', preventPageScroll, { passive: false });
       document.addEventListener('wheel', handleWheel, { passive: false });
-    } else {
-      // 鼠标离开时恢复页面滚动
-      document.removeEventListener('wheel', preventPageScroll);
-      document.removeEventListener('wheel', handleWheel);
     }
 
     return () => {
-      document.removeEventListener('wheel', preventPageScroll);
       document.removeEventListener('wheel', handleWheel);
     };
-  }, [isHovered]);
+  }, [isHovered, handleWheel]);
 
   // 组件加载后自动滚动到正在播放的节目
   useEffect(() => {

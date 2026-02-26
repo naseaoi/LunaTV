@@ -107,6 +107,26 @@ export function getAuthInfoFromBrowserCookie(): AuthMetaPayload | null {
   }
 }
 
+// CryptoKey 缓存：secret 在应用生命周期内不变，避免每次请求都 importKey
+let _cachedSecret: string | null = null;
+let _cachedKey: CryptoKey | null = null;
+
+async function getCachedKey(secret: string): Promise<CryptoKey> {
+  if (_cachedKey && _cachedSecret === secret) {
+    return _cachedKey;
+  }
+  const keyData = new TextEncoder().encode(secret);
+  _cachedKey = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['verify'],
+  );
+  _cachedSecret = secret;
+  return _cachedKey;
+}
+
 /**
  * 使用 HMAC-SHA256 验证签名。
  * 用于 session 校验和 middleware 认证。
@@ -116,18 +136,10 @@ export async function verifySignature(
   signature: string,
   secret: string,
 ): Promise<boolean> {
-  const encoder = new TextEncoder();
-  const keyData = encoder.encode(secret);
-  const messageData = encoder.encode(data);
+  const messageData = new TextEncoder().encode(data);
 
   try {
-    const key = await crypto.subtle.importKey(
-      'raw',
-      keyData,
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['verify'],
-    );
+    const key = await getCachedKey(secret);
 
     const signatureBuffer = new Uint8Array(
       signature.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) || [],

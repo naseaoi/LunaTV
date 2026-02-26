@@ -23,29 +23,42 @@ export interface LiveChannels {
   };
 }
 
-const cachedLiveChannels: { [key: string]: LiveChannels } = {};
+// 带 TTL 的缓存条目
+interface CacheEntry {
+  data: LiveChannels;
+  expiresAt: number;
+}
+
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 分钟
+const cachedLiveChannels: { [key: string]: CacheEntry } = {};
+// 并发请求去重：同一 key 的 inflight promise
+const inflightRequests: { [key: string]: Promise<number> } = {};
 
 export function deleteCachedLiveChannels(key: string) {
   delete cachedLiveChannels[key];
+  delete inflightRequests[key];
 }
 
 export async function getCachedLiveChannels(
   key: string,
 ): Promise<LiveChannels | null> {
-  if (!cachedLiveChannels[key]) {
-    const config = await getConfig();
-    const liveInfo = config.LiveConfig?.find((live) => live.key === key);
-    if (!liveInfo) {
-      return null;
-    }
-    const channelNum = await refreshLiveChannels(liveInfo);
-    if (channelNum === 0) {
-      return null;
-    }
-    liveInfo.channelNumber = channelNum;
-    await db.saveAdminConfig(config);
+  const entry = cachedLiveChannels[key];
+  if (entry && Date.now() < entry.expiresAt) {
+    return entry.data;
   }
-  return cachedLiveChannels[key] || null;
+
+  const config = await getConfig();
+  const liveInfo = config.LiveConfig?.find((live) => live.key === key);
+  if (!liveInfo) {
+    return null;
+  }
+  const channelNum = await refreshLiveChannels(liveInfo);
+  if (channelNum === 0) {
+    return null;
+  }
+  liveInfo.channelNumber = channelNum;
+  await db.saveAdminConfig(config);
+  return cachedLiveChannels[key]?.data || null;
 }
 
 export async function refreshLiveChannels(liveInfo: {
@@ -58,30 +71,43 @@ export async function refreshLiveChannels(liveInfo: {
   channelNumber?: number;
   disabled?: boolean;
 }): Promise<number> {
-  if (cachedLiveChannels[liveInfo.key]) {
-    delete cachedLiveChannels[liveInfo.key];
+  // 并发请求去重：如果已有 inflight 请求，直接复用
+  if (liveInfo.key in inflightRequests) {
+    return inflightRequests[liveInfo.key];
   }
-  const ua = liveInfo.ua || defaultUA;
-  const response = await fetch(liveInfo.url, {
-    headers: {
-      'User-Agent': ua,
-    },
-  });
-  const data = await response.text();
-  const result = parseM3U(liveInfo.key, data);
-  const epgUrl = liveInfo.epg || result.tvgUrl;
-  const epgs = await parseEpg(
-    epgUrl,
-    liveInfo.ua || defaultUA,
-    result.channels.map((channel) => channel.tvgId).filter((tvgId) => tvgId),
-  );
-  cachedLiveChannels[liveInfo.key] = {
-    channelNumber: result.channels.length,
-    channels: result.channels,
-    epgUrl: epgUrl,
-    epgs: epgs,
+
+  const doRefresh = async (): Promise<number> => {
+    delete cachedLiveChannels[liveInfo.key];
+    const ua = liveInfo.ua || defaultUA;
+    const response = await fetch(liveInfo.url, {
+      headers: {
+        'User-Agent': ua,
+      },
+    });
+    const data = await response.text();
+    const result = parseM3U(liveInfo.key, data);
+    const epgUrl = liveInfo.epg || result.tvgUrl;
+    const epgs = await parseEpg(
+      epgUrl,
+      liveInfo.ua || defaultUA,
+      result.channels.map((channel) => channel.tvgId).filter((tvgId) => tvgId),
+    );
+    cachedLiveChannels[liveInfo.key] = {
+      data: {
+        channelNumber: result.channels.length,
+        channels: result.channels,
+        epgUrl: epgUrl,
+        epgs: epgs,
+      },
+      expiresAt: Date.now() + CACHE_TTL_MS,
+    };
+    return result.channels.length;
   };
-  return result.channels.length;
+
+  inflightRequests[liveInfo.key] = doRefresh().finally(() => {
+    delete inflightRequests[liveInfo.key];
+  });
+  return inflightRequests[liveInfo.key];
 }
 
 async function parseEpg(

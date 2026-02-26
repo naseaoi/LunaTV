@@ -115,14 +115,11 @@ function DoubanPageClient() {
     return () => clearTimeout(timer);
   }, []); // 只在组件挂载时执行一次
 
-  // type变化时立即重置selectorsReady（最高优先级）
-  useEffect(() => {
-    setSelectorsReady(false);
-    setLoading(true); // 立即显示loading状态
-  }, [type]);
-
   // 当type变化时重置选择器状态
   useEffect(() => {
+    setSelectorsReady(false);
+    setLoading(true);
+
     if (type === 'custom' && customCategories.length > 0) {
       // 自定义分类模式：优先选择 movie，如果没有 movie 则选择 tv
       const types = Array.from(

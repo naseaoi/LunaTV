@@ -23,6 +23,8 @@ const WeekdaySelector: React.FC<WeekdaySelectorProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const onWeekdayChangeRef = useRef(onWeekdayChange);
+  onWeekdayChangeRef.current = onWeekdayChange;
   const [indicatorStyle, setIndicatorStyle] = useState<{
     left: number;
     width: number;
@@ -65,7 +67,7 @@ const WeekdaySelector: React.FC<WeekdaySelectorProps> = ({
 
   // 组件初始化时通知父组件默认选中的星期并计算指示器位置
   useEffect(() => {
-    onWeekdayChange(getTodayWeekday());
+    onWeekdayChangeRef.current(getTodayWeekday());
     const activeIndex = weekdays.findIndex(
       (w) => w.value === getTodayWeekday(),
     );

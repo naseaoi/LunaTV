@@ -8,7 +8,7 @@ import React, {
 } from 'react';
 
 import { SearchResult } from '@/lib/types';
-import { getVideoResolutionFromM3u8 } from '@/lib/utils';
+import { getVideoResolutionFromM3u8 } from '@/lib/hls-utils';
 
 interface VideoInfo {
   quality: string;

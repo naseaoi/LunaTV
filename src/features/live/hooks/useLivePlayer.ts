@@ -6,54 +6,14 @@ import {
   useRef,
 } from 'react';
 
-import Artplayer from 'artplayer';
-import Hls from 'hls.js';
+import type ArtplayerType from 'artplayer';
 
 import type { LiveChannel, LiveSource } from '../types';
-
-// ----- HLS 自定义 Loader（为请求注入 icetv-source 参数）-----
-function createCustomHlsJsLoader(
-  currentSourceRef: MutableRefObject<LiveSource | null>,
-) {
-  return class CustomHlsJsLoader extends Hls.DefaultConfig.loader {
-    constructor(config: any) {
-      super(config);
-      const load = this.load.bind(this);
-
-      this.load = function (context: any, cfg: any, callbacks: any) {
-        try {
-          const url = new URL(context.url);
-          url.searchParams.set(
-            'icetv-source',
-            currentSourceRef.current?.key || '',
-          );
-          context.url = url.toString();
-        } catch {
-          // ignore
-        }
-        if (context.type === 'manifest' || context.type === 'level') {
-          const isLiveDirectConnect =
-            localStorage.getItem('liveDirectConnect') === 'true';
-          if (isLiveDirectConnect) {
-            try {
-              const url = new URL(context.url);
-              url.searchParams.set('allowCORS', 'true');
-              context.url = url.toString();
-            } catch {
-              context.url = context.url + '&allowCORS=true';
-            }
-          }
-        }
-        load(context, cfg, callbacks);
-      };
-    }
-  };
-}
 
 // ----- 播放器工具函数 -----
 
 /** 清理播放器资源 */
-function cleanupPlayer(artPlayerRef: MutableRefObject<Artplayer | null>) {
+function cleanupPlayer(artPlayerRef: MutableRefObject<ArtplayerType | null>) {
   if (!artPlayerRef.current) return;
   try {
     const video = artPlayerRef.current.video;
@@ -76,7 +36,7 @@ function cleanupPlayer(artPlayerRef: MutableRefObject<Artplayer | null>) {
         video.flv = null;
       }
     }
-    // Artplayer 运行时支持这些事件，但类型定义未包含
+
     const player = artPlayerRef.current as unknown as {
       off(event: string): void;
       destroy(): void;
@@ -135,7 +95,7 @@ export function useLivePlayer({
   setIsVideoLoading,
   setUnsupportedType,
 }: UseLivePlayerParams) {
-  const artPlayerRef = useRef<Artplayer | null>(null);
+  const artPlayerRef = useRef<ArtplayerType | null>(null);
 
   /** 外部可调用的清理方法 */
   const doCleanup = () => {
@@ -143,64 +103,22 @@ export function useLivePlayer({
     cleanupPlayer(artPlayerRef);
   };
 
-  // ----- m3u8 Loader -----
-  const CustomHlsJsLoader = createCustomHlsJsLoader(currentSourceRef);
-
-  function m3u8Loader(video: HTMLVideoElement, url: string) {
-    if (!Hls) {
-      console.error('HLS.js 未加载');
-      return;
-    }
-    if (video.hls) {
-      try {
-        video.hls.destroy();
-        video.hls = null;
-      } catch (err) {
-        console.warn('清理 HLS 实例时出错:', err);
-      }
-    }
-    const hls = new Hls({
-      debug: false,
-      enableWorker: true,
-      lowLatencyMode: true,
-      maxBufferLength: 30,
-      backBufferLength: 30,
-      maxBufferSize: 60 * 1000 * 1000,
-      loader: CustomHlsJsLoader,
-    });
-    hls.loadSource(url);
-    hls.attachMedia(video);
-    video.hls = hls;
-
-    hls.on(Hls.Events.ERROR, function (_event: any, data: any) {
-      console.error('HLS Error:', _event, data);
-      if (data.fatal) {
-        switch (data.type) {
-          case Hls.ErrorTypes.NETWORK_ERROR:
-            hls.startLoad();
-            break;
-          case Hls.ErrorTypes.MEDIA_ERROR:
-            break;
-          default:
-            hls.destroy();
-            break;
-        }
-      }
-    });
-  }
-
   // ----- 播放器初始化 Effect -----
   useEffect(() => {
+    let cancelled = false;
+
     const preload = async () => {
-      if (
-        !Artplayer ||
-        !Hls ||
-        !videoUrl ||
-        !artRef.current ||
-        !currentChannel
-      ) {
+      if (!videoUrl || !artRef.current || !currentChannel) {
         return;
       }
+
+      // 动态导入 artplayer 和 hls.js，避免在非直播页面打包
+      const [{ default: Artplayer }, { default: Hls }] = await Promise.all([
+        import('artplayer'),
+        import('hls.js'),
+      ]);
+
+      if (cancelled || !artRef.current) return;
 
       if (artPlayerRef.current) {
         cleanupPlayer(artPlayerRef);
@@ -226,6 +144,84 @@ export function useLivePlayer({
       }
 
       setUnsupportedType(null);
+
+      // HLS 自定义 Loader（为请求注入 icetv-source 参数）
+      const CustomHlsJsLoader = class extends (Hls.DefaultConfig
+        .loader as unknown as {
+        new (config: unknown): { load: (...args: unknown[]) => void };
+      }) {
+        constructor(config: unknown) {
+          super(config);
+          const load = this.load.bind(this);
+
+          this.load = function (context: any, cfg: any, callbacks: any) {
+            try {
+              const url = new URL(context.url);
+              url.searchParams.set(
+                'icetv-source',
+                currentSourceRef.current?.key || '',
+              );
+              context.url = url.toString();
+            } catch {
+              // ignore
+            }
+            if (context.type === 'manifest' || context.type === 'level') {
+              const isLiveDirectConnect =
+                localStorage.getItem('liveDirectConnect') === 'true';
+              if (isLiveDirectConnect) {
+                try {
+                  const url = new URL(context.url);
+                  url.searchParams.set('allowCORS', 'true');
+                  context.url = url.toString();
+                } catch {
+                  context.url = context.url + '&allowCORS=true';
+                }
+              }
+            }
+            load(context, cfg, callbacks);
+          };
+        }
+      };
+
+      function m3u8Loader(video: HTMLVideoElement, url: string) {
+        if (video.hls) {
+          try {
+            video.hls.destroy();
+            video.hls = null;
+          } catch (err) {
+            console.warn('清理 HLS 实例时出错:', err);
+          }
+        }
+        const hls = new Hls({
+          debug: false,
+          enableWorker: true,
+          lowLatencyMode: true,
+          maxBufferLength: 30,
+          backBufferLength: 30,
+          maxBufferSize: 60 * 1000 * 1000,
+          loader:
+            CustomHlsJsLoader as unknown as typeof Hls.DefaultConfig.loader,
+        });
+        hls.loadSource(url);
+        hls.attachMedia(video);
+        video.hls = hls;
+
+        hls.on(Hls.Events.ERROR, function (_event: any, data: any) {
+          console.error('HLS Error:', _event, data);
+          if (data.fatal) {
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                hls.startLoad();
+                break;
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                break;
+              default:
+                hls.destroy();
+                break;
+            }
+          }
+        });
+      }
 
       const customType = { m3u8: m3u8Loader };
       const targetUrl = `/api/proxy/m3u8?url=${encodeURIComponent(videoUrl)}&icetv-source=${currentSourceRef.current?.key || ''}`;
@@ -312,7 +308,11 @@ export function useLivePlayer({
       }
     };
     preload();
-  }, [Artplayer, Hls, videoUrl, currentChannel, loading]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [videoUrl, currentChannel, loading]);
 
   // ----- 组件卸载清理 -----
   useEffect(() => {

@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface ScrollableRowProps {
   children: React.ReactNode;
@@ -15,79 +15,51 @@ export default function ScrollableRow({
   const [showRightScroll, setShowRightScroll] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
-  const checkScroll = () => {
-    if (containerRef.current) {
-      const { scrollWidth, clientWidth, scrollLeft } = containerRef.current;
-
-      // 计算是否需要左右滚动按钮
-      const threshold = 1; // 容差值，避免浮点误差
-      const canScrollRight =
-        scrollWidth - (scrollLeft + clientWidth) > threshold;
-      const canScrollLeft = scrollLeft > threshold;
-
-      setShowRightScroll(canScrollRight);
-      setShowLeftScroll(canScrollLeft);
-    }
-  };
-
-  useEffect(() => {
-    // 多次延迟检查，确保内容已完全渲染
-    checkScroll();
-
-    // 监听窗口大小变化
-    window.addEventListener('resize', checkScroll);
-
-    // 创建一个 ResizeObserver 来监听容器大小变化
-    const resizeObserver = new ResizeObserver(() => {
-      // 延迟执行检查
-      checkScroll();
-    });
-
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current);
-    }
-
-    return () => {
-      window.removeEventListener('resize', checkScroll);
-      resizeObserver.disconnect();
-    };
-  }, [children]); // 依赖 children，当子组件变化时重新检查
-
-  // 添加一个额外的效果来监听子组件的变化
-  useEffect(() => {
-    if (containerRef.current) {
-      // 监听 DOM 变化
-      const observer = new MutationObserver(() => {
-        setTimeout(checkScroll, 100);
-      });
-
-      observer.observe(containerRef.current, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['style', 'class'],
-      });
-
-      return () => observer.disconnect();
-    }
+  const checkScroll = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const { scrollWidth, clientWidth, scrollLeft } = el;
+    const threshold = 1;
+    setShowRightScroll(scrollWidth - (scrollLeft + clientWidth) > threshold);
+    setShowLeftScroll(scrollLeft > threshold);
   }, []);
 
+  // 单个 useEffect 统一管理所有 observer，不依赖 children
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    checkScroll();
+
+    // ResizeObserver 监听容器尺寸变化（包括子元素导致的尺寸变化）
+    const resizeObserver = new ResizeObserver(checkScroll);
+    resizeObserver.observe(el);
+
+    // MutationObserver 监听子元素增删（覆盖 children 变化场景）
+    const mutationObserver = new MutationObserver(checkScroll);
+    mutationObserver.observe(el, {
+      childList: true,
+      subtree: true,
+    });
+
+    return () => {
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
+    };
+  }, [checkScroll]);
+
   const handleScrollRightClick = () => {
-    if (containerRef.current) {
-      containerRef.current.scrollBy({
-        left: scrollDistance,
-        behavior: 'smooth',
-      });
-    }
+    containerRef.current?.scrollBy({
+      left: scrollDistance,
+      behavior: 'smooth',
+    });
   };
 
   const handleScrollLeftClick = () => {
-    if (containerRef.current) {
-      containerRef.current.scrollBy({
-        left: -scrollDistance,
-        behavior: 'smooth',
-      });
-    }
+    containerRef.current?.scrollBy({
+      left: -scrollDistance,
+      behavior: 'smooth',
+    });
   };
 
   return (
@@ -95,7 +67,6 @@ export default function ScrollableRow({
       className='relative'
       onMouseEnter={() => {
         setIsHovered(true);
-        // 当鼠标进入时重新检查一次
         checkScroll();
       }}
       onMouseLeave={() => setIsHovered(false)}
@@ -114,7 +85,7 @@ export default function ScrollableRow({
           }`}
           style={{
             background: 'transparent',
-            pointerEvents: 'none', // 允许点击穿透
+            pointerEvents: 'none',
           }}
         >
           <div
@@ -143,7 +114,7 @@ export default function ScrollableRow({
           }`}
           style={{
             background: 'transparent',
-            pointerEvents: 'none', // 允许点击穿透
+            pointerEvents: 'none',
           }}
         >
           <div

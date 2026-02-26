@@ -1,6 +1,6 @@
 'use client';
 
-import Artplayer from 'artplayer';
+import type Artplayer from 'artplayer';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 

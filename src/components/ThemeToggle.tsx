@@ -22,10 +22,10 @@ export function ThemeToggle({
   const setThemeColor = (theme?: string) => {
     const meta = document.querySelector('meta[name="theme-color"]');
     if (!meta) {
-      const meta = document.createElement('meta');
-      meta.name = 'theme-color';
-      meta.content = theme === 'dark' ? '#0c111c' : '#f9fbfe';
-      document.head.appendChild(meta);
+      const newMeta = document.createElement('meta');
+      newMeta.name = 'theme-color';
+      newMeta.content = theme === 'dark' ? '#0c111c' : '#f9fbfe';
+      document.head.appendChild(newMeta);
     } else {
       meta.setAttribute('content', theme === 'dark' ? '#0c111c' : '#f9fbfe');
     }
