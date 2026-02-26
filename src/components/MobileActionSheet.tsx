@@ -1,8 +1,7 @@
 import { Radio, X } from 'lucide-react';
-import Image from 'next/image';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
-import NoImageCover from '@/components/NoImageCover';
+import CoverImage from '@/components/CoverImage';
 
 interface ActionItem {
   id: string;
@@ -49,7 +48,6 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
-  const [hasPosterError, setHasPosterError] = useState(false);
   const [activeMode, setActiveMode] = useState<'mobile' | 'desktop'>('mobile');
   const [desktopAnchorRect, setDesktopAnchorRect] = useState<{
     top: number;
@@ -158,10 +156,8 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
   // 阻止背景滚动
   useEffect(() => {
     if (!isOpen) {
-      setHasPosterError(false);
       return;
     }
-    setHasPosterError(false);
   }, [isOpen, poster]);
 
   useEffect(() => {
@@ -277,20 +273,13 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
 
   const posterPreview = (
     <div className='relative h-16 w-12 flex-shrink-0 overflow-hidden rounded-lg border border-gray-200/60 bg-gray-100 dark:border-gray-700/60 dark:bg-gray-800'>
-      {poster && !hasPosterError ? (
-        <Image
-          src={poster}
-          alt={title}
-          fill
-          sizes='(max-width: 640px) 96px, 180px'
-          className={origin === 'live' ? 'object-contain' : 'object-cover'}
-          referrerPolicy='no-referrer'
-          loading='lazy'
-          onError={() => setHasPosterError(true)}
-        />
-      ) : (
-        <NoImageCover />
-      )}
+      <CoverImage
+        src={poster || ''}
+        alt={title}
+        fit={origin === 'live' ? 'contain' : 'cover'}
+        sizes='48px'
+        enableRetry={false}
+      />
     </div>
   );
 

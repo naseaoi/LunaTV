@@ -6,7 +6,6 @@ import {
   Radio,
   Trash2,
 } from 'lucide-react';
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import React, {
   forwardRef,
@@ -26,14 +25,12 @@ import {
   saveFavorite,
   subscribeToDataUpdates,
 } from '@/lib/db.client';
-import { processImageUrl } from '@/lib/utils';
 import { SearchResult } from '@/lib/types';
 import { useLongPress } from '@/hooks/useLongPress';
 
 import ConfirmModal from '@/components/modals/ConfirmModal';
-import { ImagePlaceholder } from '@/components/ImagePlaceholder';
+import CoverImage from '@/components/CoverImage';
 import MobileActionSheet from '@/components/MobileActionSheet';
-import NoImageCover from '@/components/NoImageCover';
 
 export interface VideoCardProps {
   id?: string;
@@ -92,8 +89,6 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
   ) {
     const router = useRouter();
     const [favorited, setFavorited] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
-    const [hasImageError, setHasImageError] = useState(false);
     const [showMobileActions, setShowMobileActions] = useState(false);
     const [actionSheetAnchorRect, setActionSheetAnchorRect] = useState<{
       top: number;
@@ -148,17 +143,6 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
         ? 'movie'
         : 'tv'
       : type;
-    const processedPoster = useMemo(
-      () => processImageUrl(actualPoster),
-      [actualPoster],
-    );
-    const shouldShowPosterFallback =
-      hasImageError || actualPoster.trim() === '';
-
-    useEffect(() => {
-      setIsLoading(false);
-      setHasImageError(false);
-    }, [actualPoster]);
 
     // 获取收藏状态（搜索结果页面不检查）
     useEffect(() => {
@@ -683,66 +667,12 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
               return false;
             }}
           >
-            {/* 骨架屏 */}
-            {!isLoading && !shouldShowPosterFallback && (
-              <ImagePlaceholder aspectRatio='aspect-[2/3]' />
-            )}
-            {/* 图片 */}
-            {!shouldShowPosterFallback && (
-              <Image
-                src={processedPoster}
-                alt={actualTitle}
-                fill
-                sizes='(max-width: 640px) 96px, 180px'
-                className={`${origin === 'live' ? 'object-contain' : 'object-cover'} transition-opacity duration-200 ${isLoading ? 'opacity-100' : 'opacity-0'}`}
-                referrerPolicy='no-referrer'
-                loading='lazy'
-                onLoadingComplete={() => setIsLoading(true)}
-                onError={(e) => {
-                  const img = e.target as HTMLImageElement;
-                  if (!img.dataset.retried) {
-                    img.dataset.retried = 'true';
-                    const retryUrl = `${processedPoster}${
-                      processedPoster.includes('?') ? '&' : '?'
-                    }retry=${Date.now().toString()}`;
-                    setTimeout(() => {
-                      img.src = retryUrl;
-                    }, 1200);
-                    return;
-                  }
-
-                  setHasImageError(true);
-                  setIsLoading(true);
-                }}
-                style={
-                  {
-                    // 禁用图片的默认长按效果
-                    WebkitUserSelect: 'none',
-                    userSelect: 'none',
-                    WebkitTouchCallout: 'none',
-                    pointerEvents: 'none', // 图片不响应任何指针事件
-                  } as React.CSSProperties
-                }
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  return false;
-                }}
-                onDragStart={(e) => {
-                  e.preventDefault();
-                  return false;
-                }}
-              />
-            )}
-
-            {shouldShowPosterFallback && (
-              <NoImageCover
-                label='无封面'
-                iconSize={34}
-                iconStrokeWidth={1.5}
-                className='gap-2 bg-zinc-100 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400'
-                labelClassName='text-[11px] sm:text-xs'
-              />
-            )}
+            {/* 封面 */}
+            <CoverImage
+              src={actualPoster}
+              alt={actualTitle}
+              fit={origin === 'live' ? 'contain' : 'cover'}
+            />
 
             {/* 悬浮遮罩 */}
             <div
@@ -1280,7 +1210,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
             setShowMobileActions(false);
           }}
           title={actualTitle}
-          poster={processedPoster}
+          poster={actualPoster}
           actions={mobileActions}
           sources={
             isAggregate && dynamicSourceNames

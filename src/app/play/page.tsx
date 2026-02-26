@@ -698,11 +698,7 @@ function PlayPageClient() {
       <PlayErrorView
         error={error}
         videoTitle={videoTitle}
-        onBack={() =>
-          videoTitle
-            ? router.push(`/search?q=${encodeURIComponent(videoTitle)}`)
-            : router.back()
-        }
+        onBack={() => window.history.back()}
         onRetry={() => window.location.reload()}
       />
     );

@@ -1,10 +1,8 @@
 import { ExternalLink, Heart } from 'lucide-react';
-import Image from 'next/image';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 
-import NoImageCover from '@/components/NoImageCover';
+import CoverImage from '@/components/CoverImage';
 import { SearchResult } from '@/lib/types';
-import { processImageUrl } from '@/lib/utils';
 
 interface InfoTabProps {
   videoTitle: string;
@@ -47,9 +45,6 @@ export const InfoTab: React.FC<InfoTabProps> = ({
   videoCover,
   videoDoubanId,
 }) => {
-  const [coverError, setCoverError] = useState(false);
-  const hasCover = !!videoCover && !coverError;
-
   const formattedDesc = useMemo(() => {
     const raw = detail?.desc;
     if (!raw) return '';
@@ -68,19 +63,12 @@ export const InfoTab: React.FC<InfoTabProps> = ({
       <div className='flex gap-5'>
         {/* 封面 */}
         <div className='relative aspect-[2/3] w-28 flex-shrink-0 overflow-hidden rounded-xl bg-gray-200 shadow-md shadow-black/10 ring-1 ring-black/10 dark:bg-gray-800 dark:shadow-black/30 dark:ring-white/10'>
-          {hasCover ? (
-            <Image
-              src={processImageUrl(videoCover)}
-              alt={videoTitle}
-              fill
-              sizes='112px'
-              className='object-cover'
-              referrerPolicy='no-referrer'
-              onError={() => setCoverError(true)}
-            />
-          ) : (
-            <NoImageCover />
-          )}
+          <CoverImage
+            src={videoCover}
+            alt={videoTitle}
+            sizes='112px'
+            enableRetry={false}
+          />
         </div>
 
         {/* 标题 + 标签：紧凑排列，垂直居中对齐封面 */}
