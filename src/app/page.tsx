@@ -1,6 +1,14 @@
 'use client';
 
-import { Cat, ChevronRight, Clover, Film, Star, Tv } from 'lucide-react';
+import {
+  Cat,
+  ChevronRight,
+  Clover,
+  Film,
+  Home as HomeIcon,
+  Star,
+  Tv,
+} from 'lucide-react';
 import Link from 'next/link';
 import { Suspense, useEffect, useState } from 'react';
 
@@ -175,8 +183,8 @@ function HomeClient() {
         <div className='mb-8 flex justify-center'>
           <CapsuleSwitch
             options={[
-              { label: '首页', value: 'home' },
-              { label: '收藏夹', value: 'favorites' },
+              { label: '首页', value: 'home', icon: HomeIcon },
+              { label: '收藏', value: 'favorites', icon: Star },
             ]}
             active={activeTab}
             onChange={(value) => setActiveTab(value as 'home' | 'favorites')}

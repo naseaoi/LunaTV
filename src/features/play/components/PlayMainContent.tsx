@@ -228,7 +228,7 @@ export function PlayMainContent(props: PlayMainContentProps) {
     <PageLayout activePath='/play'>
       <div className='relative flex h-full min-h-0 flex-col gap-3 overflow-hidden md:overflow-visible py-2 px-4 sm:px-6 lg:px-[3rem] 2xl:px-20'>
         {/* 顶部流光背景层：不占高度，四周渐隐形成柔和边界 */}
-        <div className='pointer-events-none absolute inset-x-0 top-0 h-80'>
+        <div className='pointer-events-none absolute inset-x-0 top-0 h-80 overflow-hidden'>
           <div
             className='absolute inset-0 dark:hidden'
             style={{
@@ -239,6 +239,7 @@ export function PlayMainContent(props: PlayMainContentProps) {
               ].join(', '),
               animation: 'aurora-breathe 8s ease-in-out infinite',
               animationPlayState: isPlaying ? 'running' : 'paused',
+              transformOrigin: 'top center',
             }}
           />
           <div
@@ -251,6 +252,7 @@ export function PlayMainContent(props: PlayMainContentProps) {
               ].join(', '),
               animation: 'aurora-breathe 8s ease-in-out infinite',
               animationPlayState: isPlaying ? 'running' : 'paused',
+              transformOrigin: 'top center',
             }}
           />
         </div>

@@ -1,7 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+'use client';
+
+import React from 'react';
+import { motion } from 'framer-motion';
+import type { LucideIcon } from 'lucide-react';
 
 interface CapsuleSwitchProps {
-  options: { label: string; value: string }[];
+  options: { label: string; value: string; icon?: LucideIcon }[];
   active: string;
   onChange: (value: string) => void;
   className?: string;
@@ -13,80 +17,55 @@ const CapsuleSwitch: React.FC<CapsuleSwitchProps> = ({
   onChange,
   className,
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const [indicatorStyle, setIndicatorStyle] = useState<{
-    left: number;
-    width: number;
-  }>({ left: 0, width: 0 });
-
-  const activeIndex = options.findIndex((opt) => opt.value === active);
-
-  const updateIndicatorPosition = () => {
-    if (
-      activeIndex >= 0 &&
-      buttonRefs.current[activeIndex] &&
-      containerRef.current
-    ) {
-      const button = buttonRefs.current[activeIndex];
-      const container = containerRef.current;
-      if (button && container) {
-        const buttonRect = button.getBoundingClientRect();
-        const containerRect = container.getBoundingClientRect();
-
-        if (buttonRect.width > 0) {
-          setIndicatorStyle({
-            left: buttonRect.left - containerRect.left,
-            width: buttonRect.width,
-          });
-        }
-      }
-    }
-  };
-
-  useEffect(() => {
-    const timeoutId = setTimeout(updateIndicatorPosition, 0);
-    return () => clearTimeout(timeoutId);
-  }, []);
-
-  useEffect(() => {
-    const timeoutId = setTimeout(updateIndicatorPosition, 0);
-    return () => clearTimeout(timeoutId);
-  }, [activeIndex]);
-
   return (
-    <div
-      ref={containerRef}
-      className={`relative inline-flex items-center p-1 rounded-full bg-gray-100/80 dark:bg-black/40 backdrop-blur-xl border border-gray-200/50 dark:border-white/10 shadow-inner ${className || ''}`}
-    >
-      {/* 滑动指示器 — 毛玻璃胶囊 */}
-      {indicatorStyle.width > 0 && (
-        <div
-          className='absolute top-1 bottom-1 rounded-full bg-white dark:bg-[#333] shadow-[0_2px_8px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.4)] ring-1 ring-black/[0.04] dark:ring-white/[0.05] transition-all duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] z-0'
-          style={{
-            left: `${indicatorStyle.left}px`,
-            width: `${indicatorStyle.width}px`,
-          }}
-        />
-      )}
+    <div className={`relative flex items-end ${className || ''}`}>
+      {/* 底部贯穿分割线 */}
+      <div className='absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-gray-300/60 dark:via-white/20 to-transparent' />
 
       {options.map((opt, index) => {
         const isActive = active === opt.value;
+        const Icon = opt.icon;
         return (
-          <button
-            key={opt.value}
-            ref={(el) => {
-              buttonRefs.current[index] = el;
-            }}
-            onClick={() => onChange(opt.value)}
-            className={`relative z-10 px-5 py-1.5 text-[13px] sm:px-6 sm:py-2 sm:text-sm rounded-full transition-colors duration-200 cursor-pointer select-none ${
-              isActive
-                ? 'text-gray-900 dark:text-gray-100 font-medium'
-                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
-            }`}
-          >
-            {opt.label}
-          </button>
+          <React.Fragment key={opt.value}>
+            {index > 0 && (
+              <div className='relative z-10 mb-3.5 h-4 w-[1px] bg-gray-300/40 dark:bg-white/10' />
+            )}
+            <button
+              onClick={() => onChange(opt.value)}
+              className={`relative px-6 py-3 text-sm tracking-wider transition-colors duration-500 cursor-pointer select-none ${
+                isActive
+                  ? 'text-gray-900 dark:text-white'
+                  : 'text-gray-400 hover:text-gray-600 dark:text-white/40 dark:hover:text-white/70'
+              }`}
+            >
+              <span className='relative z-10 flex items-center gap-2'>
+                {Icon && <Icon className='h-4 w-4' />}
+                <span>{opt.label}</span>
+              </span>
+
+              {isActive && (
+                <motion.div
+                  layoutId='capsule-active-tab'
+                  className='pointer-events-none absolute inset-0 z-0'
+                  initial={false}
+                  transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+                >
+                  {/* 玻璃质感背景 */}
+                  <div
+                    className='absolute inset-0 bg-gradient-to-t from-blue-500/[0.08] to-transparent backdrop-blur-[4px] dark:from-white/[0.12] dark:to-transparent'
+                    style={{
+                      maskImage:
+                        'linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0,1) 20%, rgba(0,0,0,1) 80%, rgba(0,0,0,0))',
+                      WebkitMaskImage:
+                        'linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0,1) 20%, rgba(0,0,0,1) 80%, rgba(0,0,0,0))',
+                    }}
+                  />
+                  {/* 底部高亮指示线 */}
+                  <div className='absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-blue-500 to-transparent drop-shadow-[0_0_6px_rgba(59,130,246,0.5)] dark:via-white dark:drop-shadow-[0_0_6px_rgba(255,255,255,0.8)]' />
+                </motion.div>
+              )}
+            </button>
+          </React.Fragment>
         );
       })}
     </div>
