@@ -35,14 +35,6 @@ define(['./workbox-e9849328'], function (a) {
     a.precacheAndRoute(
       [
         {
-          url: '/_next/static/8A84xPgRQhJC72xTbG_90/_buildManifest.js',
-          revision: 'bb06eecccda90bff24825145568458de',
-        },
-        {
-          url: '/_next/static/8A84xPgRQhJC72xTbG_90/_ssgManifest.js',
-          revision: 'b6652df95db52feb4daf4eca35380933',
-        },
-        {
           url: '/_next/static/chunks/1109-cd8ece9041c3834b.js',
           revision: 'cd8ece9041c3834b',
         },
@@ -331,8 +323,8 @@ define(['./workbox-e9849328'], function (a) {
           revision: 'af674a464d67f8cb',
         },
         {
-          url: '/_next/static/chunks/main-afe14ba5b067fc7f.js',
-          revision: 'afe14ba5b067fc7f',
+          url: '/_next/static/chunks/main-190a827506012f35.js',
+          revision: '190a827506012f35',
         },
         {
           url: '/_next/static/chunks/main-app-b741a61d59381658.js',
@@ -401,6 +393,14 @@ define(['./workbox-e9849328'], function (a) {
         {
           url: '/_next/static/media/e4af272ccee01ff0-s.p.woff2',
           revision: '65850a373e258f1c897a2b3d75eb74de',
+        },
+        {
+          url: '/_next/static/p7HTzoN_2T2OBu8eEUrYy/_buildManifest.js',
+          revision: 'bb06eecccda90bff24825145568458de',
+        },
+        {
+          url: '/_next/static/p7HTzoN_2T2OBu8eEUrYy/_ssgManifest.js',
+          revision: 'b6652df95db52feb4daf4eca35380933',
         },
         { url: '/favicon.ico', revision: '2a440afb7f13a0c990049fc7c383bdd4' },
         {
