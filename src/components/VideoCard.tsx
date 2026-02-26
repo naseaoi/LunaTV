@@ -27,6 +27,7 @@ import {
   subscribeToDataUpdates,
 } from '@/lib/db.client';
 import { processImageUrl } from '@/lib/utils';
+import { SearchResult } from '@/lib/types';
 import { useLongPress } from '@/hooks/useLongPress';
 
 import ConfirmModal from '@/components/modals/ConfirmModal';
@@ -54,6 +55,7 @@ export interface VideoCardProps {
   isBangumi?: boolean;
   isAggregate?: boolean;
   origin?: 'vod' | 'live';
+  aggregateGroup?: SearchResult[];
 }
 
 export type VideoCardHandle = {
@@ -84,6 +86,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
       isBangumi = false,
       isAggregate = false,
       origin = 'vod',
+      aggregateGroup,
     }: VideoCardProps,
     ref,
   ) {
@@ -262,6 +265,20 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
       }
     }, [actualSource, actualId, onDelete]);
 
+    // 聚合模式跳转前，把完整的 group 数据写入 sessionStorage 供播放页复用
+    const saveAggregateGroup = useCallback(() => {
+      if (isAggregate && aggregateGroup && aggregateGroup.length > 0) {
+        try {
+          sessionStorage.setItem(
+            'aggregate_group',
+            JSON.stringify(aggregateGroup),
+          );
+        } catch {
+          // sessionStorage 写入失败（如隐私模式容量满），静默忽略
+        }
+      }
+    }, [isAggregate, aggregateGroup]);
+
     const handleClick = useCallback(() => {
       if (origin === 'live' && actualSource && actualId) {
         // 直播内容跳转到直播页面
@@ -274,6 +291,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
         from === 'douban' ||
         (isAggregate && !actualSource && !actualId)
       ) {
+        saveAggregateGroup();
         const url = `/play?title=${encodeURIComponent(actualTitle.trim())}${
           actualYear ? `&year=${actualYear}` : ''
         }${actualSearchType ? `&stype=${actualSearchType}` : ''}${
@@ -303,6 +321,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
       isAggregate,
       actualQuery,
       actualSearchType,
+      saveAggregateGroup,
     ]);
 
     // 新标签页播放处理函数
@@ -318,6 +337,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
         from === 'douban' ||
         (isAggregate && !actualSource && !actualId)
       ) {
+        saveAggregateGroup();
         const url = `/play?title=${encodeURIComponent(actualTitle.trim())}${
           actualYear ? `&year=${actualYear}` : ''
         }${actualSearchType ? `&stype=${actualSearchType}` : ''}${
@@ -346,6 +366,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
       isAggregate,
       actualQuery,
       actualSearchType,
+      saveAggregateGroup,
     ]);
 
     // 检查搜索结果的收藏状态
@@ -594,7 +615,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
     return (
       <>
         <div
-          className='group relative w-full rounded-lg bg-transparent cursor-pointer transition-all duration-300 ease-in-out hover:scale-[1.05] active:scale-[0.97] active:opacity-80 hover:z-[500]'
+          className='group relative w-full cursor-pointer rounded-lg bg-transparent transition-all duration-300 ease-in-out hover:z-[500] hover:scale-[1.05] active:scale-[0.97] active:opacity-80'
           onClick={handleClick}
           {...longPressProps}
           style={
@@ -725,7 +746,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
 
             {/* 悬浮遮罩 */}
             <div
-              className='absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent transition-opacity duration-300 ease-in-out opacity-0 group-hover:opacity-100'
+              className='absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 transition-opacity duration-300 ease-in-out group-hover:opacity-100'
               style={
                 {
                   WebkitUserSelect: 'none',
@@ -743,7 +764,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
             {config.showPlayButton && (
               <div
                 data-button='true'
-                className='absolute inset-0 flex items-center justify-center opacity-0 transition-all duration-300 ease-in-out delay-75 group-hover:opacity-100 group-hover:scale-100'
+                className='absolute inset-0 flex items-center justify-center opacity-0 transition-all delay-75 duration-300 ease-in-out group-hover:scale-100 group-hover:opacity-100'
                 style={
                   {
                     WebkitUserSelect: 'none',
@@ -759,7 +780,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
                 <PlayCircleIcon
                   size={50}
                   strokeWidth={0.8}
-                  className='text-white fill-transparent transition-all duration-300 ease-out hover:fill-green-500 hover:scale-[1.1]'
+                  className='fill-transparent text-white transition-all duration-300 ease-out hover:scale-[1.1] hover:fill-green-500'
                   style={
                     {
                       WebkitUserSelect: 'none',
@@ -779,7 +800,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
             {(config.showHeart || config.showCheckCircle) && (
               <div
                 data-button='true'
-                className='absolute bottom-3 right-3 flex gap-3 opacity-0 translate-y-2 transition-all duration-300 ease-in-out sm:group-hover:opacity-100 sm:group-hover:translate-y-0'
+                className='absolute bottom-3 right-3 flex translate-y-2 gap-3 opacity-0 transition-all duration-300 ease-in-out sm:group-hover:translate-y-0 sm:group-hover:opacity-100'
                 style={
                   {
                     WebkitUserSelect: 'none',
@@ -796,7 +817,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
                   <Trash2
                     onClick={handleDeleteRecord}
                     size={20}
-                    className='text-white transition-all duration-300 ease-out hover:stroke-red-500 hover:scale-[1.1]'
+                    className='text-white transition-all duration-300 ease-out hover:scale-[1.1] hover:stroke-red-500'
                     style={
                       {
                         WebkitUserSelect: 'none',
@@ -841,7 +862,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
               actualYear !== 'unknown' &&
               actualYear.trim() !== '' && (
                 <div
-                  className='absolute top-2 bg-black/50 text-white text-xs font-medium px-2 py-1 rounded backdrop-blur-sm shadow-sm transition-all duration-300 ease-out group-hover:opacity-90 left-2'
+                  className='absolute left-2 top-2 rounded bg-black/50 px-2 py-1 text-xs font-medium text-white shadow-sm backdrop-blur-sm transition-all duration-300 ease-out group-hover:opacity-90'
                   style={
                     {
                       WebkitUserSelect: 'none',
@@ -861,7 +882,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
             {/* 徽章 */}
             {config.showRating && rate && (
               <div
-                className='absolute top-2 right-2 bg-pink-500 text-white text-xs font-bold w-7 h-7 rounded-full flex items-center justify-center shadow-md transition-all duration-300 ease-out group-hover:scale-110'
+                className='absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-pink-500 text-xs font-bold text-white shadow-md transition-all duration-300 ease-out group-hover:scale-110'
                 style={
                   {
                     WebkitUserSelect: 'none',
@@ -880,7 +901,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
 
             {actualEpisodes && actualEpisodes > 1 && (
               <div
-                className='absolute top-2 right-2 bg-green-500 text-white text-xs font-semibold px-2 py-1 rounded-md shadow-md transition-all duration-300 ease-out group-hover:scale-110'
+                className='absolute right-2 top-2 rounded-md bg-green-500 px-2 py-1 text-xs font-semibold text-white shadow-md transition-all duration-300 ease-out group-hover:scale-110'
                 style={
                   {
                     WebkitUserSelect: 'none',
@@ -912,7 +933,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
                   target='_blank'
                   rel='noopener noreferrer'
                   onClick={(e) => e.stopPropagation()}
-                  className='absolute top-2 left-2 opacity-0 -translate-x-2 transition-all duration-300 ease-in-out delay-100 sm:group-hover:opacity-100 sm:group-hover:translate-x-0'
+                  className='absolute left-2 top-2 -translate-x-2 opacity-0 transition-all delay-100 duration-300 ease-in-out sm:group-hover:translate-x-0 sm:group-hover:opacity-100'
                   style={
                     {
                       WebkitUserSelect: 'none',
@@ -926,7 +947,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
                   }}
                 >
                   <div
-                    className='bg-green-500 text-white text-xs font-bold w-7 h-7 rounded-full flex items-center justify-center shadow-md hover:bg-green-600 hover:scale-[1.1] transition-all duration-300 ease-out'
+                    className='flex h-7 w-7 items-center justify-center rounded-full bg-green-500 text-xs font-bold text-white shadow-md transition-all duration-300 ease-out hover:scale-[1.1] hover:bg-green-600'
                     style={
                       {
                         WebkitUserSelect: 'none',
@@ -964,7 +985,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
 
                 return (
                   <div
-                    className='absolute bottom-2 right-2 opacity-0 transition-all duration-300 ease-in-out delay-75 sm:group-hover:opacity-100'
+                    className='absolute bottom-2 right-2 opacity-0 transition-all delay-75 duration-300 ease-in-out sm:group-hover:opacity-100'
                     style={
                       {
                         WebkitUserSelect: 'none',
@@ -978,7 +999,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
                     }}
                   >
                     <div
-                      className='relative group/sources'
+                      className='group/sources relative'
                       style={
                         {
                           WebkitUserSelect: 'none',
@@ -988,7 +1009,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
                       }
                     >
                       <div
-                        className='bg-gray-700 text-white text-xs font-bold w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center shadow-md hover:bg-gray-600 hover:scale-[1.1] transition-all duration-300 ease-out cursor-pointer'
+                        className='flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-gray-700 text-xs font-bold text-white shadow-md transition-all duration-300 ease-out hover:scale-[1.1] hover:bg-gray-600 sm:h-7 sm:w-7'
                         style={
                           {
                             WebkitUserSelect: 'none',
@@ -1039,7 +1060,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
 
                         return (
                           <div
-                            className='absolute bottom-full mb-2 opacity-0 invisible group-hover/sources:opacity-100 group-hover/sources:visible transition-all duration-200 ease-out delay-100 pointer-events-none z-50 right-0 sm:right-0 -translate-x-0 sm:translate-x-0'
+                            className='pointer-events-none invisible absolute bottom-full right-0 z-50 mb-2 -translate-x-0 opacity-0 transition-all delay-100 duration-200 ease-out group-hover/sources:visible group-hover/sources:opacity-100 sm:right-0 sm:translate-x-0'
                             style={
                               {
                                 WebkitUserSelect: 'none',
@@ -1053,7 +1074,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
                             }}
                           >
                             <div
-                              className='bg-gray-800/90 backdrop-blur-sm text-white text-xs sm:text-xs rounded-lg shadow-xl border border-white/10 p-1.5 sm:p-2 min-w-[100px] sm:min-w-[120px] max-w-[140px] sm:max-w-[200px] overflow-hidden'
+                              className='min-w-[100px] max-w-[140px] overflow-hidden rounded-lg border border-white/10 bg-gray-800/90 p-1.5 text-xs text-white shadow-xl backdrop-blur-sm sm:min-w-[120px] sm:max-w-[200px] sm:p-2 sm:text-xs'
                               style={
                                 {
                                   WebkitUserSelect: 'none',
@@ -1073,9 +1094,9 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
                                     key={index}
                                     className='flex items-center gap-1 sm:gap-1.5'
                                   >
-                                    <div className='w-0.5 h-0.5 sm:w-1 sm:h-1 bg-blue-400 rounded-full flex-shrink-0'></div>
+                                    <div className='h-0.5 w-0.5 flex-shrink-0 rounded-full bg-blue-400 sm:h-1 sm:w-1'></div>
                                     <span
-                                      className='truncate text-[10px] sm:text-xs leading-tight'
+                                      className='truncate text-[10px] leading-tight sm:text-xs'
                                       title={sourceName}
                                     >
                                       {sourceName}
@@ -1086,9 +1107,9 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
 
                               {/* 显示更多提示 */}
                               {hasMore && (
-                                <div className='mt-1 sm:mt-2 pt-1 sm:pt-1.5 border-t border-gray-700/50'>
+                                <div className='mt-1 border-t border-gray-700/50 pt-1 sm:mt-2 sm:pt-1.5'>
                                   <div className='flex items-center justify-center text-gray-400'>
-                                    <span className='text-[10px] sm:text-xs font-medium'>
+                                    <span className='text-[10px] font-medium sm:text-xs'>
                                       +{remainingCount} 播放源
                                     </span>
                                   </div>
@@ -1096,7 +1117,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
                               )}
 
                               {/* 小箭头 */}
-                              <div className='absolute top-full right-2 sm:right-3 w-0 h-0 border-l-[4px] border-r-[4px] border-t-[4px] sm:border-l-[6px] sm:border-r-[6px] sm:border-t-[6px] border-transparent border-t-gray-800/90'></div>
+                              <div className='absolute right-2 top-full h-0 w-0 border-l-[4px] border-r-[4px] border-t-[4px] border-transparent border-t-gray-800/90 sm:right-3 sm:border-l-[6px] sm:border-r-[6px] sm:border-t-[6px]'></div>
                             </div>
                           </div>
                         );
@@ -1110,7 +1131,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
           {/* 进度条 */}
           {config.showProgress && progress !== undefined && (
             <div
-              className='mt-1 h-1 w-full bg-gray-200 rounded-full overflow-hidden'
+              className='mt-1 h-1 w-full overflow-hidden rounded-full bg-gray-200'
               style={
                 {
                   WebkitUserSelect: 'none',
@@ -1167,7 +1188,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
               }
             >
               <span
-                className='block text-sm font-semibold truncate text-gray-900 dark:text-gray-100 transition-colors duration-300 ease-in-out group-hover:text-green-600 dark:group-hover:text-green-400 peer'
+                className='peer block truncate text-sm font-semibold text-gray-900 transition-colors duration-300 ease-in-out group-hover:text-green-600 dark:text-gray-100 dark:group-hover:text-green-400'
                 style={
                   {
                     WebkitUserSelect: 'none',
@@ -1184,7 +1205,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
               </span>
               {/* 自定义 tooltip */}
               <div
-                className='absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1 bg-gray-800 text-white text-xs rounded-md shadow-lg opacity-0 invisible peer-hover:opacity-100 peer-hover:visible transition-all duration-200 ease-out delay-100 whitespace-nowrap pointer-events-none'
+                className='pointer-events-none invisible absolute bottom-full left-1/2 mb-2 -translate-x-1/2 transform whitespace-nowrap rounded-md bg-gray-800 px-3 py-1 text-xs text-white opacity-0 shadow-lg transition-all delay-100 duration-200 ease-out peer-hover:visible peer-hover:opacity-100'
                 style={
                   {
                     WebkitUserSelect: 'none',
@@ -1199,7 +1220,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
               >
                 {actualTitle}
                 <div
-                  className='absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800'
+                  className='absolute left-1/2 top-full h-0 w-0 -translate-x-1/2 transform border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800'
                   style={
                     {
                       WebkitUserSelect: 'none',
@@ -1212,7 +1233,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
             </div>
             {config.showSourceName && source_name && (
               <span
-                className='block text-xs text-gray-500 dark:text-gray-400 mt-1'
+                className='mt-1 block text-xs text-gray-500 dark:text-gray-400'
                 style={
                   {
                     WebkitUserSelect: 'none',
@@ -1226,7 +1247,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
                 }}
               >
                 <span
-                  className='inline-block border rounded px-2 py-0.5 border-gray-500/60 dark:border-gray-400/60 transition-all duration-300 ease-in-out group-hover:border-green-500/60 group-hover:text-green-600 dark:group-hover:text-green-400'
+                  className='inline-block rounded border border-gray-500/60 px-2 py-0.5 transition-all duration-300 ease-in-out group-hover:border-green-500/60 group-hover:text-green-600 dark:border-gray-400/60 dark:group-hover:text-green-400'
                   style={
                     {
                       WebkitUserSelect: 'none',
@@ -1242,7 +1263,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
                   {origin === 'live' && (
                     <Radio
                       size={12}
-                      className='inline-block text-gray-500 dark:text-gray-400 mr-1.5'
+                      className='mr-1.5 inline-block text-gray-500 dark:text-gray-400'
                     />
                   )}
                   {source_name}

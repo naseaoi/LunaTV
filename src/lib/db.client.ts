@@ -274,11 +274,19 @@ export async function addSearchHistory(keyword: string): Promise<void> {
       new CustomEvent('searchHistoryUpdated', { detail: newHistory }),
     );
     try {
-      await fetchWithAuth('/api/searchhistory', {
+      const res = await fetchWithAuth('/api/searchhistory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ keyword: trimmed }),
       });
+      // 用服务端权威数据同步缓存，避免后台同步时覆盖导致记录"消失"
+      if (res.ok) {
+        const serverHistory = (await res.json()) as string[];
+        cacheManager.cacheSearchHistory(serverHistory);
+        window.dispatchEvent(
+          new CustomEvent('searchHistoryUpdated', { detail: serverHistory }),
+        );
+      }
     } catch (err) {
       await handleDatabaseOperationFailure('searchHistory', err);
     }

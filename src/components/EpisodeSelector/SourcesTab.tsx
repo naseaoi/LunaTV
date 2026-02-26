@@ -1,4 +1,3 @@
-import { useRouter } from 'next/navigation';
 import React, {
   useCallback,
   useEffect,
@@ -9,6 +8,8 @@ import React, {
 
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8 } from '@/lib/hls-utils';
+import { getProxyModes } from '@/lib/proxy-modes';
+import { normalizeTitleForSourceMatch } from '@/lib/source_match';
 
 interface VideoInfo {
   quality: string;
@@ -31,6 +32,10 @@ interface SourcesTabProps {
   videoTitle?: string;
   onSourceChange?: (source: string, id: string, title: string) => void;
   precomputedVideoInfo?: Map<string, VideoInfo>;
+  /** 测速前补全 detail 后，通知父组件更新 availableSources 中对应条目 */
+  onSourceDetailFetched?: (updated: SearchResult) => void;
+  /** 搜索到新源后，通知父组件追加到 availableSources */
+  onAddSources?: (newSources: SearchResult[]) => void;
 }
 
 export const SourcesTab: React.FC<SourcesTabProps> = ({
@@ -43,9 +48,9 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
   videoTitle,
   onSourceChange,
   precomputedVideoInfo,
+  onSourceDetailFetched,
+  onAddSources,
 }) => {
-  const router = useRouter();
-
   const [videoInfoMap, setVideoInfoMap] = useState<Map<string, VideoInfo>>(
     new Map(),
   );
@@ -74,6 +79,12 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
     }
     return true;
   });
+
+  // 搜索更多源站
+  const [isSearchingMore, setIsSearchingMore] = useState(false);
+  const [searchMoreDone, setSearchMoreDone] = useState(false);
+  // 检验全部
+  const [isRetestingAll, setIsRetestingAll] = useState(false);
 
   // 进入换源 Tab 时：用缓存快速回填，确保立即显示已有测速结果
   useEffect(() => {
@@ -133,9 +144,30 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
 
       if (!force && attemptedSourcesRef.current.has(sourceKey)) return;
       if (testingSourcesRef.current.has(sourceKey)) return;
-      if (!source.episodes || source.episodes.length === 0) return;
 
-      const episodeUrl = source.episodes[0];
+      // episodes 为空（如 giri 搜索阶段的残缺数据），先调 detail 补全
+      let resolvedSource = source;
+      if (!source.episodes || source.episodes.length === 0) {
+        try {
+          const res = await fetch(
+            `/api/detail?source=${source.source}&id=${source.id}`,
+          );
+          if (res.ok) {
+            const full = (await res.json()) as SearchResult;
+            if (full.episodes && full.episodes.length > 0) {
+              resolvedSource = full;
+              onSourceDetailFetched?.(full);
+            }
+          }
+        } catch {
+          // 补全失败，跳过测速
+        }
+        if (!resolvedSource.episodes || resolvedSource.episodes.length === 0) {
+          return;
+        }
+      }
+
+      const episodeUrl = resolvedSource.episodes[0];
       testingSourcesRef.current.add(sourceKey);
 
       try {
@@ -149,7 +181,9 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
           return;
         }
 
-        const probePromise = getVideoResolutionFromM3u8(episodeUrl);
+        const proxyModes = await getProxyModes();
+        const useProxy = proxyModes[source.source] === 'server';
+        const probePromise = getVideoResolutionFromM3u8(episodeUrl, useProxy);
         inFlightVideoInfo.set(sourceKey, probePromise);
 
         const info = await probePromise;
@@ -173,7 +207,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
         testingSourcesRef.current.delete(sourceKey);
       }
     },
-    [],
+    [onSourceDetailFetched],
   );
 
   // 合并预计算结果
@@ -187,16 +221,16 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
         });
         return newMap;
       });
-      // 无论成功或失败，都标记为已尝试，避免重复测速
+      // 只把测速成功的标记为已尝试；hasError 的不标记，让后台测速 effect 自动重测
       setAttemptedSources((prev) => {
         const newSet = new Set(prev);
-        precomputedVideoInfo.forEach((_, key) => {
-          newSet.add(key);
+        precomputedVideoInfo.forEach((v, key) => {
+          if (!v.hasError) {
+            newSet.add(key);
+            attemptedSourcesRef.current.add(key);
+          }
         });
         return newSet;
-      });
-      precomputedVideoInfo.forEach((_, key) => {
-        attemptedSourcesRef.current.add(key);
       });
     }
   }, [precomputedVideoInfo]);
@@ -215,6 +249,13 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
         }
       }
 
+      // 当前正在播放的源跳过后台测速（播放器会通过 precomputedVideoInfo 回填真实数据）
+      const currentKey =
+        currentSource && currentId ? `${currentSource}-${currentId}` : '';
+      if (currentKey) {
+        attemptedSourcesRef.current.add(currentKey);
+      }
+
       const pendingSources = availableSources.filter((source) => {
         const sourceKey = `${source.source}-${source.id}`;
         return !attemptedSourcesRef.current.has(sourceKey);
@@ -228,7 +269,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
       }
     };
     fetchVideoInfosInBatches();
-  }, [availableSources, getVideoInfo]);
+  }, [availableSources, getVideoInfo, currentSource, currentId]);
 
   const handleSourceClick = useCallback(
     (source: SearchResult) => {
@@ -550,16 +591,108 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
       </div>
 
       <div className='mt-6 flex-shrink-0 border-t border-gray-100 pt-4 dark:border-white/[0.06]'>
-        <button
-          onClick={() => {
-            if (videoTitle) {
-              router.push(`/search?q=${encodeURIComponent(videoTitle)}`);
-            }
-          }}
-          className='w-full py-2 text-center text-xs text-gray-400 transition-colors hover:text-green-500 dark:text-gray-500 dark:hover:text-green-400'
-        >
-          影片匹配有误？点击去搜索
-        </button>
+        <div className='flex gap-2'>
+          <button
+            disabled={isRetestingAll}
+            onClick={async () => {
+              setIsRetestingAll(true);
+              // 清除所有缓存和已尝试标记
+              for (const source of availableSources) {
+                const key = `${source.source}-${source.id}`;
+                videoInfoCache.delete(key);
+                attemptedSourcesRef.current.delete(key);
+              }
+              setAttemptedSources(new Set());
+              setVideoInfoMap(new Map());
+
+              // 当前播放源标记为"播放中"
+              const curKey =
+                currentSource && currentId
+                  ? `${currentSource}-${currentId}`
+                  : '';
+              if (curKey) {
+                const playingInfo: VideoInfo = {
+                  quality: '播放中',
+                  loadSpeed: '播放中',
+                  pingTime: 0,
+                };
+                videoInfoCache.set(curKey, {
+                  info: playingInfo,
+                  ts: Date.now(),
+                });
+                setVideoInfoMap((prev) =>
+                  new Map(prev).set(curKey, playingInfo),
+                );
+                setAttemptedSources((prev) => new Set(prev).add(curKey));
+                attemptedSourcesRef.current.add(curKey);
+              }
+
+              // 逐批重测（排除当前源）
+              const toTest = availableSources.filter((s) => {
+                const key = `${s.source}-${s.id}`;
+                return key !== curKey;
+              });
+              const batchSize = Math.ceil(toTest.length / 2);
+              for (let start = 0; start < toTest.length; start += batchSize) {
+                const batch = toTest.slice(start, start + batchSize);
+                await Promise.all(
+                  batch.map((s) => getVideoInfo(s, { force: true })),
+                );
+              }
+              setIsRetestingAll(false);
+            }}
+            className='flex-1 rounded-lg py-2 text-center text-xs font-medium text-gray-500 ring-1 ring-gray-200/60 transition-colors hover:text-green-600 hover:ring-green-300 disabled:opacity-50 dark:text-gray-400 dark:ring-white/[0.08] dark:hover:text-green-400 dark:hover:ring-green-500/30'
+          >
+            {isRetestingAll ? '检验中...' : '检验全部'}
+          </button>
+          <button
+            disabled={isSearchingMore}
+            onClick={async () => {
+              if (!videoTitle) return;
+              setIsSearchingMore(true);
+              setSearchMoreDone(false);
+              try {
+                const res = await fetch(
+                  `/api/search?q=${encodeURIComponent(videoTitle.trim())}`,
+                );
+                if (!res.ok) throw new Error('搜索失败');
+                const data = await res.json();
+                if (Array.isArray(data.results)) {
+                  const existingKeys = new Set(
+                    availableSources.map((s) => `${s.source}-${s.id}`),
+                  );
+                  const normalizedTitle = normalizeTitleForSourceMatch(
+                    videoTitle || '',
+                  );
+                  const newSources = (data.results as SearchResult[]).filter(
+                    (s) => {
+                      if (existingKeys.has(`${s.source}-${s.id}`)) return false;
+                      // 标题匹配过滤，避免追加无关结果
+                      if (!normalizedTitle) return true;
+                      const t = normalizeTitleForSourceMatch(s.title);
+                      return t.length > 0 && t === normalizedTitle;
+                    },
+                  );
+                  if (newSources.length > 0) {
+                    onAddSources?.(newSources);
+                  }
+                  setSearchMoreDone(true);
+                }
+              } catch {
+                // 静默失败
+              } finally {
+                setIsSearchingMore(false);
+              }
+            }}
+            className='flex-1 rounded-lg py-2 text-center text-xs font-medium text-gray-500 ring-1 ring-gray-200/60 transition-colors hover:text-green-600 hover:ring-green-300 disabled:opacity-50 dark:text-gray-400 dark:ring-white/[0.08] dark:hover:text-green-400 dark:hover:ring-green-500/30'
+          >
+            {isSearchingMore
+              ? '搜索中...'
+              : searchMoreDone
+                ? '搜索完成'
+                : '搜索更多源站'}
+          </button>
+        </div>
       </div>
     </div>
   );

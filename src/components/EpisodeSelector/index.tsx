@@ -34,6 +34,10 @@ interface EpisodeSelectorProps {
   onToggleFavorite?: () => void;
   videoCover?: string;
   videoDoubanId?: number;
+  /** 测速补全 detail 后回调，更新父组件的 availableSources */
+  onSourceDetailFetched?: (updated: SearchResult) => void;
+  /** 搜索到新源后，通知父组件追加到 availableSources */
+  onAddSources?: (newSources: SearchResult[]) => void;
 }
 
 type TabKey = 'episodes' | 'info' | 'sources';
@@ -58,6 +62,8 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   onToggleFavorite,
   videoCover = '',
   videoDoubanId = 0,
+  onSourceDetailFetched,
+  onAddSources,
 }) => {
   const [activeTab, setActiveTab] = useState<TabKey>(
     totalEpisodes > 1 ? 'episodes' : 'info',
@@ -134,6 +140,8 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
           videoTitle={videoTitle}
           onSourceChange={onSourceChange}
           precomputedVideoInfo={precomputedVideoInfo}
+          onSourceDetailFetched={onSourceDetailFetched}
+          onAddSources={onAddSources}
         />
       </div>
     </div>

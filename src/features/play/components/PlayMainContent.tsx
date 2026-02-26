@@ -48,6 +48,8 @@ interface PlayMainContentProps {
   onToggleFavorite: () => void;
   videoCover: string;
   videoDoubanId: number;
+  onSourceDetailFetched?: (updated: SearchResult) => void;
+  onAddSources?: (newSources: SearchResult[]) => void;
 }
 
 const TogglePanelButton = ({
@@ -112,6 +114,8 @@ export function PlayMainContent(props: PlayMainContentProps) {
     onToggleFavorite,
     videoCover,
     videoDoubanId,
+    onSourceDetailFetched,
+    onAddSources,
   } = props;
 
   // 根据 detail.type_name 选择标题图标和分类颜色
@@ -556,6 +560,8 @@ export function PlayMainContent(props: PlayMainContentProps) {
               onToggleFavorite={onToggleFavorite}
               videoCover={videoCover}
               videoDoubanId={videoDoubanId}
+              onSourceDetailFetched={onSourceDetailFetched}
+              onAddSources={onAddSources}
             />
           </div>
         </div>

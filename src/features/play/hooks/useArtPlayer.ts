@@ -4,6 +4,7 @@ import type ArtplayerType from 'artplayer';
 import type HlsType from 'hls.js';
 
 import { SearchResult } from '@/lib/types';
+import { isServerProxy } from '@/lib/proxy-modes';
 
 import { WakeLockSentinel } from '@/features/play/lib/playTypes';
 import { filterAdsFromM3U8 } from '@/features/play/lib/playUtils';
@@ -89,6 +90,12 @@ export interface UseArtPlayerParams {
   requestWakeLock: () => Promise<void>;
   releaseWakeLock: () => Promise<void>;
   cleanupPlayer: () => void;
+  /** 播放器收集到当前源的测速数据后回调（速度+分辨率+延迟） */
+  onCurrentSourceVideoInfo?: (info: {
+    quality: string;
+    loadSpeed: string;
+    pingTime: number;
+  }) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -128,6 +135,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
     requestWakeLock,
     releaseWakeLock,
     cleanupPlayer,
+    onCurrentSourceVideoInfo,
   } = params;
 
   // --- 主 useEffect ---
@@ -280,9 +288,20 @@ export function useArtPlayer(params: UseArtPlayerParams) {
                     : Hls.DefaultConfig.loader,
                 });
 
-                const targetUrl = url;
+                // 根据源站流量路由配置决定是否走服务端代理
+                const sourceKey = detailRef.current?.source || '';
+                const useServerProxy = isServerProxy(sourceKey);
+                const targetUrl = useServerProxy
+                  ? `/api/proxy/m3u8?url=${encodeURIComponent(url)}`
+                  : `/api/proxy/m3u8?url=${encodeURIComponent(url)}&allowCORS=true`;
 
                 setRealtimeLoadSpeed('测速中...');
+
+                // 收集首分片测速数据，回填给 SourcesTab
+                let firstFragSpeed = '';
+                let firstFragPing = 0;
+                let videoInfoReported = false;
+                const fragLoadStart = performance.now();
 
                 const speedFallbackTimer = setTimeout(() => {
                   setRealtimeLoadSpeed((prev) =>
@@ -307,6 +326,13 @@ export function useArtPlayer(params: UseArtPlayerParams) {
                   }
                 });
 
+                // manifest 解析成功即表示播放源可用，兜底清除 loading overlay
+                // 某些场景下 canplay 事件不触发（如 autoplay 被阻止），
+                // 此时用户至少能看到播放器并手动点击播放
+                hls.on(Hls.Events.MANIFEST_PARSED, function () {
+                  setIsVideoLoading(false);
+                });
+
                 hls.on(Hls.Events.FRAG_LOADED, function (_, data) {
                   clearTimeout(speedFallbackTimer);
                   const stats = data.frag.stats;
@@ -317,11 +343,46 @@ export function useArtPlayer(params: UseArtPlayerParams) {
                     endTime > startTime ? endTime - startTime : 0;
                   if (loadedBytes > 0 && elapsedMs > 0) {
                     const bytesPerSecond = loadedBytes / (elapsedMs / 1000);
-                    setRealtimeLoadSpeed(formatBytesPerSecond(bytesPerSecond));
+                    const speedStr = formatBytesPerSecond(bytesPerSecond);
+                    setRealtimeLoadSpeed(speedStr);
+                    // 收集首分片速度用于回填 SourcesTab
+                    if (!firstFragSpeed) {
+                      firstFragSpeed = speedStr;
+                      firstFragPing = Math.round(
+                        performance.now() - fragLoadStart,
+                      );
+                      tryReportVideoInfo();
+                    }
                   } else if (loadedBytes > 0) {
                     setRealtimeLoadSpeed('0 KB/s');
                   }
                 });
+
+                // 首帧解码后收集分辨率，与首分片速度合并回填
+                const tryReportVideoInfo = () => {
+                  if (videoInfoReported || !firstFragSpeed) return;
+                  const w = video.videoWidth;
+                  if (!w || w <= 0) return;
+                  videoInfoReported = true;
+                  const quality =
+                    w >= 3840
+                      ? '4K'
+                      : w >= 2560
+                        ? '2K'
+                        : w >= 1920
+                          ? '1080p'
+                          : w >= 1280
+                            ? '720p'
+                            : w >= 854
+                              ? '480p'
+                              : 'SD';
+                  onCurrentSourceVideoInfo?.({
+                    quality,
+                    loadSpeed: firstFragSpeed,
+                    pingTime: firstFragPing,
+                  });
+                };
+                video.addEventListener('loadeddata', tryReportVideoInfo);
 
                 hls.loadSource(targetUrl);
                 hls.attachMedia(video);
@@ -454,6 +515,12 @@ export function useArtPlayer(params: UseArtPlayerParams) {
           artPlayerRef.current.on('play', () => {
             requestWakeLock();
             setIsPlaying(true);
+          });
+
+          // 备用：playing 事件表示视频已真正开始渲染帧，
+          // 某些 HLS 流 canplay 可能不触发，用 playing 兜底清除 loading
+          artPlayerRef.current.on('video:playing', () => {
+            setIsVideoLoading(false);
           });
 
           artPlayerRef.current.on('pause', () => {

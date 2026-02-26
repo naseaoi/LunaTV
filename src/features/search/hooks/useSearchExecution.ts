@@ -13,6 +13,54 @@ interface UseSearchExecutionParams {
   filterAllYearOrder: 'none' | 'asc' | 'desc';
 }
 
+interface SearchSnapshotCache {
+  expiresAt: number;
+  results: SearchResult[];
+  totalSources: number;
+  completedSources: number;
+  useFluidSearch: boolean;
+}
+
+const SEARCH_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
+const searchSnapshotCache = new Map<string, SearchSnapshotCache>();
+
+function getSearchSnapshotCacheKey(query: string) {
+  return query.trim().toLowerCase();
+}
+
+function getSearchSnapshot(query: string): SearchSnapshotCache | null {
+  const key = getSearchSnapshotCacheKey(query);
+  const snapshot = searchSnapshotCache.get(key);
+  if (!snapshot) {
+    return null;
+  }
+  if (snapshot.expiresAt <= Date.now()) {
+    searchSnapshotCache.delete(key);
+    return null;
+  }
+  return snapshot;
+}
+
+/** 清除指定关键词的搜索快照缓存；不传参则清除全部 */
+export function clearSearchSnapshotCache(query?: string) {
+  if (query) {
+    searchSnapshotCache.delete(getSearchSnapshotCacheKey(query));
+  } else {
+    searchSnapshotCache.clear();
+  }
+}
+
+function setSearchSnapshot(
+  query: string,
+  snapshot: Omit<SearchSnapshotCache, 'expiresAt'>,
+) {
+  const key = getSearchSnapshotCacheKey(query);
+  searchSnapshotCache.set(key, {
+    ...snapshot,
+    expiresAt: Date.now() + SEARCH_SNAPSHOT_TTL_MS,
+  });
+}
+
 export function useSearchExecution({
   searchParams,
   viewMode,
@@ -33,29 +81,41 @@ export function useSearchExecution({
 
   // 核心搜索 effect
   useEffect(() => {
-    const query = searchParams.get('q') || '';
-    currentQueryRef.current = query.trim();
+    const query = (searchParams.get('q') || '').trim();
+    currentQueryRef.current = query;
+
+    if (eventSourceRef.current) {
+      try {
+        eventSourceRef.current.close();
+      } catch {}
+      eventSourceRef.current = null;
+    }
+    if (flushTimerRef.current) {
+      clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+    pendingResultsRef.current = [];
 
     if (query) {
-      // 新搜索：关闭旧连接并清空结果
-      if (eventSourceRef.current) {
-        try {
-          eventSourceRef.current.close();
-        } catch {}
-        eventSourceRef.current = null;
+      const cachedSnapshot = getSearchSnapshot(query);
+      if (cachedSnapshot) {
+        setSearchResults(cachedSnapshot.results);
+        setTotalSources(cachedSnapshot.totalSources);
+        setCompletedSources(cachedSnapshot.completedSources);
+        setUseFluidSearch(cachedSnapshot.useFluidSearch);
+        setIsLoading(false);
+        setShowResults(true);
+        addSearchHistory(query);
+        return;
       }
+
       setSearchResults([]);
       setTotalSources(0);
       setCompletedSources(0);
-      pendingResultsRef.current = [];
-      if (flushTimerRef.current) {
-        clearTimeout(flushTimerRef.current);
-        flushTimerRef.current = null;
-      }
       setIsLoading(true);
       setShowResults(true);
 
-      const trimmed = query.trim();
+      const trimmed = query;
 
       // 每次搜索时重新读取设置
       let currentFluidSearch = true;
@@ -200,9 +260,35 @@ export function useSearchExecution({
       // 保存到搜索历史
       addSearchHistory(query);
     } else {
+      setSearchResults([]);
+      setTotalSources(0);
+      setCompletedSources(0);
+      setIsLoading(false);
       setShowResults(false);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    const query = currentQueryRef.current;
+    // 搜索进行中不写入快照，避免空结果覆盖有效缓存
+    if (!query || !showResults || isLoading) {
+      return;
+    }
+
+    setSearchSnapshot(query, {
+      results: searchResults,
+      totalSources,
+      completedSources,
+      useFluidSearch,
+    });
+  }, [
+    searchResults,
+    totalSources,
+    completedSources,
+    showResults,
+    useFluidSearch,
+    isLoading,
+  ]);
 
   // 组件卸载时清理连接
   useEffect(() => {

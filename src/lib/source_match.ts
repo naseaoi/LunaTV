@@ -35,6 +35,11 @@ export const isSearchTypeMatched = (
     return true;
   }
 
+  // 搜索阶段部分源（如 giri）尚无完整剧集信息，跳过类型检查
+  if (episodesLength === 0) {
+    return true;
+  }
+
   return (
     (searchType === 'tv' && episodesLength > 1) ||
     (searchType === 'movie' && episodesLength === 1)

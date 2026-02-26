@@ -3,6 +3,7 @@ import { Dispatch, MutableRefObject, SetStateAction, useEffect } from 'react';
 import { filterSourcesForPlayback } from '@/lib/source_match';
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8 } from '@/lib/hls-utils';
+import { getProxyModes } from '@/lib/proxy-modes';
 
 import { calculateSourceScore } from '@/features/play/lib/playUtils';
 
@@ -24,6 +25,9 @@ export async function preferBestSource(
 
   // 收割窗口：首个源测速成功后，再等待此时间收集更多结果
   const HARVEST_WINDOW_MS = 1500;
+
+  // 预先获取流量路由配置（在 Promise 构造器外 await）
+  const proxyModes = await getProxyModes();
 
   type TestResult = {
     source: SearchResult;
@@ -112,7 +116,8 @@ export async function preferBestSource(
         if (pendingCount === 0) finalize();
         continue;
       }
-      getVideoResolutionFromM3u8(source.episodes[0])
+      const useProxy = proxyModes[source.source] === 'server';
+      getVideoResolutionFromM3u8(source.episodes[0], useProxy)
         .then((testResult) => {
           if (settled) return;
           collectedResults.push({ source, testResult });
@@ -276,6 +281,21 @@ export function usePlayInit({
       }
     };
 
+    // 从 sessionStorage 读取聚合组数据（搜索页传递），读后立即清理
+    const loadAggregateGroup = (): SearchResult[] | null => {
+      try {
+        const raw = sessionStorage.getItem('aggregate_group');
+        if (raw) {
+          sessionStorage.removeItem('aggregate_group');
+          const parsed = JSON.parse(raw) as SearchResult[];
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {
+        // 解析失败，静默忽略
+      }
+      return null;
+    };
+
     const initAll = async () => {
       if (!currentSource && !currentId && !videoTitle && !searchTitle) {
         setError('缺少必要参数');
@@ -290,16 +310,35 @@ export function usePlayInit({
           : '正在搜索播放源...',
       );
 
-      let sourcesInfo = await fetchSourcesData(searchTitle || videoTitle);
-      if (
-        currentSource &&
-        currentId &&
-        !sourcesInfo.some(
-          (source) =>
-            source.source === currentSource && source.id === currentId,
-        )
-      ) {
-        sourcesInfo = await fetchSourceDetail(currentSource, currentId);
+      // 优先使用搜索页通过 sessionStorage 传递的聚合组数据，避免重新搜索导致源站列表不一致
+      const cachedGroup = loadAggregateGroup();
+      let sourcesInfo: SearchResult[];
+      if (cachedGroup) {
+        sourcesInfo = filterSourcesForPlayback(cachedGroup, {
+          title: videoTitleRef.current,
+          year: videoYearRef.current,
+          searchType:
+            searchType === 'tv' || searchType === 'movie' ? searchType : '',
+        });
+        setAvailableSources(sourcesInfo);
+        setSourceSearchLoading(false);
+      } else {
+        sourcesInfo = await fetchSourcesData(searchTitle || videoTitle);
+      }
+      if (currentSource && currentId) {
+        const detailedSources = await fetchSourceDetail(
+          currentSource,
+          currentId,
+        );
+        if (detailedSources.length > 0) {
+          sourcesInfo = [
+            detailedSources[0],
+            ...sourcesInfo.filter(
+              (source) =>
+                !(source.source === currentSource && source.id === currentId),
+            ),
+          ];
+        }
       }
       if (sourcesInfo.length === 0) {
         setError('未找到匹配结果');
@@ -335,10 +374,28 @@ export function usePlayInit({
         );
       }
 
+      // 选定源的 episodes 为空（搜索阶段的残缺数据），补调 detail 获取完整信息
+      if (!detailData.episodes || detailData.episodes.length === 0) {
+        setLoadingStage('fetching');
+        setLoadingMessage('正在获取视频详情...');
+        const fullDetail = await fetchSourceDetail(
+          detailData.source,
+          detailData.id,
+        );
+        if (fullDetail.length > 0) {
+          detailData = fullDetail[0];
+        }
+      }
+
       setNeedPrefer(false);
       setCurrentSource(detailData.source);
       setCurrentId(detailData.id);
-      setVideoYear(detailData.year);
+      // 防御：detailData.year 为 unknown 时保留 URL 参数中的年份
+      const resolvedYear =
+        detailData.year && detailData.year !== 'unknown'
+          ? detailData.year
+          : videoYearRef.current || detailData.year;
+      setVideoYear(resolvedYear);
       setVideoTitle(detailData.title || videoTitleRef.current);
       setVideoCover(detailData.poster);
       setVideoDoubanId(detailData.douban_id || 0);
@@ -351,7 +408,7 @@ export function usePlayInit({
       const newUrl = new URL(window.location.href);
       newUrl.searchParams.set('source', detailData.source);
       newUrl.searchParams.set('id', detailData.id);
-      newUrl.searchParams.set('year', detailData.year);
+      newUrl.searchParams.set('year', resolvedYear);
       newUrl.searchParams.set('title', detailData.title);
       newUrl.searchParams.delete('prefer');
       window.history.replaceState({}, '', newUrl.toString());

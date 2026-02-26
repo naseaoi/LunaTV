@@ -16,6 +16,346 @@ interface ApiSearchItem {
   type_name?: string;
 }
 
+interface GirigiriSuggestItem {
+  id: number | string;
+  name: string;
+  pic?: string;
+}
+
+interface GirigiriPlayExtractResult {
+  url: string | null;
+  title: string;
+  year: string;
+  desc: string;
+  poster: string;
+}
+
+function isGirigiriSource(apiSite: ApiSite): boolean {
+  return /girigirilove\.com/i.test(apiSite.api);
+}
+
+// giri 页面请求用浏览器风格 headers，降低 CF 盾触发概率
+const GIRI_HTML_HEADERS: Record<string, string> = {
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  Accept:
+    'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+  'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+};
+
+/** 检测 HTML 是否为 Cloudflare challenge 页面 */
+function isCfChallenge(html: string): boolean {
+  return (
+    html.includes('cf-browser-verification') ||
+    html.includes('cf_chl_opt') ||
+    html.includes('challenge-platform') ||
+    (html.includes('Just a moment') && html.includes('cloudflare'))
+  );
+}
+
+/** giri 页面 fetch，遇到 CF challenge 自动重试一次 */
+async function fetchGiriHtml(url: string): Promise<string | null> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url, { headers: GIRI_HTML_HEADERS });
+      if (!res.ok) return null;
+      const html = await res.text();
+      if (!isCfChallenge(html)) return html;
+      // CF challenge，等 1.5 秒后重试
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 1500));
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function getSiteOrigin(apiSite: ApiSite): string {
+  const fallback = apiSite.api.replace(/\/+$/, '');
+  try {
+    return new URL(apiSite.api).origin;
+  } catch {
+    return fallback;
+  }
+}
+
+function toAbsoluteUrl(url: string, origin: string): string {
+  if (!url) return '';
+  try {
+    return new URL(url, origin).toString();
+  } catch {
+    return url;
+  }
+}
+
+function decodeGirigiriPlayUrl(rawUrl: string, encrypt: number): string {
+  const normalized = rawUrl.replace(/\\\//g, '/');
+
+  if (encrypt === 2) {
+    try {
+      const base64Decoded = Buffer.from(normalized, 'base64').toString('utf8');
+      return decodeURIComponent(base64Decoded);
+    } catch {
+      return normalized;
+    }
+  }
+
+  if (encrypt === 1) {
+    try {
+      return decodeURIComponent(normalized);
+    } catch {
+      return normalized;
+    }
+  }
+
+  return normalized;
+}
+
+async function fetchGirigiriEpisodePlayUrl(
+  origin: string,
+  playPath: string,
+): Promise<GirigiriPlayExtractResult> {
+  const playUrl = toAbsoluteUrl(playPath, origin);
+  const html = await fetchGiriHtml(playUrl);
+
+  if (!html) {
+    return {
+      url: null,
+      title: '',
+      year: 'unknown',
+      desc: '',
+      poster: '',
+    };
+  }
+
+  const title =
+    html.match(/class="player-title-link"[^>]*>([^<]+)<\/a>/)?.[1]?.trim() ||
+    html.match(/<title>([^<_]+)/)?.[1]?.trim() ||
+    '';
+  const desc =
+    cleanHtmlTags(
+      html.match(/<div class="small-text">([\s\S]*?)<\/div>/)?.[1] ||
+        html.match(/<meta\s+name="description"\s+content="([^"]*)"/i)?.[1] ||
+        '',
+    ).trim() || '';
+  const year =
+    html.match(/<div class="cor4"\s+title="(\d{4})">/)?.[1] ||
+    html.match(/<a[^>]*>(\d{4})<\/a>/)?.[1] ||
+    'unknown';
+  const poster = toAbsoluteUrl(
+    html.match(/<div class="this-pic">[\s\S]*?data-src="([^"]+)"/i)?.[1] ||
+      html.match(/<img[^>]+data-src="([^"]+)"/i)?.[1] ||
+      '',
+    origin,
+  );
+
+  const playerBlock =
+    html.match(/var\s+player_aaaa\s*=\s*(\{[\s\S]*?\});/)?.[1] || '';
+  const encryptMatch = playerBlock.match(/"encrypt":(\d+)/);
+  const urlMatch = playerBlock.match(/"url":"([^"]+)"/);
+  if (!urlMatch) {
+    return {
+      url: null,
+      title,
+      year,
+      desc,
+      poster,
+    };
+  }
+
+  const encrypt = encryptMatch ? Number(encryptMatch[1]) : 0;
+  const decoded = decodeGirigiriPlayUrl(urlMatch[1], encrypt);
+  const normalizedUrl = /^https?:\/\//i.test(decoded)
+    ? decoded
+    : decoded.startsWith('//')
+      ? `https:${decoded}`
+      : '';
+
+  return {
+    url: normalizedUrl || null,
+    title,
+    year,
+    desc,
+    poster,
+  };
+}
+
+async function runWithConcurrency<T>(
+  tasks: Array<() => Promise<T>>,
+  concurrency: number,
+): Promise<T[]> {
+  if (tasks.length === 0) return [];
+
+  const results: T[] = new Array(tasks.length);
+  let index = 0;
+
+  async function worker() {
+    while (index < tasks.length) {
+      const current = index;
+      index += 1;
+      results[current] = await tasks[current]();
+    }
+  }
+
+  const workers = Array.from(
+    { length: Math.min(concurrency, tasks.length) },
+    () => worker(),
+  );
+  await Promise.all(workers);
+
+  return results;
+}
+
+async function searchFromGirigiri(
+  apiSite: ApiSite,
+  query: string,
+): Promise<SearchResult[]> {
+  const origin = getSiteOrigin(apiSite);
+  const searchUrl = `${origin}/index.php/ajax/suggest?mid=1&wd=${encodeURIComponent(query)}`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const response = await fetch(searchUrl, {
+      headers: API_CONFIG.search.headers,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) return [];
+    const data = await response.json();
+    const list = Array.isArray(data?.list)
+      ? (data.list as GirigiriSuggestItem[])
+      : [];
+
+    return list
+      .map((item) => {
+        const id = String(item.id || '').trim();
+        const title = (item.name || '').trim();
+        if (!id || !title) return null;
+
+        return {
+          id,
+          title,
+          poster: toAbsoluteUrl(item.pic || '', origin),
+          episodes: [],
+          episodes_titles: [],
+          source: apiSite.key,
+          source_name: apiSite.name,
+          class: '',
+          year: 'unknown',
+          desc: '',
+          type_name: '',
+          douban_id: 0,
+        } as SearchResult;
+      })
+      .filter((item): item is SearchResult => Boolean(item));
+  } catch {
+    clearTimeout(timeoutId);
+    return [];
+  }
+}
+
+async function getDetailFromGirigiri(
+  apiSite: ApiSite,
+  id: string,
+): Promise<SearchResult> {
+  const origin = getSiteOrigin(apiSite);
+  const detailUrl = `${origin}/GV${id}/`;
+  const html = await fetchGiriHtml(detailUrl);
+
+  if (!html) {
+    throw new Error('详情页请求失败或被 Cloudflare 拦截');
+  }
+
+  const title =
+    html
+      .match(/<h3 class="slide-info-title[^"]*">([^<]+)<\/h3>/)?.[1]
+      ?.trim() ||
+    html.match(/<title>([^<_]+)/)?.[1]?.trim() ||
+    '';
+  const descRaw =
+    html.match(/id="height_limit"[^>]*>([\s\S]*?)<\/div>/)?.[1] ||
+    html.match(/<meta\s+name="description"\s+content="([^"]*)"/i)?.[1] ||
+    '';
+  const desc = cleanHtmlTags(descRaw).trim();
+  const year =
+    html.match(/<em class="cor4">年份：<\/em>\s*(\d{4})/)?.[1] ||
+    html.match(/href="\/search\/[^"]*?(\d{4})\/"/)?.[1] ||
+    html.match(/<a[^>]*>(\d{4})<\/a>/)?.[1] ||
+    'unknown';
+  const posterRaw =
+    html.match(/<div class="detail-pic">[\s\S]*?data-src="([^"]+)"/i)?.[1] ||
+    html.match(/<img[^>]+data-src="([^"]+)"/i)?.[1] ||
+    '';
+  const poster = toAbsoluteUrl(posterRaw, origin);
+
+  const episodeMap = new Map<string, string>();
+  const episodeRegex = /href="(\/playGV\d+-\d+-\d+\/)"[^>]*>([\s\S]*?)<\/a>/g;
+  const episodeMatches = Array.from(html.matchAll(episodeRegex));
+  for (const match of episodeMatches) {
+    const playPath = match[1];
+    const epTitle =
+      cleanHtmlTags(match[2] || '').trim() || `${episodeMap.size + 1}`;
+    if (!episodeMap.has(playPath)) {
+      episodeMap.set(playPath, epTitle);
+    }
+  }
+
+  const episodeEntries = Array.from(episodeMap.entries());
+  if (episodeEntries.length === 0) {
+    throw new Error('详情页未提取到可播放剧集');
+  }
+
+  const playResults = await runWithConcurrency(
+    episodeEntries.map(
+      ([playPath]) =>
+        async () =>
+          fetchGirigiriEpisodePlayUrl(origin, playPath),
+    ),
+    4,
+  );
+
+  const episodes: string[] = [];
+  const episodesTitles: string[] = [];
+  playResults.forEach((result, index) => {
+    if (result.url) {
+      episodes.push(result.url);
+      episodesTitles.push(episodeEntries[index][1]);
+    }
+  });
+
+  const fallbackMeta = playResults.find(
+    (item) => item.title || item.poster || item.desc || item.year !== 'unknown',
+  );
+
+  const finalTitle = title || fallbackMeta?.title || '';
+  const finalPoster = poster || fallbackMeta?.poster || '';
+  const finalYear = year !== 'unknown' ? year : fallbackMeta?.year || 'unknown';
+  const finalDesc = desc || fallbackMeta?.desc || '';
+
+  if (episodes.length === 0) {
+    throw new Error('未提取到有效播放地址');
+  }
+
+  return {
+    id,
+    title: finalTitle,
+    poster: finalPoster,
+    episodes,
+    episodes_titles: episodesTitles,
+    source: apiSite.key,
+    source_name: apiSite.name,
+    class: '',
+    year: finalYear,
+    desc: finalDesc,
+    type_name: '',
+    douban_id: 0,
+  };
+}
+
 /**
  * 从 vod_play_url 中解析出 m3u8 播放链接和对应标题。
  * 格式: 多播放源用 $$$ 分隔，每个源内集与集之间用 # 分隔，标题与链接用 $ 分隔。
@@ -150,6 +490,10 @@ export async function searchFromApi(
   apiSite: ApiSite,
   query: string,
 ): Promise<SearchResult[]> {
+  if (isGirigiriSource(apiSite)) {
+    return searchFromGirigiri(apiSite, query);
+  }
+
   try {
     const apiBaseUrl = apiSite.api;
     const apiUrl =
@@ -224,6 +568,10 @@ export async function getDetailFromApi(
   apiSite: ApiSite,
   id: string,
 ): Promise<SearchResult> {
+  if (isGirigiriSource(apiSite)) {
+    return getDetailFromGirigiri(apiSite, id);
+  }
+
   if (apiSite.detail) {
     return handleSpecialSourceDetail(id, apiSite);
   }

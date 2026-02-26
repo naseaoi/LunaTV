@@ -179,6 +179,15 @@ const VideoSourceConfig = ({
     ).catch(() => void 0);
   };
 
+  const handleToggleProxyMode = (key: string) => {
+    const target = sources.find((s) => s.key === key);
+    if (!target) return;
+    const newMode = target.proxyMode === 'server' ? 'browser' : 'server';
+    withLoading(`proxyMode_${key}`, () =>
+      callSourceApi({ action: 'set_proxy_mode', key, proxyMode: newMode }),
+    ).catch(() => void 0);
+  };
+
   const handleDelete = (key: string) => {
     withLoading(`deleteSource_${key}`, () =>
       callSourceApi({ action: 'delete', key }),
@@ -417,10 +426,10 @@ const VideoSourceConfig = ({
       <tr
         ref={setNodeRef}
         style={style}
-        className='hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors select-none'
+        className='select-none transition-colors hover:bg-gray-50 dark:hover:bg-gray-800'
       >
         <td
-          className='px-2 py-4 cursor-grab text-gray-400'
+          className='cursor-grab px-2 py-4 text-gray-400'
           style={{ touchAction: 'none' }}
           {...attributes}
           {...listeners}
@@ -432,51 +441,69 @@ const VideoSourceConfig = ({
             type='checkbox'
             checked={selectedSources.has(source.key)}
             onChange={(e) => handleSelectSource(source.key, e.target.checked)}
-            className='w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600'
+            className='h-4 w-4 rounded border-gray-300 bg-gray-100 text-blue-600 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:ring-offset-gray-800 dark:focus:ring-blue-600'
           />
         </td>
-        <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100'>
+        <td className='whitespace-nowrap px-6 py-4 text-sm text-gray-900 dark:text-gray-100'>
           {source.name}
         </td>
-        <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100'>
+        <td className='whitespace-nowrap px-6 py-4 text-sm text-gray-900 dark:text-gray-100'>
           {source.key}
         </td>
         <td
-          className='px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 max-w-[12rem] truncate'
+          className='max-w-[12rem] truncate whitespace-nowrap px-6 py-4 text-sm text-gray-900 dark:text-gray-100'
           title={source.api}
         >
           {source.api}
         </td>
         <td
-          className='px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 max-w-[8rem] truncate'
+          className='max-w-[8rem] truncate whitespace-nowrap px-6 py-4 text-sm text-gray-900 dark:text-gray-100'
           title={source.detail || '-'}
         >
           {source.detail || '-'}
         </td>
-        <td className='px-6 py-4 whitespace-nowrap max-w-[1rem]'>
+        <td className='max-w-[1rem] whitespace-nowrap px-6 py-4'>
           <span
-            className={`px-2 py-1 text-xs rounded-full ${
+            className={`rounded-full px-2 py-1 text-xs ${
               !source.disabled
-                ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300'
-                : 'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300'
+                ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300'
+                : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300'
             }`}
           >
             {!source.disabled ? '启用中' : '已禁用'}
           </span>
         </td>
-        <td className='px-6 py-4 whitespace-nowrap max-w-[1rem]'>
+        <td className='whitespace-nowrap px-6 py-4'>
+          <button
+            onClick={() => handleToggleProxyMode(source.key)}
+            disabled={isLoading(`proxyMode_${source.key}`)}
+            className={`rounded-full px-2 py-1 text-xs transition-colors ${
+              source.proxyMode === 'server'
+                ? 'bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/40'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-900/20 dark:text-gray-400 dark:hover:bg-gray-800/40'
+            } ${isLoading(`proxyMode_${source.key}`) ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+            title={
+              source.proxyMode === 'server'
+                ? '播放和测速流量走服务端代理'
+                : '播放和测速流量走浏览器直连'
+            }
+          >
+            {source.proxyMode === 'server' ? '服务端' : '浏览器'}
+          </button>
+        </td>
+        <td className='max-w-[1rem] whitespace-nowrap px-6 py-4'>
           {(() => {
             const status = getValidationStatus(source.key);
             if (!status) {
               return (
-                <span className='px-2 py-1 text-xs rounded-full bg-gray-100 dark:bg-gray-900/20 text-gray-600 dark:text-gray-400'>
+                <span className='rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600 dark:bg-gray-900/20 dark:text-gray-400'>
                   未检测
                 </span>
               );
             }
             return (
               <span
-                className={`px-2 py-1 text-xs rounded-full ${status.className}`}
+                className={`rounded-full px-2 py-1 text-xs ${status.className}`}
                 title={status.message}
               >
                 {status.icon} {status.text}
@@ -484,17 +511,17 @@ const VideoSourceConfig = ({
             );
           })()}
         </td>
-        <td className='px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2'>
+        <td className='space-x-2 whitespace-nowrap px-6 py-4 text-right text-sm font-medium'>
           <button
             onClick={() => handleToggleEnable(source.key)}
             disabled={isLoading(`toggleSource_${source.key}`)}
-            className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium ${
+            className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium ${
               !source.disabled
                 ? buttonStyles.roundedDanger
                 : buttonStyles.roundedSuccess
             } transition-colors ${
               isLoading(`toggleSource_${source.key}`)
-                ? 'opacity-50 cursor-not-allowed'
+                ? 'cursor-not-allowed opacity-50'
                 : ''
             }`}
           >
@@ -506,7 +533,7 @@ const VideoSourceConfig = ({
               disabled={isLoading(`deleteSource_${source.key}`)}
               className={`${buttonStyles.roundedSecondary} ${
                 isLoading(`deleteSource_${source.key}`)
-                  ? 'opacity-50 cursor-not-allowed'
+                  ? 'cursor-not-allowed opacity-50'
                   : ''
               }`}
             >
@@ -620,16 +647,16 @@ const VideoSourceConfig = ({
   return (
     <div className='space-y-6'>
       {/* 添加视频源表单 */}
-      <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4'>
+      <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
         <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>
           视频源列表
         </h4>
-        <div className='flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-2'>
+        <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-2'>
           {/* 批量操作按钮 - 移动端显示在下一行，PC端显示在左侧 */}
           <div
             className={`${selectedSources.size > 0 ? '' : 'invisible'} contents`}
           >
-            <div className='flex flex-wrap items-center gap-3 order-2 sm:order-1'>
+            <div className='order-2 flex flex-wrap items-center gap-3 sm:order-1'>
               <span className='text-sm text-gray-600 dark:text-gray-400'>
                 <span className='sm:hidden'>已选 {selectedSources.size}</span>
                 <span className='hidden sm:inline'>
@@ -676,19 +703,19 @@ const VideoSourceConfig = ({
                   : '批量删除'}
               </button>
             </div>
-            <div className='hidden sm:block w-px h-6 bg-gray-300 dark:bg-gray-600 order-2'></div>
+            <div className='order-2 hidden h-6 w-px bg-gray-300 dark:bg-gray-600 sm:block'></div>
           </div>
-          <div className='flex items-center gap-2 order-1 sm:order-2'>
+          <div className='order-1 flex items-center gap-2 sm:order-2'>
             <button
               onClick={openValidationModal}
               disabled={isValidating}
-              className={`px-3 py-1 text-sm rounded-lg transition-colors flex items-center space-x-1 ${
+              className={`flex items-center space-x-1 rounded-lg px-3 py-1 text-sm transition-colors ${
                 isValidating ? buttonStyles.disabled : buttonStyles.primary
               }`}
             >
               {isValidating ? (
                 <>
-                  <div className='w-3 h-3 border border-white border-t-transparent rounded-full animate-spin'></div>
+                  <div className='h-3 w-3 animate-spin rounded-full border border-white border-t-transparent'></div>
                   <span>检测中...</span>
                 </>
               ) : (
@@ -708,8 +735,8 @@ const VideoSourceConfig = ({
       </div>
 
       {showAddForm && (
-        <div className='p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 space-y-4'>
-          <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+        <div className='space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900'>
+          <div className='grid grid-cols-1 gap-4 sm:grid-cols-2'>
             <input
               type='text'
               placeholder='名称'
@@ -717,7 +744,7 @@ const VideoSourceConfig = ({
               onChange={(e) =>
                 setNewSource((prev) => ({ ...prev, name: e.target.value }))
               }
-              className='px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+              className='rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
             />
             <input
               type='text'
@@ -726,7 +753,7 @@ const VideoSourceConfig = ({
               onChange={(e) =>
                 setNewSource((prev) => ({ ...prev, key: e.target.value }))
               }
-              className='px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+              className='rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
             />
             <input
               type='text'
@@ -735,7 +762,7 @@ const VideoSourceConfig = ({
               onChange={(e) =>
                 setNewSource((prev) => ({ ...prev, api: e.target.value }))
               }
-              className='px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+              className='rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
             />
             <input
               type='text'
@@ -744,7 +771,7 @@ const VideoSourceConfig = ({
               onChange={(e) =>
                 setNewSource((prev) => ({ ...prev, detail: e.target.value }))
               }
-              className='px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+              className='rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
             />
           </div>
           <div className='flex justify-end'>
@@ -756,7 +783,7 @@ const VideoSourceConfig = ({
                 !newSource.api ||
                 isLoading('addSource')
               }
-              className={`w-full sm:w-auto px-4 py-2 ${
+              className={`w-full px-4 py-2 sm:w-auto ${
                 !newSource.name ||
                 !newSource.key ||
                 !newSource.api ||
@@ -773,7 +800,7 @@ const VideoSourceConfig = ({
 
       {/* 视频源表格 */}
       <div
-        className='border border-gray-200 dark:border-gray-700 rounded-lg max-h-[28rem] overflow-y-auto overflow-x-auto relative'
+        className='relative max-h-[28rem] overflow-x-auto overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700'
         data-table='source-list'
       >
         <DndContext
@@ -784,7 +811,7 @@ const VideoSourceConfig = ({
           modifiers={[restrictToVerticalAxis, restrictToParentElement]}
         >
           <table className='min-w-full divide-y divide-gray-200 dark:divide-gray-700'>
-            <thead className='bg-gray-50 dark:bg-gray-900 sticky top-0 z-10'>
+            <thead className='sticky top-0 z-10 bg-gray-50 dark:bg-gray-900'>
               <tr>
                 <th className='w-8' />
                 <th className='w-12 px-2 py-3 text-center'>
@@ -792,28 +819,31 @@ const VideoSourceConfig = ({
                     type='checkbox'
                     checked={selectAll}
                     onChange={(e) => handleSelectAll(e.target.checked)}
-                    className='w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600'
+                    className='h-4 w-4 rounded border-gray-300 bg-gray-100 text-blue-600 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:ring-offset-gray-800 dark:focus:ring-blue-600'
                   />
                 </th>
-                <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'>
+                <th className='px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400'>
                   名称
                 </th>
-                <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'>
+                <th className='px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400'>
                   Key
                 </th>
-                <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'>
+                <th className='px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400'>
                   API 地址
                 </th>
-                <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'>
+                <th className='px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400'>
                   Detail 地址
                 </th>
-                <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'>
+                <th className='px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400'>
                   状态
                 </th>
-                <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'>
+                <th className='px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400'>
+                  流量路由
+                </th>
+                <th className='px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400'>
                   有效性
                 </th>
-                <th className='px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'>
+                <th className='px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400'>
                   操作
                 </th>
               </tr>

@@ -15,7 +15,8 @@ type Action =
   | 'sort'
   | 'batch_disable'
   | 'batch_enable'
-  | 'batch_delete';
+  | 'batch_delete'
+  | 'set_proxy_mode';
 
 interface BaseBody {
   action?: Action;
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
       'batch_disable',
       'batch_enable',
       'batch_delete',
+      'set_proxy_mode',
     ];
     if (!action || !ACTIONS.includes(action)) {
       return NextResponse.json({ error: '参数格式错误' }, { status: 400 });
@@ -232,6 +234,25 @@ export async function POST(request: NextRequest) {
           if (map.has(item.key)) newList.push(item);
         });
         adminConfig.SourceConfig = newList;
+        break;
+      }
+      case 'set_proxy_mode': {
+        const { key, proxyMode } = body as {
+          key?: string;
+          proxyMode?: string;
+        };
+        if (!key)
+          return NextResponse.json({ error: '缺少 key 参数' }, { status: 400 });
+        if (proxyMode !== 'server' && proxyMode !== 'browser') {
+          return NextResponse.json(
+            { error: 'proxyMode 必须为 server 或 browser' },
+            { status: 400 },
+          );
+        }
+        const entry = adminConfig.SourceConfig.find((s) => s.key === key);
+        if (!entry)
+          return NextResponse.json({ error: '源不存在' }, { status: 404 });
+        entry.proxyMode = proxyMode;
         break;
       }
       default:

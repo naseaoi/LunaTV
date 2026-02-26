@@ -11,6 +11,7 @@ import {
   saveSkipConfig,
 } from '@/lib/db.client';
 import { SearchResult } from '@/lib/types';
+import { preloadProxyModes } from '@/lib/proxy-modes';
 
 import { PlayMainContent } from '@/features/play/components/PlayMainContent';
 import {
@@ -32,6 +33,11 @@ import {
 function PlayPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // 预热源站流量路由缓存
+  useEffect(() => {
+    preloadProxyModes();
+  }, []);
 
   // ---------------------------------------------------------------------------
   // 状态变量
@@ -532,12 +538,35 @@ function PlayPageClient() {
         }
       }
 
-      const newDetail = availableSources.find(
+      let newDetail = availableSources.find(
         (source) => source.source === newSource && source.id === newId,
       );
       if (!newDetail) {
         setError('未找到匹配结果');
         return;
+      }
+
+      // episodes 为空（如 giri 搜索阶段的残缺数据），补调 detail 获取完整信息
+      if (!newDetail.episodes || newDetail.episodes.length === 0) {
+        try {
+          const detailRes = await fetch(
+            `/api/detail?source=${newSource}&id=${newId}`,
+          );
+          if (detailRes.ok) {
+            const fullDetail = (await detailRes.json()) as SearchResult;
+            if (fullDetail.episodes && fullDetail.episodes.length > 0) {
+              newDetail = fullDetail;
+              // 同步更新 availableSources，后续切换/测速不再重复请求
+              setAvailableSources((prev) =>
+                prev.map((s) =>
+                  s.source === newSource && s.id === newId ? fullDetail : s,
+                ),
+              );
+            }
+          }
+        } catch (err) {
+          console.error('换源补全详情失败:', err);
+        }
       }
 
       // 使用 ref 获取最新集数索引，避免闭包捕获到过期的 state 值
@@ -577,6 +606,26 @@ function PlayPageClient() {
     }
   };
 
+  // 测速补全 detail 后，同步更新 availableSources 中对应条目
+  const handleSourceDetailFetched = useCallback((updated: SearchResult) => {
+    setAvailableSources((prev) =>
+      prev.map((s) =>
+        s.source === updated.source && s.id === updated.id ? updated : s,
+      ),
+    );
+  }, []);
+
+  // 搜索更多源站后，追加到 availableSources（去重）
+  const handleAddSources = useCallback((newSources: SearchResult[]) => {
+    setAvailableSources((prev) => {
+      const existingKeys = new Set(prev.map((s) => `${s.source}-${s.id}`));
+      const unique = newSources.filter(
+        (s) => !existingKeys.has(`${s.source}-${s.id}`),
+      );
+      return unique.length > 0 ? [...prev, ...unique] : prev;
+    });
+  }, []);
+
   // ---------------------------------------------------------------------------
   // Artplayer hook
   // ---------------------------------------------------------------------------
@@ -614,6 +663,20 @@ function PlayPageClient() {
     requestWakeLock,
     releaseWakeLock,
     cleanupPlayer,
+    onCurrentSourceVideoInfo: useCallback(
+      (info: { quality: string; loadSpeed: string; pingTime: number }) => {
+        const src = currentSourceRef.current;
+        const id = currentIdRef.current;
+        if (!src || !id) return;
+        const key = `${src}-${id}`;
+        setPrecomputedVideoInfo((prev) => {
+          const next = new Map(prev);
+          next.set(key, info);
+          return next;
+        });
+      },
+      [],
+    ),
   });
 
   // ---------------------------------------------------------------------------
@@ -676,6 +739,8 @@ function PlayPageClient() {
       onToggleFavorite={handleToggleFavorite}
       videoCover={videoCover}
       videoDoubanId={videoDoubanId}
+      onSourceDetailFetched={handleSourceDetailFetched}
+      onAddSources={handleAddSources}
     />
   );
 }

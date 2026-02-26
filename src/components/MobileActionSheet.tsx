@@ -249,7 +249,17 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
       return;
     }
 
-    const handleScrollClose = () => {
+    const isEventFromPanel = (event: Event) => {
+      if (!panelRef.current) {
+        return false;
+      }
+      return panelRef.current.contains(event.target as Node);
+    };
+
+    const handleScrollClose = (event: Event) => {
+      if (isEventFromPanel(event)) {
+        return;
+      }
       onClose();
     };
 

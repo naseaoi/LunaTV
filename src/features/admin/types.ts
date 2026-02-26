@@ -20,6 +20,7 @@ export interface DataSource {
   detail?: string;
   disabled?: boolean;
   from: 'config' | 'custom';
+  proxyMode?: 'server' | 'browser';
 }
 
 // 直播源数据类型

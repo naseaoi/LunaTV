@@ -3,31 +3,38 @@ import Hls from 'hls.js';
 /**
  * 从m3u8地址获取视频质量等级和网络信息
  * @param m3u8Url m3u8播放列表的URL
+ * @param useProxy 是否走服务端代理（默认 true，兼容旧调用）
  * @returns Promise<{quality: string, loadSpeed: string, pingTime: number}> 视频质量等级和网络信息
  */
-export async function getVideoResolutionFromM3u8(m3u8Url: string): Promise<{
+export async function getVideoResolutionFromM3u8(
+  m3u8Url: string,
+  useProxy = true,
+): Promise<{
   quality: string; // 如720p、1080p等
   loadSpeed: string; // 自动转换为KB/s或MB/s
   pingTime: number; // 网络延迟（毫秒）
 }> {
   try {
-    // 直接使用m3u8 URL作为视频源，避免CORS问题
+    // useProxy=true 走服务端代理；false 走 allowCORS 模式（浏览器直连 ts 片段）
+    const proxyUrl = useProxy
+      ? `/api/proxy/m3u8?url=${encodeURIComponent(m3u8Url)}`
+      : `/api/proxy/m3u8?url=${encodeURIComponent(m3u8Url)}&allowCORS=true`;
+
     return new Promise((resolve, reject) => {
       const video = document.createElement('video');
       video.muted = true;
       video.preload = 'metadata';
 
-      // 测量网络延迟（ping时间） - 使用m3u8 URL而不是ts文件
+      // 测量网络延迟（ping时间）
       const pingStart = performance.now();
       let pingTime = 0;
 
-      // 测量ping时间（使用m3u8 URL）
-      fetch(m3u8Url, { method: 'HEAD', mode: 'no-cors' })
+      fetch(proxyUrl, { method: 'HEAD' })
         .then(() => {
           pingTime = performance.now() - pingStart;
         })
         .catch(() => {
-          pingTime = performance.now() - pingStart; // 记录到失败为止的时间
+          pingTime = performance.now() - pingStart;
         });
 
       // 固定使用hls.js加载
@@ -147,7 +154,7 @@ export async function getVideoResolutionFromM3u8(m3u8Url: string): Promise<{
         }
       });
 
-      hls.loadSource(m3u8Url);
+      hls.loadSource(proxyUrl);
       hls.attachMedia(video);
 
       // 监听hls.js错误
