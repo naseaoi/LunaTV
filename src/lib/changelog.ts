@@ -11,6 +11,15 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '100.2.2',
+    date: '2026-02-27',
+    added: [
+      // 无新增内容
+    ],
+    changed: ['优化搜索和换源面板的体验', '全面优化封面处理逻辑'],
+    fixed: ['修复换源面板的测速错误问题'],
+  },
+  {
     version: '100.2.1',
     date: '2026-02-26',
     added: [

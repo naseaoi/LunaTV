@@ -23,6 +23,8 @@ interface EpisodeSelectorProps {
   currentSource?: string;
   currentId?: string;
   videoTitle?: string;
+  /** 搜索关键词（来自聚合搜索的原始关键词），透传给 SourcesTab */
+  searchKeyword?: string;
   availableSources?: SearchResult[];
   sourceSearchLoading?: boolean;
   sourceSearchError?: string | null;
@@ -52,6 +54,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   currentSource,
   currentId,
   videoTitle,
+  searchKeyword,
   availableSources = [],
   sourceSearchLoading = false,
   sourceSearchError = null,
@@ -138,6 +141,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
           currentSource={currentSource}
           currentId={currentId}
           videoTitle={videoTitle}
+          searchKeyword={searchKeyword}
           onSourceChange={onSourceChange}
           precomputedVideoInfo={precomputedVideoInfo}
           onSourceDetailFetched={onSourceDetailFetched}

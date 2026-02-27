@@ -549,7 +549,8 @@ export function PlayMainContent(props: PlayMainContentProps) {
               onSourceChange={onSourceChange}
               currentSource={currentSource}
               currentId={currentId}
-              videoTitle={searchTitle || videoTitle}
+              videoTitle={videoTitle}
+              searchKeyword={searchTitle}
               availableSources={availableSources}
               sourceSearchLoading={sourceSearchLoading}
               sourceSearchError={sourceSearchError}

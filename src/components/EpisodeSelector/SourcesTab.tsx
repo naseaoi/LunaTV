@@ -30,6 +30,8 @@ interface SourcesTabProps {
   currentSource?: string;
   currentId?: string;
   videoTitle?: string;
+  /** 搜索关键词（来自聚合搜索的原始关键词），用于"搜索更多源站"时扩大搜索范围 */
+  searchKeyword?: string;
   onSourceChange?: (source: string, id: string, title: string) => void;
   precomputedVideoInfo?: Map<string, VideoInfo>;
   /** 测速前补全 detail 后，通知父组件更新 availableSources 中对应条目 */
@@ -46,6 +48,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
   currentSource,
   currentId,
   videoTitle,
+  searchKeyword,
   onSourceChange,
   precomputedVideoInfo,
   onSourceDetailFetched,
@@ -145,6 +148,17 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
       if (!force && attemptedSourcesRef.current.has(sourceKey)) return;
       if (testingSourcesRef.current.has(sourceKey)) return;
 
+      testingSourcesRef.current.add(sourceKey);
+
+      // 立即写入"测量中..."临时状态，让 UI 显示"检测中"
+      setVideoInfoMap((prev) =>
+        new Map(prev).set(sourceKey, {
+          quality: '未知',
+          loadSpeed: '测量中...',
+          pingTime: 0,
+        }),
+      );
+
       // episodes 为空（如 giri 搜索阶段的残缺数据），先调 detail 补全
       let resolvedSource = source;
       if (!source.episodes || source.episodes.length === 0) {
@@ -160,15 +174,26 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
             }
           }
         } catch {
-          // 补全失败，跳过测速
+          // 补全失败
         }
         if (!resolvedSource.episodes || resolvedSource.episodes.length === 0) {
+          // detail 补全失败，标记为已尝试并写入错误状态
+          const info: VideoInfo = {
+            quality: '未知',
+            loadSpeed: '未知',
+            pingTime: 0,
+            hasError: true,
+          };
+          videoInfoCache.set(sourceKey, { info, ts: Date.now() });
+          setVideoInfoMap((prev) => new Map(prev).set(sourceKey, info));
+          setAttemptedSources((prev) => new Set(prev).add(sourceKey));
+          attemptedSourcesRef.current.add(sourceKey);
+          testingSourcesRef.current.delete(sourceKey);
           return;
         }
       }
 
       const episodeUrl = resolvedSource.episodes[0];
-      testingSourcesRef.current.add(sourceKey);
 
       try {
         const inflight = inFlightVideoInfo.get(sourceKey);
@@ -565,7 +590,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
                   >
                     {videoInfo.quality === '错误'
                       ? '检测失败 · 重试'
-                      : '未测速 · 重试'}
+                      : '开始测速'}
                   </span>
                 ) : optimizationEnabled ? (
                   <div className='flex items-center gap-1.5 text-[10px]'>
@@ -652,8 +677,11 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
               setIsSearchingMore(true);
               setSearchMoreDone(false);
               try {
+                // 搜索时用 searchKeyword 扩大范围（如聚合搜索的原始关键词），
+                // 过滤时始终用 videoTitle 精确匹配，避免混入同系列其他作品
+                const query = searchKeyword || videoTitle;
                 const res = await fetch(
-                  `/api/search?q=${encodeURIComponent(videoTitle.trim())}`,
+                  `/api/search?q=${encodeURIComponent(query.trim())}`,
                 );
                 if (!res.ok) throw new Error('搜索失败');
                 const data = await res.json();
