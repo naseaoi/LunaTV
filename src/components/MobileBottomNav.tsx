@@ -40,25 +40,31 @@ const MobileBottomNav = ({ activePath }: MobileBottomNavProps) => {
       label: '综艺',
       href: '/douban?type=show',
     },
-    {
-      icon: Radio,
-      label: '直播',
-      href: '/live',
-    },
   ]);
 
   useEffect(() => {
     const runtimeConfig = window.RUNTIME_CONFIG;
-    if ((runtimeConfig?.CUSTOM_CATEGORIES?.length ?? 0) > 0) {
-      setNavItems((prevItems) => [
-        ...prevItems,
-        {
-          icon: Star,
-          label: '自定义',
-          href: '/douban?type=custom',
-        },
-      ]);
+    const nextItems = [
+      { icon: Home, label: '首页', href: '/' },
+      { icon: Film, label: '电影', href: '/douban?type=movie' },
+      { icon: Tv, label: '剧集', href: '/douban?type=tv' },
+      { icon: Cat, label: '动漫', href: '/douban?type=anime' },
+      { icon: Clover, label: '综艺', href: '/douban?type=show' },
+    ];
+
+    if (runtimeConfig?.ENABLE_LIVE_ENTRY) {
+      nextItems.push({ icon: Radio, label: '直播', href: '/live' });
     }
+
+    if ((runtimeConfig?.CUSTOM_CATEGORIES?.length ?? 0) > 0) {
+      nextItems.push({
+        icon: Star,
+        label: '自定义',
+        href: '/douban?type=custom',
+      });
+    }
+
+    setNavItems(nextItems);
   }, []);
 
   const isActive = (href: string) => {
@@ -77,7 +83,7 @@ const MobileBottomNav = ({ activePath }: MobileBottomNavProps) => {
 
   return (
     <nav
-      className='md:hidden fixed left-0 right-0 z-[600] bg-white/90 backdrop-blur-xl border-t border-gray-200/50 overflow-hidden dark:bg-gray-900/80 dark:border-gray-700/50'
+      className='fixed left-0 right-0 z-[600] overflow-hidden border-t border-gray-200/50 bg-white/90 backdrop-blur-xl dark:border-gray-700/50 dark:bg-gray-900/80 md:hidden'
       style={{
         /* 紧贴视口底部，同时在内部留出安全区高度 */
         bottom: 0,
@@ -85,7 +91,7 @@ const MobileBottomNav = ({ activePath }: MobileBottomNavProps) => {
         minHeight: 'calc(3.5rem + env(safe-area-inset-bottom))',
       }}
     >
-      <ul className='flex items-center overflow-x-auto scrollbar-hide'>
+      <ul className='scrollbar-hide flex items-center overflow-x-auto'>
         {navItems.map((item) => {
           const active = isActive(item.href);
           return (
@@ -96,7 +102,7 @@ const MobileBottomNav = ({ activePath }: MobileBottomNavProps) => {
             >
               <Link
                 href={item.href}
-                className='flex flex-col items-center justify-center w-full h-14 gap-1 text-xs'
+                className='flex h-14 w-full flex-col items-center justify-center gap-1 text-xs'
               >
                 <item.icon
                   className={`h-6 w-6 ${

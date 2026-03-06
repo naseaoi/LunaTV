@@ -6,6 +6,7 @@ import {
   Database,
   FileText,
   FolderOpen,
+  Loader2,
   Settings,
   Tv,
   Users,
@@ -91,18 +92,23 @@ function AdminPageClient() {
   if (loading) {
     return (
       <PageLayout activePath='/admin'>
-        <div className='px-2 sm:px-10 py-4 sm:py-8'>
-          <div className='max-w-[95%] mx-auto'>
-            <h1 className='text-2xl font-bold text-gray-900 dark:text-gray-100 mb-8'>
+        <div className='px-2 py-4 sm:px-10 sm:py-8'>
+          <div className='mx-auto max-w-[95%]'>
+            <h1 className='mb-8 text-2xl font-bold text-gray-900 dark:text-gray-100'>
               管理员设置
             </h1>
-            <div className='space-y-4'>
-              {Array.from({ length: 3 }).map((_, index) => (
-                <div
-                  key={index}
-                  className='h-20 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse'
-                />
-              ))}
+            <div className='flex min-h-[320px] items-center justify-center rounded-xl border border-gray-200 bg-white/80 backdrop-blur-md dark:border-gray-700 dark:bg-gray-800/50'>
+              <div className='flex flex-col items-center gap-4 text-center'>
+                <Loader2 className='h-10 w-10 animate-spin text-green-500' />
+                <div>
+                  <p className='text-base font-medium text-gray-900 dark:text-gray-100'>
+                    正在加载后台配置
+                  </p>
+                  <p className='mt-1 text-sm text-gray-500 dark:text-gray-400'>
+                    请稍候片刻...
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -117,17 +123,17 @@ function AdminPageClient() {
 
   return (
     <PageLayout activePath='/admin'>
-      <div className='px-2 sm:px-10 py-4 sm:py-8'>
-        <div className='max-w-[95%] mx-auto'>
+      <div className='px-2 py-4 sm:px-10 sm:py-8'>
+        <div className='mx-auto max-w-[95%]'>
           {/* 标题 + 重置配置按钮 */}
-          <div className='flex items-center gap-2 mb-8'>
+          <div className='mb-8 flex items-center gap-2'>
             <h1 className='text-2xl font-bold text-gray-900 dark:text-gray-100'>
               管理员设置
             </h1>
             {config && isOwner(role) && (
               <button
                 onClick={handleResetConfig}
-                className={`px-3 py-1 text-xs rounded-md transition-colors ${buttonStyles.dangerSmall}`}
+                className={`rounded-md px-3 py-1 text-xs transition-colors ${buttonStyles.dangerSmall}`}
               >
                 重置配置
               </button>
@@ -269,10 +275,10 @@ function AdminPageClient() {
         }`}
         cancelClassName={`px-6 py-2.5 text-sm font-medium ${buttonStyles.secondary}`}
       >
-        <div className='bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-4'>
-          <div className='flex items-center space-x-2 mb-2'>
+        <div className='mb-4 rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-900/20'>
+          <div className='mb-2 flex items-center space-x-2'>
             <svg
-              className='w-5 h-5 text-yellow-600 dark:text-yellow-400'
+              className='h-5 w-5 text-yellow-600 dark:text-yellow-400'
               fill='none'
               stroke='currentColor'
               viewBox='0 0 24 24'

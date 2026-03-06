@@ -13,6 +13,7 @@ export interface RuntimeConfig {
   DOUBAN_IMAGE_PROXY_TYPE: string;
   DOUBAN_IMAGE_PROXY: string;
   DISABLE_YELLOW_FILTER: boolean;
+  ENABLE_LIVE_ENTRY: boolean;
   CUSTOM_CATEGORIES: { name: string; type: 'movie' | 'tv'; query: string }[];
   FLUID_SEARCH: boolean;
 }

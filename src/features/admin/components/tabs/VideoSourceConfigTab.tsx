@@ -35,6 +35,157 @@ import { DataSource } from '@/features/admin/types';
 import { AdminConfig } from '@/features/admin/types/api';
 import { useModalState } from '@/hooks/useModalState';
 
+type SourceValidationStatus = {
+  text: string;
+  className: string;
+  icon: string;
+  message: string;
+};
+
+interface SortableSourceRowProps {
+  source: DataSource;
+  isSelected: boolean;
+  validationStatus: SourceValidationStatus | null;
+  isProxyModeLoading: boolean;
+  isToggleLoading: boolean;
+  isDeleteLoading: boolean;
+  onSelectSource: (key: string, checked: boolean) => void;
+  onToggleProxyMode: (key: string) => void;
+  onToggleEnable: (key: string) => void;
+  onDelete: (key: string) => void;
+}
+
+function SortableSourceRow({
+  source,
+  isSelected,
+  validationStatus,
+  isProxyModeLoading,
+  isToggleLoading,
+  isDeleteLoading,
+  onSelectSource,
+  onToggleProxyMode,
+  onToggleEnable,
+  onDelete,
+}: SortableSourceRowProps) {
+  const { attributes, listeners, setNodeRef, transform, transition } =
+    useSortable({ id: source.key });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  } as React.CSSProperties;
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className='select-none transition-colors hover:bg-gray-50 dark:hover:bg-gray-800'
+    >
+      <td
+        className='cursor-grab px-2 py-4 text-gray-400'
+        style={{ touchAction: 'none' }}
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical size={16} />
+      </td>
+      <td className='px-2 py-4 text-center'>
+        <input
+          type='checkbox'
+          checked={isSelected}
+          onChange={(e) => onSelectSource(source.key, e.target.checked)}
+          className='h-4 w-4 rounded border-gray-300 bg-gray-100 text-blue-600 accent-blue-600 checked:border-blue-600 checked:bg-blue-600 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:accent-blue-500 dark:ring-offset-gray-800 dark:checked:border-blue-500 dark:checked:bg-blue-500 dark:focus:ring-blue-600'
+        />
+      </td>
+      <td className='whitespace-nowrap px-6 py-4 text-sm text-gray-900 dark:text-gray-100'>
+        {source.name}
+      </td>
+      <td className='whitespace-nowrap px-6 py-4 text-sm text-gray-900 dark:text-gray-100'>
+        {source.key}
+      </td>
+      <td
+        className='max-w-[12rem] truncate whitespace-nowrap px-6 py-4 text-sm text-gray-900 dark:text-gray-100'
+        title={source.api}
+      >
+        {source.api}
+      </td>
+      <td
+        className='max-w-[8rem] truncate whitespace-nowrap px-6 py-4 text-sm text-gray-900 dark:text-gray-100'
+        title={source.detail || '-'}
+      >
+        {source.detail || '-'}
+      </td>
+      <td className='max-w-[1rem] whitespace-nowrap px-6 py-4'>
+        <span
+          className={`rounded-full px-2 py-1 text-xs ${
+            !source.disabled
+              ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300'
+              : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300'
+          }`}
+        >
+          {!source.disabled ? '启用中' : '已禁用'}
+        </span>
+      </td>
+      <td className='whitespace-nowrap px-6 py-4'>
+        <button
+          onClick={() => onToggleProxyMode(source.key)}
+          disabled={isProxyModeLoading}
+          className={`rounded-full px-2 py-1 text-xs transition-colors ${
+            source.proxyMode === 'server'
+              ? 'bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/40'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-900/20 dark:text-gray-400 dark:hover:bg-gray-800/40'
+          } ${isProxyModeLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+          title={
+            source.proxyMode === 'server'
+              ? '播放和测速流量走服务端代理'
+              : '播放和测速流量走浏览器直连'
+          }
+        >
+          {source.proxyMode === 'server' ? '服务端' : '浏览器'}
+        </button>
+      </td>
+      <td className='max-w-[1rem] whitespace-nowrap px-6 py-4'>
+        {validationStatus ? (
+          <span
+            className={`rounded-full px-2 py-1 text-xs ${validationStatus.className}`}
+            title={validationStatus.message}
+          >
+            {validationStatus.icon} {validationStatus.text}
+          </span>
+        ) : (
+          <span className='rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600 dark:bg-gray-900/20 dark:text-gray-400'>
+            未检测
+          </span>
+        )}
+      </td>
+      <td className='space-x-2 whitespace-nowrap px-6 py-4 text-right text-sm font-medium'>
+        <button
+          onClick={() => onToggleEnable(source.key)}
+          disabled={isToggleLoading}
+          className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium ${
+            !source.disabled
+              ? buttonStyles.roundedDanger
+              : buttonStyles.roundedSuccess
+          } transition-colors ${isToggleLoading ? 'cursor-not-allowed opacity-50' : ''}`}
+        >
+          {!source.disabled ? '禁用' : '启用'}
+        </button>
+        {source.from !== 'config' && (
+          <button
+            onClick={() => onDelete(source.key)}
+            disabled={isDeleteLoading}
+            className={`${buttonStyles.roundedSecondary} ${
+              isDeleteLoading ? 'cursor-not-allowed opacity-50' : ''
+            }`}
+          >
+            删除
+          </button>
+        )}
+      </td>
+    </tr>
+  );
+}
+
 const VideoSourceConfig = ({
   config,
   refreshConfig,
@@ -412,139 +563,6 @@ const VideoSourceConfig = ({
     }
   };
 
-  // 可拖拽行封装 (dnd-kit)
-  const DraggableRow = ({ source }: { source: DataSource }) => {
-    const { attributes, listeners, setNodeRef, transform, transition } =
-      useSortable({ id: source.key });
-
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-    } as React.CSSProperties;
-
-    return (
-      <tr
-        ref={setNodeRef}
-        style={style}
-        className='select-none transition-colors hover:bg-gray-50 dark:hover:bg-gray-800'
-      >
-        <td
-          className='cursor-grab px-2 py-4 text-gray-400'
-          style={{ touchAction: 'none' }}
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical size={16} />
-        </td>
-        <td className='px-2 py-4 text-center'>
-          <input
-            type='checkbox'
-            checked={selectedSources.has(source.key)}
-            onChange={(e) => handleSelectSource(source.key, e.target.checked)}
-            className='h-4 w-4 rounded border-gray-300 bg-gray-100 text-blue-600 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:ring-offset-gray-800 dark:focus:ring-blue-600'
-          />
-        </td>
-        <td className='whitespace-nowrap px-6 py-4 text-sm text-gray-900 dark:text-gray-100'>
-          {source.name}
-        </td>
-        <td className='whitespace-nowrap px-6 py-4 text-sm text-gray-900 dark:text-gray-100'>
-          {source.key}
-        </td>
-        <td
-          className='max-w-[12rem] truncate whitespace-nowrap px-6 py-4 text-sm text-gray-900 dark:text-gray-100'
-          title={source.api}
-        >
-          {source.api}
-        </td>
-        <td
-          className='max-w-[8rem] truncate whitespace-nowrap px-6 py-4 text-sm text-gray-900 dark:text-gray-100'
-          title={source.detail || '-'}
-        >
-          {source.detail || '-'}
-        </td>
-        <td className='max-w-[1rem] whitespace-nowrap px-6 py-4'>
-          <span
-            className={`rounded-full px-2 py-1 text-xs ${
-              !source.disabled
-                ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300'
-                : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300'
-            }`}
-          >
-            {!source.disabled ? '启用中' : '已禁用'}
-          </span>
-        </td>
-        <td className='whitespace-nowrap px-6 py-4'>
-          <button
-            onClick={() => handleToggleProxyMode(source.key)}
-            disabled={isLoading(`proxyMode_${source.key}`)}
-            className={`rounded-full px-2 py-1 text-xs transition-colors ${
-              source.proxyMode === 'server'
-                ? 'bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/40'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-900/20 dark:text-gray-400 dark:hover:bg-gray-800/40'
-            } ${isLoading(`proxyMode_${source.key}`) ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-            title={
-              source.proxyMode === 'server'
-                ? '播放和测速流量走服务端代理'
-                : '播放和测速流量走浏览器直连'
-            }
-          >
-            {source.proxyMode === 'server' ? '服务端' : '浏览器'}
-          </button>
-        </td>
-        <td className='max-w-[1rem] whitespace-nowrap px-6 py-4'>
-          {(() => {
-            const status = getValidationStatus(source.key);
-            if (!status) {
-              return (
-                <span className='rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600 dark:bg-gray-900/20 dark:text-gray-400'>
-                  未检测
-                </span>
-              );
-            }
-            return (
-              <span
-                className={`rounded-full px-2 py-1 text-xs ${status.className}`}
-                title={status.message}
-              >
-                {status.icon} {status.text}
-              </span>
-            );
-          })()}
-        </td>
-        <td className='space-x-2 whitespace-nowrap px-6 py-4 text-right text-sm font-medium'>
-          <button
-            onClick={() => handleToggleEnable(source.key)}
-            disabled={isLoading(`toggleSource_${source.key}`)}
-            className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium ${
-              !source.disabled
-                ? buttonStyles.roundedDanger
-                : buttonStyles.roundedSuccess
-            } transition-colors ${
-              isLoading(`toggleSource_${source.key}`)
-                ? 'cursor-not-allowed opacity-50'
-                : ''
-            }`}
-          >
-            {!source.disabled ? '禁用' : '启用'}
-          </button>
-          {source.from !== 'config' && (
-            <button
-              onClick={() => handleDelete(source.key)}
-              disabled={isLoading(`deleteSource_${source.key}`)}
-              className={`${buttonStyles.roundedSecondary} ${
-                isLoading(`deleteSource_${source.key}`)
-                  ? 'cursor-not-allowed opacity-50'
-                  : ''
-              }`}
-            >
-              删除
-            </button>
-          )}
-        </td>
-      </tr>
-    );
-  };
-
   // 全选/取消全选
   const handleSelectAll = useCallback(
     (checked: boolean) => {
@@ -819,7 +837,7 @@ const VideoSourceConfig = ({
                     type='checkbox'
                     checked={selectAll}
                     onChange={(e) => handleSelectAll(e.target.checked)}
-                    className='h-4 w-4 rounded border-gray-300 bg-gray-100 text-blue-600 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:ring-offset-gray-800 dark:focus:ring-blue-600'
+                    className='h-4 w-4 rounded border-gray-300 bg-gray-100 text-blue-600 accent-blue-600 checked:border-blue-600 checked:bg-blue-600 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:accent-blue-500 dark:ring-offset-gray-800 dark:checked:border-blue-500 dark:checked:bg-blue-500 dark:focus:ring-blue-600'
                   />
                 </th>
                 <th className='px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400'>
@@ -854,7 +872,19 @@ const VideoSourceConfig = ({
             >
               <tbody className='divide-y divide-gray-200 dark:divide-gray-700'>
                 {sources.map((source) => (
-                  <DraggableRow key={source.key} source={source} />
+                  <SortableSourceRow
+                    key={source.key}
+                    source={source}
+                    isSelected={selectedSources.has(source.key)}
+                    validationStatus={getValidationStatus(source.key)}
+                    isProxyModeLoading={isLoading(`proxyMode_${source.key}`)}
+                    isToggleLoading={isLoading(`toggleSource_${source.key}`)}
+                    isDeleteLoading={isLoading(`deleteSource_${source.key}`)}
+                    onSelectSource={handleSelectSource}
+                    onToggleProxyMode={handleToggleProxyMode}
+                    onToggleEnable={handleToggleEnable}
+                    onDelete={handleDelete}
+                  />
                 ))}
               </tbody>
             </SortableContext>

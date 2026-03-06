@@ -208,6 +208,7 @@ async function getInitConfig(
       Announcement:
         process.env.ANNOUNCEMENT ||
         '本网站仅提供影视信息搜索服务，所有内容均来自第三方网站。本站不存储任何视频资源，不对任何内容的准确性、合法性、完整性负责。',
+      EnableLiveEntry: false,
       SearchDownstreamMaxPage:
         Number(process.env.NEXT_PUBLIC_SEARCH_MAX_PAGE) || 5,
       SiteInterfaceCacheTime: cfgFile.cache_time || 7200,
@@ -351,6 +352,7 @@ export function configSelfCheck(adminConfig: AdminConfig): AdminConfig {
       Announcement:
         process.env.ANNOUNCEMENT ||
         '本网站仅提供影视信息搜索服务，所有内容均来自第三方网站。本站不存储任何视频资源，不对任何内容的准确性、合法性、完整性负责。',
+      EnableLiveEntry: false,
       SearchDownstreamMaxPage:
         Number(process.env.NEXT_PUBLIC_SEARCH_MAX_PAGE) || 5,
       SiteInterfaceCacheTime: 7200,
@@ -368,6 +370,9 @@ export function configSelfCheck(adminConfig: AdminConfig): AdminConfig {
   // 兼容旧配置：补全 SiteIcon 字段
   if (typeof adminConfig.SiteConfig.SiteIcon !== 'string') {
     adminConfig.SiteConfig.SiteIcon = '';
+  }
+  if (typeof adminConfig.SiteConfig.EnableLiveEntry !== 'boolean') {
+    adminConfig.SiteConfig.EnableLiveEntry = false;
   }
 
   // 站长变更自检

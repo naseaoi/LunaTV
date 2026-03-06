@@ -26,6 +26,7 @@ const SiteConfigComponent = ({
     SiteName: '',
     SiteIcon: '',
     Announcement: '',
+    EnableLiveEntry: false,
     SearchDownstreamMaxPage: 1,
     SiteInterfaceCacheTime: 7200,
     DoubanProxyType: 'direct',
@@ -94,6 +95,7 @@ const SiteConfigComponent = ({
         DoubanImageProxyType:
           config.SiteConfig.DoubanImageProxyType || 'cmliussss-cdn-tencent',
         DoubanImageProxy: config.SiteConfig.DoubanImageProxy || '',
+        EnableLiveEntry: config.SiteConfig.EnableLiveEntry || false,
         DisableYellowFilter: config.SiteConfig.DisableYellowFilter || false,
         FluidSearch: config.SiteConfig.FluidSearch || true,
       });
@@ -193,7 +195,7 @@ const SiteConfigComponent = ({
                     setIconPreview(url);
                   }}
                   placeholder='输入图标 URL 或上传文件'
-                  className='min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
+                  className='min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
                 />
                 <button
                   type='button'
@@ -455,74 +457,107 @@ const SiteConfigComponent = ({
       </div>
 
       <div className='grid grid-cols-1 gap-6 md:grid-cols-2'>
-        <div>
-          <div className='flex items-center justify-between'>
-            <label className='mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300'>
-              NSFW模式
-            </label>
-            <button
-              type='button'
-              onClick={() =>
-                setSiteSettings((prev) => ({
-                  ...prev,
-                  DisableYellowFilter: !prev.DisableYellowFilter,
-                }))
-              }
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${
-                siteSettings.DisableYellowFilter
-                  ? buttonStyles.toggleOn
-                  : buttonStyles.toggleOff
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full ${
-                  buttonStyles.toggleThumb
-                } transition-transform ${
-                  siteSettings.DisableYellowFilter
-                    ? buttonStyles.toggleThumbOn
-                    : buttonStyles.toggleThumbOff
-                }`}
-              />
-            </button>
+        <div className='flex min-h-[96px] items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900'>
+          <div>
+            <p className='text-sm font-medium text-gray-900 dark:text-gray-100'>
+              显示直播入口
+            </p>
+            <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+              开启后，侧栏和底部导航会显示“直播”分类入口。
+            </p>
           </div>
-          <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
-            开启后，允许NSFW内容。
-          </p>
+          <button
+            type='button'
+            onClick={() =>
+              setSiteSettings((prev) => ({
+                ...prev,
+                EnableLiveEntry: !prev.EnableLiveEntry,
+              }))
+            }
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              siteSettings.EnableLiveEntry
+                ? 'bg-green-500'
+                : 'bg-gray-300 dark:bg-gray-600'
+            }`}
+            aria-label='切换直播入口显示'
+            aria-pressed={siteSettings.EnableLiveEntry}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                siteSettings.EnableLiveEntry
+                  ? 'translate-x-5'
+                  : 'translate-x-0.5'
+              }`}
+            />
+          </button>
         </div>
 
-        <div>
-          <div className='flex items-center justify-between'>
-            <label className='mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300'>
-              启用流式搜索
-            </label>
-            <button
-              type='button'
-              onClick={() =>
-                setSiteSettings((prev) => ({
-                  ...prev,
-                  FluidSearch: !prev.FluidSearch,
-                }))
-              }
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${
-                siteSettings.FluidSearch
-                  ? buttonStyles.toggleOn
-                  : buttonStyles.toggleOff
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full ${
-                  buttonStyles.toggleThumb
-                } transition-transform ${
-                  siteSettings.FluidSearch
-                    ? buttonStyles.toggleThumbOn
-                    : buttonStyles.toggleThumbOff
-                }`}
-              />
-            </button>
+        <div className='flex min-h-[96px] items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900'>
+          <div>
+            <p className='text-sm font-medium text-gray-900 dark:text-gray-100'>
+              NSFW模式
+            </p>
+            <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+              开启后，允许NSFW内容。
+            </p>
           </div>
-          <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
-            启用后搜索结果将实时流式返回，提升用户体验。
-          </p>
+          <button
+            type='button'
+            onClick={() =>
+              setSiteSettings((prev) => ({
+                ...prev,
+                DisableYellowFilter: !prev.DisableYellowFilter,
+              }))
+            }
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              siteSettings.DisableYellowFilter
+                ? 'bg-green-500'
+                : 'bg-gray-300 dark:bg-gray-600'
+            }`}
+            aria-label='切换NSFW模式'
+            aria-pressed={siteSettings.DisableYellowFilter}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                siteSettings.DisableYellowFilter
+                  ? 'translate-x-5'
+                  : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </div>
+
+        <div className='flex min-h-[96px] items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900'>
+          <div>
+            <p className='text-sm font-medium text-gray-900 dark:text-gray-100'>
+              启用流式搜索
+            </p>
+            <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+              启用后搜索结果将实时流式返回，提升用户体验。
+            </p>
+          </div>
+          <button
+            type='button'
+            onClick={() =>
+              setSiteSettings((prev) => ({
+                ...prev,
+                FluidSearch: !prev.FluidSearch,
+              }))
+            }
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              siteSettings.FluidSearch
+                ? 'bg-green-500'
+                : 'bg-gray-300 dark:bg-gray-600'
+            }`}
+            aria-label='切换流式搜索'
+            aria-pressed={siteSettings.FluidSearch}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                siteSettings.FluidSearch ? 'translate-x-5' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
         </div>
       </div>
 

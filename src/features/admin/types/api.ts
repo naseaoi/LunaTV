@@ -9,6 +9,7 @@ export interface AdminConfig {
     SiteName: string;
     SiteIcon: string;
     Announcement: string;
+    EnableLiveEntry: boolean;
     SearchDownstreamMaxPage: number;
     SiteInterfaceCacheTime: number;
     DoubanProxyType: string;

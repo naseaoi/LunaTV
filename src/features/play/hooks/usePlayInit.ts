@@ -162,6 +162,35 @@ export function updateVideoUrl(
   }
 }
 
+function mergeSourceResult(
+  preferred: SearchResult,
+  fallback?: SearchResult,
+): SearchResult {
+  return {
+    ...fallback,
+    ...preferred,
+    title: preferred.title || fallback?.title || '',
+    poster: preferred.poster || fallback?.poster || '',
+    episodes:
+      preferred.episodes && preferred.episodes.length > 0
+        ? preferred.episodes
+        : fallback?.episodes || [],
+    episodes_titles:
+      preferred.episodes_titles && preferred.episodes_titles.length > 0
+        ? preferred.episodes_titles
+        : fallback?.episodes_titles || [],
+    source_name: preferred.source_name || fallback?.source_name || '',
+    year:
+      preferred.year && preferred.year !== 'unknown'
+        ? preferred.year
+        : fallback?.year || preferred.year,
+    class: preferred.class || fallback?.class,
+    desc: preferred.desc || fallback?.desc,
+    type_name: preferred.type_name || fallback?.type_name,
+    douban_id: preferred.douban_id || fallback?.douban_id,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // usePlayInit — 入口初始化 hook
 // ---------------------------------------------------------------------------
@@ -235,7 +264,7 @@ export function usePlayInit({
     const fetchSourceDetail = async (
       source: string,
       id: string,
-    ): Promise<SearchResult[]> => {
+    ): Promise<SearchResult | null> => {
       try {
         const detailResponse = await fetch(
           `/api/detail?source=${source}&id=${id}`,
@@ -244,11 +273,10 @@ export function usePlayInit({
           throw new Error('获取视频详情失败');
         }
         const detailData = (await detailResponse.json()) as SearchResult;
-        setAvailableSources([detailData]);
-        return [detailData];
+        return detailData;
       } catch (err) {
         console.error('获取视频详情失败:', err);
-        return [];
+        return null;
       } finally {
         setSourceSearchLoading(false);
       }
@@ -326,19 +354,28 @@ export function usePlayInit({
         sourcesInfo = await fetchSourcesData(searchTitle || videoTitle);
       }
       if (currentSource && currentId) {
-        const detailedSources = await fetchSourceDetail(
+        const detailedSource = await fetchSourceDetail(
           currentSource,
           currentId,
         );
-        if (detailedSources.length > 0) {
+        if (detailedSource) {
+          const matchedSource = sourcesInfo.find(
+            (source) =>
+              source.source === currentSource && source.id === currentId,
+          );
+          const mergedCurrentSource = mergeSourceResult(
+            detailedSource,
+            matchedSource,
+          );
           sourcesInfo = [
-            detailedSources[0],
+            mergedCurrentSource,
             ...sourcesInfo.filter(
               (source) =>
                 !(source.source === currentSource && source.id === currentId),
             ),
           ];
         }
+        setAvailableSources(sourcesInfo);
       }
       if (sourcesInfo.length === 0) {
         setError('未找到匹配结果');
@@ -382,8 +419,19 @@ export function usePlayInit({
           detailData.source,
           detailData.id,
         );
-        if (fullDetail.length > 0) {
-          detailData = fullDetail[0];
+        if (fullDetail) {
+          detailData = mergeSourceResult(fullDetail, detailData);
+          sourcesInfo = [
+            detailData,
+            ...sourcesInfo.filter(
+              (source) =>
+                !(
+                  source.source === detailData.source &&
+                  source.id === detailData.id
+                ),
+            ),
+          ];
+          setAvailableSources(sourcesInfo);
         }
       }
 

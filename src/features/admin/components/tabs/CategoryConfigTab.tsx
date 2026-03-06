@@ -23,6 +23,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import AdminSelect from '@/features/admin/components/AdminSelect';
 import AlertModal from '@/features/admin/components/AlertModal';
 import { useAlertModal } from '@/features/admin/hooks/useAlertModal';
 import { useAdminSourceActions } from '@/features/admin/hooks/useAdminSourceActions';
@@ -56,6 +57,11 @@ const CategoryConfig = ({
     disabled: false,
     from: 'config',
   });
+
+  const categoryTypeOptions = [
+    { value: 'movie', label: '电影' },
+    { value: 'tv', label: '电视剧' },
+  ];
 
   // dnd-kit 传感器
   const sensors = useSensors(
@@ -279,19 +285,16 @@ const CategoryConfig = ({
               }
               className='rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
             />
-            <select
+            <AdminSelect
               value={newCategory.type}
-              onChange={(e) =>
+              onChange={(value) =>
                 setNewCategory((prev) => ({
                   ...prev,
-                  type: e.target.value as 'movie' | 'tv',
+                  type: value as 'movie' | 'tv',
                 }))
               }
-              className='rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
-            >
-              <option value='movie'>电影</option>
-              <option value='tv'>电视剧</option>
-            </select>
+              options={categoryTypeOptions}
+            />
             <input
               type='text'
               placeholder='搜索关键词'

@@ -500,12 +500,12 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
 
   return (
     <div className='space-y-6'>
-      <div className='grid grid-cols-1 lg:grid-cols-2 gap-4 mb-1'>
+      <div className='mb-1 grid grid-cols-1 gap-4 lg:grid-cols-2'>
         <div>
-          <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300 mb-3'>
+          <h4 className='mb-3 text-sm font-medium text-gray-700 dark:text-gray-300'>
             用户统计
           </h4>
-          <div className='p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800 min-h-[96px]'>
+          <div className='min-h-[96px] rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20'>
             <div className='text-2xl font-bold text-green-800 dark:text-green-300'>
               {config.UserConfig.Users.length}
             </div>
@@ -515,15 +515,15 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
           </div>
         </div>
         <div>
-          <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300 mb-3'>
+          <h4 className='mb-3 text-sm font-medium text-gray-700 dark:text-gray-300'>
             注册设置
           </h4>
-          <div className='p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between gap-4 min-h-[96px]'>
+          <div className='flex min-h-[96px] items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900'>
             <div>
               <p className='text-sm font-medium text-gray-900 dark:text-gray-100'>
                 开放注册
               </p>
-              <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+              <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
                 开启后，未注册用户可通过注册接口自行创建账号。
               </p>
             </div>
@@ -535,7 +535,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                 config.UserConfig.OpenRegister
                   ? 'bg-green-500'
                   : 'bg-gray-300 dark:bg-gray-600'
-              } ${isLoading('setOpenRegister') ? 'opacity-50 cursor-not-allowed' : ''}`}
+              } ${isLoading('setOpenRegister') ? 'cursor-not-allowed opacity-50' : ''}`}
               aria-label='切换开放注册'
               aria-pressed={!!config.UserConfig.OpenRegister}
             >
@@ -553,7 +553,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
 
       {/* 用户组管理 */}
       <div>
-        <div className='flex items-center justify-between mb-3'>
+        <div className='mb-3 flex items-center justify-between'>
           <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>
             用户组管理
           </h4>
@@ -576,17 +576,17 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
         </div>
 
         {/* 用户组列表 */}
-        <div className='border border-gray-200 dark:border-gray-700 rounded-lg max-h-[20rem] overflow-y-auto overflow-x-auto relative'>
+        <div className='relative max-h-[20rem] overflow-x-auto overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700'>
           <table className='min-w-full divide-y divide-gray-200 dark:divide-gray-700'>
-            <thead className='bg-gray-50 dark:bg-gray-900 sticky top-0 z-10'>
+            <thead className='sticky top-0 z-10 bg-gray-50 dark:bg-gray-900'>
               <tr>
-                <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'>
+                <th className='px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400'>
                   用户组名称
                 </th>
-                <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'>
+                <th className='px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400'>
                   可用视频源
                 </th>
-                <th className='px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'>
+                <th className='px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400'>
                   操作
                 </th>
               </tr>
@@ -595,12 +595,12 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
               {userGroups.map((group) => (
                 <tr
                   key={group.name}
-                  className='hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors'
+                  className='transition-colors hover:bg-gray-50 dark:hover:bg-gray-800'
                 >
-                  <td className='px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100'>
+                  <td className='whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100'>
                     {group.name}
                   </td>
-                  <td className='px-6 py-4 whitespace-nowrap'>
+                  <td className='whitespace-nowrap px-6 py-4'>
                     <div className='flex items-center space-x-2'>
                       <span className='text-sm text-gray-900 dark:text-gray-100'>
                         {group.enabledApis && group.enabledApis.length > 0
@@ -609,13 +609,13 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                       </span>
                     </div>
                   </td>
-                  <td className='px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2'>
+                  <td className='space-x-2 whitespace-nowrap px-6 py-4 text-right text-sm font-medium'>
                     <button
                       onClick={() => handleStartEditUserGroup(group)}
                       disabled={isLoading(`userGroup_edit_${group.name}`)}
                       className={`${buttonStyles.roundedPrimary} ${
                         isLoading(`userGroup_edit_${group.name}`)
-                          ? 'opacity-50 cursor-not-allowed'
+                          ? 'cursor-not-allowed opacity-50'
                           : ''
                       }`}
                     >
@@ -647,7 +647,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
 
       {/* 用户列表 */}
       <div>
-        <div className='flex items-center justify-between mb-3'>
+        <div className='mb-3 flex items-center justify-between'>
           <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>
             用户列表
           </h4>
@@ -666,7 +666,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                     批量设置用户组
                   </button>
                 </div>
-                <div className='w-px h-6 bg-gray-300 dark:bg-gray-600'></div>
+                <div className='h-6 w-px bg-gray-300 dark:bg-gray-600'></div>
               </>
             )}
             <button
@@ -688,9 +688,9 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
 
         {/* 添加用户表单 */}
         {showAddUserForm && (
-          <div className='mb-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700'>
+          <div className='mb-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900'>
             <div className='space-y-4'>
-              <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+              <div className='grid grid-cols-1 gap-4 sm:grid-cols-2'>
                 <input
                   type='text'
                   placeholder='用户名'
@@ -701,7 +701,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                       username: e.target.value,
                     }))
                   }
-                  className='px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
+                  className='rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
                 />
                 <input
                   type='password'
@@ -713,11 +713,11 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                       password: e.target.value,
                     }))
                   }
-                  className='px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
+                  className='rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
                 />
               </div>
               <div>
-                <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+                <label className='mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300'>
                   用户组（可选）
                 </label>
                 <AdminSelect
@@ -767,17 +767,17 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
 
         {/* 修改密码表单 */}
         {showChangePasswordForm && (
-          <div className='mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700'>
-            <h5 className='text-sm font-medium text-blue-800 dark:text-blue-300 mb-3'>
+          <div className='mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-700 dark:bg-blue-900/20'>
+            <h5 className='mb-3 text-sm font-medium text-blue-800 dark:text-blue-300'>
               修改用户密码
             </h5>
-            <div className='flex flex-col sm:flex-row gap-4 sm:gap-3'>
+            <div className='flex flex-col gap-4 sm:flex-row sm:gap-3'>
               <input
                 type='text'
                 placeholder='用户名'
                 value={changePasswordUser.username}
                 disabled
-                className='flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 cursor-not-allowed'
+                className='flex-1 cursor-not-allowed rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100'
               />
               <input
                 type='password'
@@ -789,7 +789,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                     password: e.target.value,
                   }))
                 }
-                className='flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+                className='flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
               />
               <button
                 onClick={handleChangePassword}
@@ -823,11 +823,11 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
 
         {/* 用户列表 */}
         <div
-          className='border border-gray-200 dark:border-gray-700 rounded-lg max-h-[28rem] overflow-y-auto overflow-x-auto relative'
+          className='relative max-h-[28rem] overflow-x-auto overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700'
           data-table='user-list'
         >
           <table className='min-w-full divide-y divide-gray-200 dark:divide-gray-700'>
-            <thead className='bg-gray-50 dark:bg-gray-900 sticky top-0 z-10'>
+            <thead className='sticky top-0 z-10 bg-gray-50 dark:bg-gray-900'>
               <tr>
                 <th className='w-4' />
                 <th className='w-10 px-1 py-3 text-center'>
@@ -844,46 +844,46 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                         type='checkbox'
                         checked={selectAllUsers}
                         onChange={(e) => handleSelectAllUsers(e.target.checked)}
-                        className='w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600'
+                        className='h-4 w-4 rounded border-gray-300 bg-gray-100 text-blue-600 accent-blue-600 checked:border-blue-600 checked:bg-blue-600 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:accent-blue-500 dark:ring-offset-gray-800 dark:checked:border-blue-500 dark:checked:bg-blue-500 dark:focus:ring-blue-600'
                       />
                     ) : (
-                      <div className='w-4 h-4' />
+                      <div className='h-4 w-4' />
                     );
                   })()}
                 </th>
                 <th
                   scope='col'
-                  className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'
+                  className='px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400'
                 >
                   用户名
                 </th>
                 <th
                   scope='col'
-                  className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'
+                  className='px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400'
                 >
                   角色
                 </th>
                 <th
                   scope='col'
-                  className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'
+                  className='px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400'
                 >
                   状态
                 </th>
                 <th
                   scope='col'
-                  className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'
+                  className='px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400'
                 >
                   用户组
                 </th>
                 <th
                   scope='col'
-                  className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'
+                  className='px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400'
                 >
                   采集源权限
                 </th>
                 <th
                   scope='col'
-                  className='px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'
+                  className='px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400'
                 >
                   操作
                 </th>
@@ -920,7 +920,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                     return (
                       <tr
                         key={user.username}
-                        className='hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors'
+                        className='transition-colors hover:bg-gray-50 dark:hover:bg-gray-800'
                       >
                         <td className='w-4' />
                         <td className='w-10 px-1 py-3 text-center'>
@@ -934,23 +934,23 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                                   e.target.checked,
                                 )
                               }
-                              className='w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600'
+                              className='h-4 w-4 rounded border-gray-300 bg-gray-100 text-blue-600 accent-blue-600 checked:border-blue-600 checked:bg-blue-600 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:accent-blue-500 dark:ring-offset-gray-800 dark:checked:border-blue-500 dark:checked:bg-blue-500 dark:focus:ring-blue-600'
                             />
                           ) : (
-                            <div className='w-4 h-4' />
+                            <div className='h-4 w-4' />
                           )}
                         </td>
-                        <td className='px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100'>
+                        <td className='whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100'>
                           {user.username}
                         </td>
-                        <td className='px-6 py-4 whitespace-nowrap'>
+                        <td className='whitespace-nowrap px-6 py-4'>
                           <span
-                            className={`px-2 py-1 text-xs rounded-full ${
+                            className={`rounded-full px-2 py-1 text-xs ${
                               user.role === 'owner'
-                                ? 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300'
+                                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300'
                                 : user.role === 'admin'
-                                  ? 'bg-purple-100 dark:bg-purple-900/20 text-purple-800 dark:text-purple-300'
-                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300'
+                                  : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
                             }`}
                           >
                             {user.role === 'owner'
@@ -960,18 +960,18 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                                 : '普通用户'}
                           </span>
                         </td>
-                        <td className='px-6 py-4 whitespace-nowrap'>
+                        <td className='whitespace-nowrap px-6 py-4'>
                           <span
-                            className={`px-2 py-1 text-xs rounded-full ${
+                            className={`rounded-full px-2 py-1 text-xs ${
                               !user.banned
-                                ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300'
-                                : 'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300'
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300'
+                                : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300'
                             }`}
                           >
                             {!user.banned ? '正常' : '已封禁'}
                           </span>
                         </td>
-                        <td className='px-6 py-4 whitespace-nowrap'>
+                        <td className='whitespace-nowrap px-6 py-4'>
                           <div className='flex items-center space-x-2'>
                             <span className='text-sm text-gray-900 dark:text-gray-100'>
                               {user.tags && user.tags.length > 0
@@ -989,7 +989,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                             )}
                           </div>
                         </td>
-                        <td className='px-6 py-4 whitespace-nowrap'>
+                        <td className='whitespace-nowrap px-6 py-4'>
                           <div className='flex items-center space-x-2'>
                             <span className='text-sm text-gray-900 dark:text-gray-100'>
                               {user.enabledApis && user.enabledApis.length > 0
@@ -1007,7 +1007,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                             )}
                           </div>
                         </td>
-                        <td className='px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2'>
+                        <td className='space-x-2 whitespace-nowrap px-6 py-4 text-right text-sm font-medium'>
                           {/* 修改密码按钮 */}
                           {canChangePassword && (
                             <button
@@ -1030,7 +1030,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                                   )}
                                   className={`${buttonStyles.roundedPurple} ${
                                     isLoading(`setAdmin_${user.username}`)
-                                      ? 'opacity-50 cursor-not-allowed'
+                                      ? 'cursor-not-allowed opacity-50'
                                       : ''
                                   }`}
                                 >
@@ -1049,7 +1049,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                                     buttonStyles.roundedSecondary
                                   } ${
                                     isLoading(`removeAdmin_${user.username}`)
-                                      ? 'opacity-50 cursor-not-allowed'
+                                      ? 'cursor-not-allowed opacity-50'
                                       : ''
                                   }`}
                                 >
@@ -1065,7 +1065,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                                     )}
                                     className={`${buttonStyles.roundedDanger} ${
                                       isLoading(`banUser_${user.username}`)
-                                        ? 'opacity-50 cursor-not-allowed'
+                                        ? 'cursor-not-allowed opacity-50'
                                         : ''
                                     }`}
                                   >
@@ -1083,7 +1083,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                                       buttonStyles.roundedSuccess
                                     } ${
                                       isLoading(`unbanUser_${user.username}`)
-                                        ? 'opacity-50 cursor-not-allowed'
+                                        ? 'cursor-not-allowed opacity-50'
                                         : ''
                                     }`}
                                   >
@@ -1168,7 +1168,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                         );
                       }
                     }}
-                    className='rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700'
+                    className='rounded border-gray-300 text-blue-600 accent-blue-600 checked:border-blue-600 checked:bg-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:accent-blue-500 dark:checked:border-blue-500 dark:checked:bg-blue-500'
                   />
                   <div className='min-w-0 flex-1'>
                     <div className='truncate text-sm font-medium text-gray-900 dark:text-gray-100'>
@@ -1250,7 +1250,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
         <div className='space-y-6'>
           {/* 用户组名称 */}
           <div>
-            <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
+            <label className='mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300'>
               用户组名称
             </label>
             <input
@@ -1263,20 +1263,20 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                   name: e.target.value,
                 }))
               }
-              className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+              className='w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
             />
           </div>
 
           {/* 可用视频源 */}
           <div>
-            <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-4'>
+            <label className='mb-4 block text-sm font-medium text-gray-700 dark:text-gray-300'>
               可用视频源
             </label>
-            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3'>
+            <div className='grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3'>
               {config?.SourceConfig?.map((source) => (
                 <label
                   key={source.key}
-                  className='flex items-center space-x-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors'
+                  className='flex cursor-pointer items-center space-x-3 rounded-lg border border-gray-200 p-3 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800'
                 >
                   <input
                     type='checkbox'
@@ -1296,14 +1296,14 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                         }));
                       }
                     }}
-                    className='rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700'
+                    className='rounded border-gray-300 text-blue-600 accent-blue-600 checked:border-blue-600 checked:bg-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:accent-blue-500 dark:checked:border-blue-500 dark:checked:bg-blue-500'
                   />
-                  <div className='flex-1 min-w-0'>
-                    <div className='text-sm font-medium text-gray-900 dark:text-gray-100 truncate'>
+                  <div className='min-w-0 flex-1'>
+                    <div className='truncate text-sm font-medium text-gray-900 dark:text-gray-100'>
                       {source.name}
                     </div>
                     {source.api && (
-                      <div className='text-xs text-gray-500 dark:text-gray-400 truncate'>
+                      <div className='truncate text-xs text-gray-500 dark:text-gray-400'>
                         {extractDomain(source.api)}
                       </div>
                     )}
@@ -1379,14 +1379,14 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
           <div className='space-y-6'>
             {/* 可用视频源 */}
             <div>
-              <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-4'>
+              <label className='mb-4 block text-sm font-medium text-gray-700 dark:text-gray-300'>
                 可用视频源
               </label>
-              <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3'>
+              <div className='grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3'>
                 {config?.SourceConfig?.map((source) => (
                   <label
                     key={source.key}
-                    className='flex items-center space-x-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors'
+                    className='flex cursor-pointer items-center space-x-3 rounded-lg border border-gray-200 p-3 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800'
                   >
                     <input
                       type='checkbox'
@@ -1419,14 +1419,14 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                           );
                         }
                       }}
-                      className='rounded border-gray-300 text-purple-600 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-700'
+                      className='rounded border-gray-300 text-purple-600 accent-purple-600 checked:border-purple-600 checked:bg-purple-600 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-700 dark:accent-purple-500 dark:checked:border-purple-500 dark:checked:bg-purple-500'
                     />
-                    <div className='flex-1 min-w-0'>
-                      <div className='text-sm font-medium text-gray-900 dark:text-gray-100 truncate'>
+                    <div className='min-w-0 flex-1'>
+                      <div className='truncate text-sm font-medium text-gray-900 dark:text-gray-100'>
                         {source.name}
                       </div>
                       {source.api && (
-                        <div className='text-xs text-gray-500 dark:text-gray-400 truncate'>
+                        <div className='truncate text-xs text-gray-500 dark:text-gray-400'>
                           {extractDomain(source.api)}
                         </div>
                       )}
@@ -1603,10 +1603,10 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
       >
         {deletingUserGroup && (
           <>
-            <div className='bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4'>
-              <div className='flex items-center space-x-2 mb-2'>
+            <div className='mb-4 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20'>
+              <div className='mb-2 flex items-center space-x-2'>
                 <svg
-                  className='w-5 h-5 text-red-600 dark:text-red-400'
+                  className='h-5 w-5 text-red-600 dark:text-red-400'
                   fill='none'
                   stroke='currentColor'
                   viewBox='0 0 24 24'
@@ -1629,10 +1629,10 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
             </div>
 
             {deletingUserGroup.affectedUsers.length > 0 ? (
-              <div className='bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4'>
-                <div className='flex items-center space-x-2 mb-2'>
+              <div className='rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-900/20'>
+                <div className='mb-2 flex items-center space-x-2'>
                   <svg
-                    className='w-5 h-5 text-yellow-600 dark:text-yellow-400'
+                    className='h-5 w-5 text-yellow-600 dark:text-yellow-400'
                     fill='none'
                     stroke='currentColor'
                     viewBox='0 0 24 24'
@@ -1658,15 +1658,15 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                     </div>
                   ))}
                 </div>
-                <p className='text-xs text-yellow-600 dark:text-yellow-400 mt-2'>
+                <p className='mt-2 text-xs text-yellow-600 dark:text-yellow-400'>
                   这些用户的用户组将被自动移除
                 </p>
               </div>
             ) : (
-              <div className='bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4'>
+              <div className='rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20'>
                 <div className='flex items-center space-x-2'>
                   <svg
-                    className='w-5 h-5 text-green-600 dark:text-green-400'
+                    className='h-5 w-5 text-green-600 dark:text-green-400'
                     fill='none'
                     stroke='currentColor'
                     viewBox='0 0 24 24'
@@ -1702,10 +1702,10 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
         cancelClassName={`px-6 py-2.5 text-sm font-medium ${buttonStyles.secondary}`}
       >
         {deletingUser && (
-          <div className='bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4'>
-            <div className='flex items-center space-x-2 mb-2'>
+          <div className='mb-4 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20'>
+            <div className='mb-2 flex items-center space-x-2'>
               <svg
-                className='w-5 h-5 text-red-600 dark:text-red-400'
+                className='h-5 w-5 text-red-600 dark:text-red-400'
                 fill='none'
                 stroke='currentColor'
                 viewBox='0 0 24 24'

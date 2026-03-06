@@ -19,6 +19,7 @@ interface VideoInfo {
 }
 
 const VIDEO_INFO_TTL_MS = 10 * 60_000;
+const VIDEO_INFO_BATCH_SIZE = 3;
 const videoInfoCache = new Map<string, { info: VideoInfo; ts: number }>();
 const inFlightVideoInfo = new Map<string, Promise<VideoInfo>>();
 
@@ -235,6 +236,30 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
     [onSourceDetailFetched],
   );
 
+  const probeSourcesInBatches = useCallback(
+    async (sources: SearchResult[], options?: { force?: boolean }) => {
+      for (
+        let start = 0;
+        start < sources.length;
+        start += VIDEO_INFO_BATCH_SIZE
+      ) {
+        const batch = sources.slice(start, start + VIDEO_INFO_BATCH_SIZE);
+        await Promise.all(batch.map((source) => getVideoInfo(source, options)));
+      }
+    },
+    [getVideoInfo],
+  );
+
+  const isSortingReadyVideoInfo = (videoInfo?: VideoInfo): boolean => {
+    if (!videoInfo || videoInfo.hasError) return false;
+
+    return (
+      videoInfo.loadSpeed !== '测量中...' &&
+      videoInfo.loadSpeed !== '播放中' &&
+      videoInfo.quality !== '播放中'
+    );
+  };
+
   // 合并预计算结果
   useEffect(() => {
     if (precomputedVideoInfo && precomputedVideoInfo.size > 0) {
@@ -287,14 +312,10 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
       });
       if (pendingSources.length === 0) return;
 
-      const batchSize = Math.ceil(pendingSources.length / 2);
-      for (let start = 0; start < pendingSources.length; start += batchSize) {
-        const batch = pendingSources.slice(start, start + batchSize);
-        await Promise.all(batch.map((source) => getVideoInfo(source)));
-      }
+      await probeSourcesInBatches(pendingSources);
     };
     fetchVideoInfosInBatches();
-  }, [availableSources, getVideoInfo, currentSource, currentId]);
+  }, [availableSources, probeSourcesInBatches, currentSource, currentId]);
 
   const handleSourceClick = useCallback(
     (source: SearchResult) => {
@@ -357,27 +378,32 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
       .map((source, index) => {
         const sourceKey = `${source.source}-${source.id}`;
         const videoInfo = videoInfoMap.get(sourceKey);
-        const hasValidInfo = !!videoInfo && !videoInfo.hasError;
+        const hasMeasuredInfo = isSortingReadyVideoInfo(videoInfo);
+        const measuredVideoInfo = hasMeasuredInfo ? videoInfo : undefined;
 
         return {
           source,
           index,
-          qualityRank: hasValidInfo ? getQualityRank(videoInfo.quality) : 0,
-          speedKBps: hasValidInfo ? parseSpeedToKBps(videoInfo.loadSpeed) : 0,
+          qualityRank: measuredVideoInfo
+            ? getQualityRank(measuredVideoInfo.quality)
+            : 0,
+          speedKBps: measuredVideoInfo
+            ? parseSpeedToKBps(measuredVideoInfo.loadSpeed)
+            : 0,
           pingTime:
-            hasValidInfo && Number.isFinite(videoInfo.pingTime)
-              ? videoInfo.pingTime
+            measuredVideoInfo && Number.isFinite(measuredVideoInfo.pingTime)
+              ? measuredVideoInfo.pingTime
               : Number.MAX_SAFE_INTEGER,
-          hasValidInfo,
+          hasMeasuredInfo,
         };
       })
       .sort((a, b) => {
         // 有有效数据的源优先于无数据的，但测速失败的不过度降权
-        if (a.hasValidInfo !== b.hasValidInfo) {
-          return a.hasValidInfo ? -1 : 1;
+        if (a.hasMeasuredInfo !== b.hasMeasuredInfo) {
+          return a.hasMeasuredInfo ? -1 : 1;
         }
         // 同为有效数据时，按速度 > 延迟 > 分辨率排序
-        if (a.hasValidInfo && b.hasValidInfo) {
+        if (a.hasMeasuredInfo && b.hasMeasuredInfo) {
           if (a.speedKBps !== b.speedKBps) {
             return b.speedKBps - a.speedKBps;
           }
@@ -657,13 +683,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
                 const key = `${s.source}-${s.id}`;
                 return key !== curKey;
               });
-              const batchSize = Math.ceil(toTest.length / 2);
-              for (let start = 0; start < toTest.length; start += batchSize) {
-                const batch = toTest.slice(start, start + batchSize);
-                await Promise.all(
-                  batch.map((s) => getVideoInfo(s, { force: true })),
-                );
-              }
+              await probeSourcesInBatches(toTest, { force: true });
               setIsRetestingAll(false);
             }}
             className='flex-1 rounded-lg py-2 text-center text-xs font-medium text-gray-500 ring-1 ring-gray-200/60 transition-colors hover:text-green-600 hover:ring-green-300 disabled:opacity-50 dark:text-gray-400 dark:ring-white/[0.08] dark:hover:text-green-400 dark:hover:ring-green-500/30'

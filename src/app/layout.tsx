@@ -63,6 +63,7 @@ export default async function RootLayout({
   let doubanImageProxy = process.env.NEXT_PUBLIC_DOUBAN_IMAGE_PROXY || '';
   let disableYellowFilter =
     process.env.NEXT_PUBLIC_DISABLE_YELLOW_FILTER === 'true';
+  let enableLiveEntry = false;
   let fluidSearch = process.env.NEXT_PUBLIC_FLUID_SEARCH !== 'false';
   let openRegister = false;
   let customCategories = [] as {
@@ -81,6 +82,7 @@ export default async function RootLayout({
     doubanImageProxyType = config.SiteConfig.DoubanImageProxyType;
     doubanImageProxy = config.SiteConfig.DoubanImageProxy;
     disableYellowFilter = config.SiteConfig.DisableYellowFilter;
+    enableLiveEntry = config.SiteConfig.EnableLiveEntry;
     customCategories = config.CustomCategories.filter(
       (category) => !category.disabled,
     ).map((category) => ({
@@ -103,6 +105,7 @@ export default async function RootLayout({
     DOUBAN_IMAGE_PROXY_TYPE: doubanImageProxyType,
     DOUBAN_IMAGE_PROXY: doubanImageProxy,
     DISABLE_YELLOW_FILTER: disableYellowFilter,
+    ENABLE_LIVE_ENTRY: enableLiveEntry,
     CUSTOM_CATEGORIES: customCategories,
     FLUID_SEARCH: fluidSearch,
   };

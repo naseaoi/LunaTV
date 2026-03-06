@@ -45,7 +45,7 @@ const SiteIcon = () => {
     <img
       src={iconSrc}
       alt={siteName}
-      className='w-full h-full object-contain'
+      className='h-full w-full object-contain'
       onError={(e) => {
         const img = e.target as HTMLImageElement;
         // 自定义图标加载失败时回退到默认 favicon
@@ -147,7 +147,9 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
     router.prefetch('/douban?type=anime');
     router.prefetch('/douban?type=show');
     router.prefetch('/douban?type=custom');
-    router.prefetch('/live');
+    if (window.RUNTIME_CONFIG?.ENABLE_LIVE_ENTRY) {
+      router.prefetch('/live');
+    }
   }, [router]);
 
   const contextValue = {
@@ -175,25 +177,50 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
       label: '综艺',
       href: '/douban?type=show',
     },
-    {
-      icon: Radio,
-      label: '直播',
-      href: '/live',
-    },
   ]);
 
   useEffect(() => {
     const runtimeConfig = window.RUNTIME_CONFIG;
-    if ((runtimeConfig?.CUSTOM_CATEGORIES?.length ?? 0) > 0) {
-      setMenuItems((prevItems) => [
-        ...prevItems,
-        {
-          icon: Star,
-          label: '自定义',
-          href: '/douban?type=custom',
-        },
-      ]);
+    const nextItems = [
+      {
+        icon: Film,
+        label: '电影',
+        href: '/douban?type=movie',
+      },
+      {
+        icon: Tv,
+        label: '剧集',
+        href: '/douban?type=tv',
+      },
+      {
+        icon: Cat,
+        label: '动漫',
+        href: '/douban?type=anime',
+      },
+      {
+        icon: Clover,
+        label: '综艺',
+        href: '/douban?type=show',
+      },
+    ];
+
+    if (runtimeConfig?.ENABLE_LIVE_ENTRY) {
+      nextItems.push({
+        icon: Radio,
+        label: '直播',
+        href: '/live',
+      });
     }
+
+    if ((runtimeConfig?.CUSTOM_CATEGORIES?.length ?? 0) > 0) {
+      nextItems.push({
+        icon: Star,
+        label: '自定义',
+        href: '/douban?type=custom',
+      });
+    }
+
+    setMenuItems(nextItems);
   }, []);
 
   return (
@@ -202,7 +229,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
       <div className='hidden md:flex'>
         <aside
           data-sidebar
-          className={`fixed top-0 left-0 h-screen bg-white/40 backdrop-blur-xl transition-[width] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] border-r border-gray-200/50 z-10 shadow-lg dark:bg-gray-900/70 dark:border-gray-700/50 ${
+          className={`fixed left-0 top-0 z-10 h-screen border-r border-gray-200/50 bg-white/40 shadow-lg backdrop-blur-xl transition-[width] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] dark:border-gray-700/50 dark:bg-gray-900/70 ${
             isCollapsed ? 'w-16' : 'w-64'
           }`}
           style={{
@@ -212,18 +239,18 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
         >
           <div className='flex h-full flex-col'>
             {/* 顶部品牌区域 - 完全复制菜单项布局结构以保证对齐 */}
-            <div className='px-2 flex items-center pt-6 pb-4'>
+            <div className='flex items-center px-2 pb-4 pt-6'>
               <Link
                 href='/'
-                className={`flex items-center rounded-lg py-2 select-none hover:opacity-90 transition-[padding,gap] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] min-h-[40px] overflow-hidden w-full justify-start ${
-                  isCollapsed ? 'px-[2px] gap-0' : 'px-2 gap-3'
+                className={`flex min-h-[40px] w-full select-none items-center justify-start overflow-hidden rounded-lg py-2 transition-[padding,gap] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] hover:opacity-90 ${
+                  isCollapsed ? 'gap-0 px-[2px]' : 'gap-3 px-2'
                 }`}
               >
-                <div className='w-11 h-11 flex-shrink-0 flex items-center justify-center rounded-xl bg-gray-50 dark:bg-gray-800/50 shadow-sm border border-gray-100 dark:border-gray-700/50 p-1.5'>
+                <div className='flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border border-gray-100 bg-gray-50 p-1.5 shadow-sm dark:border-gray-700/50 dark:bg-gray-800/50'>
                   <SiteIcon />
                 </div>
                 <span
-                  className={`text-lg font-bold text-gray-800 dark:text-gray-100 tracking-tight whitespace-nowrap overflow-hidden transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
+                  className={`overflow-hidden whitespace-nowrap text-lg font-bold tracking-tight text-gray-800 transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] dark:text-gray-100 ${
                     isCollapsed
                       ? 'max-w-0 opacity-0'
                       : 'max-w-[140px] opacity-100'
@@ -234,23 +261,23 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
               </Link>
             </div>
             {/* 分割线 */}
-            <div className='mx-3 h-px bg-gradient-to-r from-transparent via-gray-200 dark:via-gray-700 to-transparent' />
+            <div className='mx-3 h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent dark:via-gray-700' />
 
             {/* 首页和搜索导航 */}
-            <nav className='px-2 mt-4 space-y-1'>
+            <nav className='mt-4 space-y-1 px-2'>
               <Link
                 href='/'
                 onClick={() => setActive('/')}
                 data-active={active === '/'}
-                className={`group flex items-center rounded-lg px-2 py-2 pl-4 text-gray-700 hover:bg-gray-100/30 hover:text-green-600 data-[active=true]:bg-green-500/20 data-[active=true]:text-green-700 font-medium transition-colors duration-200 min-h-[40px] dark:text-gray-300 dark:hover:text-green-400 dark:data-[active=true]:bg-green-500/10 dark:data-[active=true]:text-green-400 ${
-                  isCollapsed ? 'w-full max-w-none mx-0' : 'mx-0'
-                } gap-3 justify-start`}
+                className={`group flex min-h-[40px] items-center rounded-lg px-2 py-2 pl-4 font-medium text-gray-700 transition-colors duration-200 hover:bg-gray-100/30 hover:text-green-600 data-[active=true]:bg-green-500/20 data-[active=true]:text-green-700 dark:text-gray-300 dark:hover:text-green-400 dark:data-[active=true]:bg-green-500/10 dark:data-[active=true]:text-green-400 ${
+                  isCollapsed ? 'mx-0 w-full max-w-none' : 'mx-0'
+                } justify-start gap-3`}
               >
-                <div className='w-4 h-4 flex-shrink-0 flex items-center justify-center'>
+                <div className='flex h-4 w-4 flex-shrink-0 items-center justify-center'>
                   <Home className='h-4 w-4 text-gray-500 group-hover:text-green-600 data-[active=true]:text-green-700 dark:text-gray-400 dark:group-hover:text-green-400 dark:data-[active=true]:text-green-400' />
                 </div>
                 <span
-                  className={`whitespace-nowrap overflow-hidden transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
+                  className={`overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
                     isCollapsed
                       ? 'max-w-0 opacity-0'
                       : 'max-w-[120px] opacity-100'
@@ -264,15 +291,15 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
                 onClick={() => setActive('/search')}
                 onMouseEnter={() => router.prefetch('/search')}
                 data-active={active === '/search'}
-                className={`group flex items-center rounded-lg px-2 py-2 pl-4 text-gray-700 hover:bg-gray-100/30 hover:text-green-600 data-[active=true]:bg-green-500/20 data-[active=true]:text-green-700 font-medium transition-colors duration-200 min-h-[40px] dark:text-gray-300 dark:hover:text-green-400 dark:data-[active=true]:bg-green-500/10 dark:data-[active=true]:text-green-400 ${
-                  isCollapsed ? 'w-full max-w-none mx-0' : 'mx-0'
-                } gap-3 justify-start`}
+                className={`group flex min-h-[40px] items-center rounded-lg px-2 py-2 pl-4 font-medium text-gray-700 transition-colors duration-200 hover:bg-gray-100/30 hover:text-green-600 data-[active=true]:bg-green-500/20 data-[active=true]:text-green-700 dark:text-gray-300 dark:hover:text-green-400 dark:data-[active=true]:bg-green-500/10 dark:data-[active=true]:text-green-400 ${
+                  isCollapsed ? 'mx-0 w-full max-w-none' : 'mx-0'
+                } justify-start gap-3`}
               >
-                <div className='w-4 h-4 flex-shrink-0 flex items-center justify-center'>
+                <div className='flex h-4 w-4 flex-shrink-0 items-center justify-center'>
                   <Search className='h-4 w-4 text-gray-500 group-hover:text-green-600 data-[active=true]:text-green-700 dark:text-gray-400 dark:group-hover:text-green-400 dark:data-[active=true]:text-green-400' />
                 </div>
                 <span
-                  className={`whitespace-nowrap overflow-hidden transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
+                  className={`overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
                     isCollapsed
                       ? 'max-w-0 opacity-0'
                       : 'max-w-[120px] opacity-100'
@@ -306,15 +333,15 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
                       onClick={() => setActive(item.href)}
                       onMouseEnter={() => router.prefetch(item.href)}
                       data-active={isActive}
-                      className={`group flex items-center rounded-lg px-2 py-2 pl-4 text-sm text-gray-700 hover:bg-gray-100/30 hover:text-green-600 data-[active=true]:bg-green-500/20 data-[active=true]:text-green-700 transition-colors duration-200 min-h-[40px] dark:text-gray-300 dark:hover:text-green-400 dark:data-[active=true]:bg-green-500/10 dark:data-[active=true]:text-green-400 ${
-                        isCollapsed ? 'w-full max-w-none mx-0' : 'mx-0'
-                      } gap-3 justify-start`}
+                      className={`group flex min-h-[40px] items-center rounded-lg px-2 py-2 pl-4 text-sm text-gray-700 transition-colors duration-200 hover:bg-gray-100/30 hover:text-green-600 data-[active=true]:bg-green-500/20 data-[active=true]:text-green-700 dark:text-gray-300 dark:hover:text-green-400 dark:data-[active=true]:bg-green-500/10 dark:data-[active=true]:text-green-400 ${
+                        isCollapsed ? 'mx-0 w-full max-w-none' : 'mx-0'
+                      } justify-start gap-3`}
                     >
-                      <div className='w-4 h-4 flex-shrink-0 flex items-center justify-center'>
+                      <div className='flex h-4 w-4 flex-shrink-0 items-center justify-center'>
                         <Icon className='h-4 w-4 text-gray-500 group-hover:text-green-600 data-[active=true]:text-green-700 dark:text-gray-400 dark:group-hover:text-green-400 dark:data-[active=true]:text-green-400' />
                       </div>
                       <span
-                        className={`whitespace-nowrap overflow-hidden transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
+                        className={`overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
                           isCollapsed
                             ? 'max-w-0 opacity-0'
                             : 'max-w-[120px] opacity-100'
@@ -330,20 +357,20 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
 
             {/* 底部折叠/展开按钮 */}
             <div className='px-2 pb-4 pt-2'>
-              <div className='mx-1 mb-2 h-px bg-gradient-to-r from-transparent via-gray-200 dark:via-gray-700 to-transparent' />
+              <div className='mx-1 mb-2 h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent dark:via-gray-700' />
               <div className='space-y-1'>
                 <UserMenu variant='sidebar' isCollapsed={isCollapsed} />
                 <ThemeToggle variant='sidebar' isCollapsed={isCollapsed} />
                 <button
                   onClick={handleToggle}
-                  className={`group flex items-center rounded-lg px-2 py-2 pl-4 w-full text-sm text-gray-500 hover:bg-gray-100/30 hover:text-green-600 transition-colors duration-200 min-h-[40px] dark:text-gray-400 dark:hover:text-green-400 gap-3 justify-start`}
+                  className={`group flex min-h-[40px] w-full items-center justify-start gap-3 rounded-lg px-2 py-2 pl-4 text-sm text-gray-500 transition-colors duration-200 hover:bg-gray-100/30 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400`}
                   title={isCollapsed ? '展开侧栏' : '折叠侧栏'}
                 >
-                  <div className='w-4 h-4 flex-shrink-0 flex items-center justify-center'>
+                  <div className='flex h-4 w-4 flex-shrink-0 items-center justify-center'>
                     <Menu className='h-4 w-4' />
                   </div>
                   <span
-                    className={`whitespace-nowrap overflow-hidden transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
+                    className={`overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
                       isCollapsed
                         ? 'max-w-0 opacity-0'
                         : 'max-w-[120px] opacity-100'
@@ -357,7 +384,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
           </div>
         </aside>
         <div
-          className={`transition-[width] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] sidebar-offset ${
+          className={`sidebar-offset transition-[width] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
             isCollapsed ? 'w-16' : 'w-64'
           }`}
         ></div>

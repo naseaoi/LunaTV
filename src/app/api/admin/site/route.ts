@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
       SiteName,
       SiteIcon,
       Announcement,
+      EnableLiveEntry,
       SearchDownstreamMaxPage,
       SiteInterfaceCacheTime,
       DoubanProxyType,
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest) {
       SiteName: string;
       SiteIcon: string;
       Announcement: string;
+      EnableLiveEntry: boolean;
       SearchDownstreamMaxPage: number;
       SiteInterfaceCacheTime: number;
       DoubanProxyType: string;
@@ -53,6 +55,7 @@ export async function POST(request: NextRequest) {
     if (
       typeof SiteName !== 'string' ||
       typeof Announcement !== 'string' ||
+      typeof EnableLiveEntry !== 'boolean' ||
       typeof SearchDownstreamMaxPage !== 'number' ||
       typeof SiteInterfaceCacheTime !== 'number' ||
       typeof DoubanProxyType !== 'string' ||
@@ -75,6 +78,7 @@ export async function POST(request: NextRequest) {
           ? SiteIcon
           : adminConfig.SiteConfig.SiteIcon || '',
       Announcement,
+      EnableLiveEntry,
       SearchDownstreamMaxPage,
       SiteInterfaceCacheTime,
       DoubanProxyType,

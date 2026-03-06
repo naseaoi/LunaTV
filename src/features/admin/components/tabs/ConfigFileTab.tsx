@@ -99,14 +99,14 @@ const ConfigFileComponent = ({
 
   return (
     <div className='space-y-4'>
-      <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
+      <div className='grid grid-cols-1 gap-4 lg:grid-cols-2'>
         {/* 配置订阅区域 */}
-        <div className='bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 shadow-sm'>
-          <div className='flex items-center justify-between mb-6'>
+        <div className='rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800'>
+          <div className='mb-6 flex items-center justify-between'>
             <h3 className='text-xl font-semibold text-gray-900 dark:text-gray-100'>
               配置订阅
             </h3>
-            <div className='text-sm text-gray-500 dark:text-gray-400 px-3 py-1.5 rounded-full'>
+            <div className='rounded-full px-3 py-1.5 text-sm text-gray-500 dark:text-gray-400'>
               最后更新:{' '}
               {lastCheckTime
                 ? new Date(lastCheckTime).toLocaleString('zh-CN')
@@ -117,7 +117,7 @@ const ConfigFileComponent = ({
           <div className='space-y-6'>
             {/* 订阅URL输入 */}
             <div>
-              <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3'>
+              <label className='mb-3 block text-sm font-medium text-gray-700 dark:text-gray-300'>
                 订阅URL
               </label>
               <input
@@ -126,7 +126,7 @@ const ConfigFileComponent = ({
                 onChange={(e) => setSubscriptionUrl(e.target.value)}
                 placeholder='https://example.com/config.json'
                 disabled={false}
-                className='w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 shadow-sm hover:border-gray-400 dark:hover:border-gray-500'
+                className='w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 shadow-sm transition-all duration-200 hover:border-gray-400 focus:border-transparent focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:border-gray-500'
               />
               <p className='mt-2 text-xs text-gray-500 dark:text-gray-400'>
                 输入配置文件的订阅地址，要求 JSON 格式，且使用 Base58 编码
@@ -138,7 +138,7 @@ const ConfigFileComponent = ({
               <button
                 onClick={handleFetchConfig}
                 disabled={isLoading('fetchConfig') || !subscriptionUrl.trim()}
-                className={`w-full px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+                className={`w-full rounded-lg px-6 py-3 font-medium transition-all duration-200 ${
                   isLoading('fetchConfig') || !subscriptionUrl.trim()
                     ? buttonStyles.disabled
                     : buttonStyles.success
@@ -146,7 +146,7 @@ const ConfigFileComponent = ({
               >
                 {isLoading('fetchConfig') ? (
                   <div className='flex items-center justify-center gap-2'>
-                    <div className='w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin'></div>
+                    <div className='h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent'></div>
                     拉取中…
                   </div>
                 ) : (
@@ -156,30 +156,27 @@ const ConfigFileComponent = ({
             </div>
 
             {/* 自动更新开关 */}
-            <div className='flex items-center justify-between'>
+            <div className='flex min-h-[96px] items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900'>
               <div>
-                <label className='text-sm font-medium text-gray-700 dark:text-gray-300'>
+                <p className='text-sm font-medium text-gray-900 dark:text-gray-100'>
                   自动更新
-                </label>
-                <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+                </p>
+                <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
                   启用后系统将定期自动拉取最新配置
                 </p>
               </div>
               <button
                 type='button'
                 onClick={() => setAutoUpdate(!autoUpdate)}
-                disabled={false}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${
-                  autoUpdate ? buttonStyles.toggleOn : buttonStyles.toggleOff
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  autoUpdate ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
                 }`}
+                aria-label='切换配置自动更新'
+                aria-pressed={autoUpdate}
               >
                 <span
-                  className={`inline-block h-4 w-4 transform rounded-full ${
-                    buttonStyles.toggleThumb
-                  } transition-transform ${
-                    autoUpdate
-                      ? buttonStyles.toggleThumbOn
-                      : buttonStyles.toggleThumbOff
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                    autoUpdate ? 'translate-x-5' : 'translate-x-0.5'
                   }`}
                 />
               </button>
@@ -188,7 +185,7 @@ const ConfigFileComponent = ({
         </div>
 
         {/* 配置文件编辑区域 */}
-        <div className='space-y-4 bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 shadow-sm'>
+        <div className='space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800'>
           <div className='relative'>
             <textarea
               value={configContent}
@@ -196,7 +193,7 @@ const ConfigFileComponent = ({
               rows={20}
               placeholder='请输入配置文件内容（JSON 格式）...'
               disabled={false}
-              className='w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 font-mono text-sm leading-relaxed resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 dark:hover:border-gray-500'
+              className='w-full resize-none rounded-lg border border-gray-300 bg-white px-4 py-3 font-mono text-sm leading-relaxed text-gray-900 transition-all duration-200 hover:border-gray-400 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:border-gray-500'
               style={{
                 fontFamily:
                   'ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace',
@@ -213,7 +210,7 @@ const ConfigFileComponent = ({
             <button
               onClick={handleSave}
               disabled={isLoading('saveConfig')}
-              className={`px-4 py-2 rounded-lg transition-colors ${
+              className={`rounded-lg px-4 py-2 transition-colors ${
                 isLoading('saveConfig')
                   ? buttonStyles.disabled
                   : buttonStyles.success
