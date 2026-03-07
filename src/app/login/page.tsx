@@ -1,12 +1,13 @@
 'use client';
 
 import { AlertCircle, CheckCircle, Eye, EyeOff } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 
 import { CURRENT_VERSION } from '@/lib/version';
 import { checkForUpdates, UpdateStatus } from '@/lib/version_check';
 import { getPrimaryRepoUrl } from '@/lib/update_source';
+import { getClientAuthRuntimeConfig } from '@/lib/runtime-config';
 
 import { useSite } from '@/components/SiteProvider';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -35,7 +36,7 @@ function VersionDisplay() {
   return (
     <button
       onClick={() => window.open(repoUrl, '_blank')}
-      className='absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 transition-colors cursor-pointer'
+      className='absolute bottom-4 left-1/2 flex -translate-x-1/2 transform cursor-pointer items-center gap-2 text-xs text-gray-500 transition-colors dark:text-gray-400'
     >
       <span className='font-mono'>v{CURRENT_VERSION}</span>
       {!isChecking && updateStatus !== UpdateStatus.FETCH_FAILED && (
@@ -50,14 +51,14 @@ function VersionDisplay() {
         >
           {updateStatus === UpdateStatus.HAS_UPDATE && (
             <>
-              <AlertCircle className='w-3.5 h-3.5' />
-              <span className='font-semibold text-xs'>有新版本</span>
+              <AlertCircle className='h-3.5 w-3.5' />
+              <span className='text-xs font-semibold'>有新版本</span>
             </>
           )}
           {updateStatus === UpdateStatus.NO_UPDATE && (
             <>
-              <CheckCircle className='w-3.5 h-3.5' />
-              <span className='font-semibold text-xs'>已是最新</span>
+              <CheckCircle className='h-3.5 w-3.5' />
+              <span className='text-xs font-semibold'>已是最新</span>
             </>
           )}
         </div>
@@ -67,7 +68,6 @@ function VersionDisplay() {
 }
 
 function LoginPageClient() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
@@ -78,22 +78,29 @@ function LoginPageClient() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [shouldAskUsername, setShouldAskUsername] = useState(false);
+  const [shouldAskUsername] = useState(true);
   const [registerEnabled, setRegisterEnabled] = useState(false);
 
   const { siteName } = useSite();
 
   // 在客户端挂载后设置配置
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const storageType = window.RUNTIME_CONFIG?.STORAGE_TYPE;
-      setShouldAskUsername(!!storageType && storageType !== 'localstorage');
-      setRegisterEnabled(
-        !!storageType &&
-          storageType !== 'localstorage' &&
-          !!window.RUNTIME_CONFIG?.OPEN_REGISTER,
-      );
-    }
+    let cancelled = false;
+
+    const loadRuntimeConfig = async () => {
+      const { openRegister } = await getClientAuthRuntimeConfig();
+      if (cancelled) {
+        return;
+      }
+
+      setRegisterEnabled(openRegister);
+    };
+
+    loadRuntimeConfig();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -132,7 +139,7 @@ function LoginPageClient() {
 
       if (res.ok && mode === 'login') {
         const redirect = searchParams.get('redirect') || '/';
-        router.replace(redirect);
+        window.location.href = redirect;
       } else if (res.ok && mode === 'register') {
         setSuccess('注册成功，请使用新账号登录');
         setMode('login');
@@ -156,16 +163,16 @@ function LoginPageClient() {
   };
 
   return (
-    <div className='relative min-h-screen flex items-center justify-center px-4 overflow-hidden'>
-      <div className='absolute top-4 right-4'>
+    <div className='relative flex min-h-screen items-center justify-center overflow-hidden px-4'>
+      <div className='absolute right-4 top-4'>
         <ThemeToggle />
       </div>
-      <div className='relative z-10 w-full max-w-md rounded-3xl bg-gradient-to-b from-white/90 via-white/70 to-white/40 dark:from-zinc-900/90 dark:via-zinc-900/70 dark:to-zinc-900/40 backdrop-blur-xl shadow-2xl p-10 dark:border dark:border-zinc-800'>
-        <h1 className='text-green-600 tracking-tight text-center text-3xl font-extrabold mb-8 bg-clip-text drop-shadow-sm'>
+      <div className='relative z-10 w-full max-w-md rounded-3xl bg-gradient-to-b from-white/90 via-white/70 to-white/40 p-10 shadow-2xl backdrop-blur-xl dark:border dark:border-zinc-800 dark:from-zinc-900/90 dark:via-zinc-900/70 dark:to-zinc-900/40'>
+        <h1 className='mb-8 bg-clip-text text-center text-3xl font-extrabold tracking-tight text-green-600 drop-shadow-sm'>
           {siteName}
         </h1>
         {registerEnabled && (
-          <div className='mb-6 grid grid-cols-2 rounded-xl bg-gray-100/80 dark:bg-zinc-800/70 p-1'>
+          <div className='mb-6 grid grid-cols-2 rounded-xl bg-gray-100/80 p-1 dark:bg-zinc-800/70'>
             <button
               type='button'
               onClick={() => {
@@ -175,7 +182,7 @@ function LoginPageClient() {
               }}
               className={`rounded-lg py-2 text-sm font-semibold transition-colors ${
                 mode === 'login'
-                  ? 'bg-white dark:bg-zinc-700 text-green-600 dark:text-green-400 shadow'
+                  ? 'bg-white text-green-600 shadow dark:bg-zinc-700 dark:text-green-400'
                   : 'text-gray-600 dark:text-gray-300'
               }`}
             >
@@ -190,7 +197,7 @@ function LoginPageClient() {
               }}
               className={`rounded-lg py-2 text-sm font-semibold transition-colors ${
                 mode === 'register'
-                  ? 'bg-white dark:bg-zinc-700 text-green-600 dark:text-green-400 shadow'
+                  ? 'bg-white text-green-600 shadow dark:bg-zinc-700 dark:text-green-400'
                   : 'text-gray-600 dark:text-gray-300'
               }`}
             >
@@ -208,7 +215,7 @@ function LoginPageClient() {
                 id='username'
                 type='text'
                 autoComplete='username'
-                className='block w-full rounded-lg border-0 py-3 px-4 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-white/60 dark:ring-white/20 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:ring-2 focus:ring-green-500 focus:outline-none sm:text-base bg-white/60 dark:bg-zinc-800/60 backdrop-blur'
+                className='block w-full rounded-lg border-0 bg-white/60 px-4 py-3 text-gray-900 shadow-sm ring-1 ring-white/60 backdrop-blur placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500 dark:bg-zinc-800/60 dark:text-gray-100 dark:ring-white/20 dark:placeholder:text-gray-400 sm:text-base'
                 placeholder='输入用户名'
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
@@ -226,21 +233,21 @@ function LoginPageClient() {
               autoComplete={
                 mode === 'register' ? 'new-password' : 'current-password'
               }
-              className='block w-full rounded-lg border-0 py-3 pl-4 pr-12 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-white/60 dark:ring-white/20 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:ring-2 focus:ring-green-500 focus:outline-none sm:text-base bg-white/60 dark:bg-zinc-800/60 backdrop-blur'
-              placeholder={mode === 'register' ? '输入密码' : '输入访问密码'}
+              className='block w-full rounded-lg border-0 bg-white/60 py-3 pl-4 pr-12 text-gray-900 shadow-sm ring-1 ring-white/60 backdrop-blur placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500 dark:bg-zinc-800/60 dark:text-gray-100 dark:ring-white/20 dark:placeholder:text-gray-400 sm:text-base'
+              placeholder='输入密码'
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
             <button
               type='button'
               onClick={() => setShowPassword((prev) => !prev)}
-              className='absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+              className='absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
               aria-label={showPassword ? '隐藏密码' : '显示密码'}
             >
               {showPassword ? (
-                <EyeOff className='w-5 h-5' />
+                <EyeOff className='h-5 w-5' />
               ) : (
-                <Eye className='w-5 h-5' />
+                <Eye className='h-5 w-5' />
               )}
             </button>
           </div>
@@ -254,7 +261,7 @@ function LoginPageClient() {
                 id='confirm-password'
                 type={showConfirmPassword ? 'text' : 'password'}
                 autoComplete='new-password'
-                className='block w-full rounded-lg border-0 py-3 pl-4 pr-12 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-white/60 dark:ring-white/20 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:ring-2 focus:ring-green-500 focus:outline-none sm:text-base bg-white/60 dark:bg-zinc-800/60 backdrop-blur'
+                className='block w-full rounded-lg border-0 bg-white/60 py-3 pl-4 pr-12 text-gray-900 shadow-sm ring-1 ring-white/60 backdrop-blur placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500 dark:bg-zinc-800/60 dark:text-gray-100 dark:ring-white/20 dark:placeholder:text-gray-400 sm:text-base'
                 placeholder='再次输入密码'
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -262,15 +269,15 @@ function LoginPageClient() {
               <button
                 type='button'
                 onClick={() => setShowConfirmPassword((prev) => !prev)}
-                className='absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                className='absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
                 aria-label={
                   showConfirmPassword ? '隐藏确认密码' : '显示确认密码'
                 }
               >
                 {showConfirmPassword ? (
-                  <EyeOff className='w-5 h-5' />
+                  <EyeOff className='h-5 w-5' />
                 ) : (
-                  <Eye className='w-5 h-5' />
+                  <Eye className='h-5 w-5' />
                 )}
               </button>
             </div>

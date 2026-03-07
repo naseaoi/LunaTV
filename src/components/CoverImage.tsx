@@ -1,7 +1,14 @@
 'use client';
 
 import Image from 'next/image';
-import React, { memo, useCallback, useMemo, useState } from 'react';
+import React, {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { processImageUrl } from '@/lib/utils';
 
@@ -18,7 +25,6 @@ const CACHE_MAX_SIZE = 500;
 function markImageLoaded(url: string) {
   if (!url) return;
   if (loadedImageCache.size >= CACHE_MAX_SIZE) {
-    // 简单淘汰：清空重建（低频操作，不值得引入 LRU）
     loadedImageCache.clear();
   }
   loadedImageCache.add(url);
@@ -57,43 +63,66 @@ const CoverImage: React.FC<CoverImageProps> = memo(function CoverImage({
   fallbackLabel = '无封面',
 }) {
   const isEmpty = !src || src.trim() === '';
+  // retryKey 变化时触发 Next.js Image 重新渲染（走 /_next/image 代理），避免直接修改 img.src
+  const [retryKey, setRetryKey] = useState(0);
+  const retriedRef = useRef(false);
+
   const processed = useMemo(
     () => (isEmpty ? '' : processImageUrl(src)),
     [src, isEmpty],
+  );
+
+  // direct/img3/server 模式的 URL 不能走 Next.js Image 优化代理（/_next/image），
+  // 否则豆瓣防盗链会返回 418。CDN 代理（cmliussss）的 URL 可以正常优化。
+  const needsUnoptimized = useMemo(() => {
+    if (!processed) return false;
+    // server 模式：以 / 开头的本地路径（/api/image-proxy?url=...）
+    if (processed.startsWith('/')) return true;
+    // direct/img3 模式：仍然是 doubanio.com 域名但不含 cmliussss
+    if (processed.includes('doubanio.com') && !processed.includes('cmliussss'))
+      return true;
+    return false;
+  }, [processed]);
+  // 重试时在 URL 上追加 cache-bust 参数，让 Next.js Image 代理重新请求上游
+  const displaySrc = useMemo(
+    () =>
+      retryKey > 0
+        ? `${processed}${processed.includes('?') ? '&' : '?'}retry=${retryKey}`
+        : processed,
+    [processed, retryKey],
   );
   const cached = !isEmpty && isImageCached(src);
 
   const [loaded, setLoaded] = useState(cached);
   const [hasError, setHasError] = useState(false);
 
+  // src 变化时重置状态
+  useEffect(() => {
+    retriedRef.current = false;
+    setRetryKey(0);
+    setHasError(false);
+    setLoaded(isImageCached(src));
+  }, [src]);
+
   const showFallback = isEmpty || hasError;
 
-  const handleLoadComplete = useCallback(() => {
+  const handleLoad = useCallback(() => {
     setLoaded(true);
     markImageLoaded(src);
   }, [src]);
 
-  const handleError = useCallback(
-    (e: React.SyntheticEvent<HTMLImageElement>) => {
-      if (!enableRetry) {
-        setHasError(true);
-        setLoaded(true);
-        return;
-      }
-      const img = e.target as HTMLImageElement;
-      if (!img.dataset.retried) {
-        img.dataset.retried = 'true';
-        const retryUrl = `${processed}${processed.includes('?') ? '&' : '?'}retry=${Date.now()}`;
-        setTimeout(() => {
-          img.src = retryUrl;
-        }, 1200);
-        return;
-      }
+  const handleError = useCallback(() => {
+    if (!enableRetry || retriedRef.current) {
       setHasError(true);
       setLoaded(true);
-    },
-    [enableRetry, processed],
-  );
+      return;
+    }
+    // 通过 state 驱动重试，保持 Next.js Image 代理链路
+    retriedRef.current = true;
+    setTimeout(() => {
+      setRetryKey(Date.now());
+    }, 1200);
+  }, [enableRetry]);
 
   if (showFallback) {
     return (
@@ -105,14 +134,16 @@ const CoverImage: React.FC<CoverImageProps> = memo(function CoverImage({
     <>
       {!loaded && <ImagePlaceholder aspectRatio={aspectRatio} />}
       <Image
-        src={processed}
+        key={retryKey}
+        src={displaySrc}
         alt={alt}
         fill
         sizes={sizes}
+        unoptimized={needsUnoptimized}
         className={`${fit === 'contain' ? 'object-contain' : 'object-cover'} transition-opacity duration-200 ${loaded ? 'opacity-100' : 'opacity-0'}`}
         referrerPolicy='no-referrer'
         loading='lazy'
-        onLoadingComplete={handleLoadComplete}
+        onLoad={handleLoad}
         onError={handleError}
         style={
           {

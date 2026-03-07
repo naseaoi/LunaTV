@@ -7,14 +7,6 @@ import { getOwnerUsername } from '@/lib/env.server';
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
-  const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
-  if (storageType === 'localstorage') {
-    return NextResponse.json(
-      { error: '当前模式不支持注册账号' },
-      { status: 400 },
-    );
-  }
-
   try {
     const body = (await request.json()) as {
       username?: string;

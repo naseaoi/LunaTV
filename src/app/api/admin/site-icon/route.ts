@@ -22,14 +22,6 @@ function getIconPath(): string {
 
 // POST: 上传站点图标
 export async function POST(request: NextRequest) {
-  const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
-  if (storageType === 'localstorage') {
-    return NextResponse.json(
-      { error: '本地存储模式不支持图标上传' },
-      { status: 400 },
-    );
-  }
-
   const guardResult = await requireAdmin(request);
   if (isGuardFailure(guardResult)) return guardResult.response;
 
@@ -146,11 +138,6 @@ export async function GET() {
 
 // DELETE: 删除站点图标
 export async function DELETE(request: NextRequest) {
-  const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
-  if (storageType === 'localstorage') {
-    return NextResponse.json({ error: '不支持' }, { status: 400 });
-  }
-
   const guardResult = await requireAdmin(request);
   if (isGuardFailure(guardResult)) return guardResult.response;
 

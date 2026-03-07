@@ -20,14 +20,12 @@ type SessionProbeResult = {
   reason:
     | 'ok'
     | 'missing_cookie'
-    | 'invalid_local_password'
     | 'session_expired'
     | 'invalid_signature'
     | 'missing_signature'
     | 'missing_username'
     | 'user_not_found'
     | 'user_banned'
-    | 'no_password_config'
     | 'server_error';
   username?: string | null;
 };
@@ -101,6 +99,7 @@ function notifySessionLost(
   authLossHandling = true;
   const loginUrl = buildLoginUrl();
   const inPlayerPage = window.location.pathname.startsWith('/play');
+  const inHomePage = window.location.pathname === '/';
 
   window.dispatchEvent(
     new CustomEvent<SessionLostDetail>(AUTH_SOFT_RECOVERY_EVENT, {
@@ -113,7 +112,8 @@ function notifySessionLost(
     }),
   );
 
-  if (!inPlayerPage) {
+  // 首页和播放页不自动跳转登录，避免中断浏览体验
+  if (!inPlayerPage && !inHomePage) {
     window.location.href = loginUrl;
   }
 }
@@ -170,18 +170,6 @@ export function setStorageValueWithLegacyCleanup(
     localStorage.removeItem(legacyKey);
   }
 }
-
-// ================================================================
-// 环境变量
-// ================================================================
-
-export const STORAGE_TYPE = (() => {
-  const raw =
-    (typeof window !== 'undefined' && window.RUNTIME_CONFIG?.STORAGE_TYPE) ||
-    (process.env.STORAGE_TYPE as 'localstorage' | 'localdb' | undefined) ||
-    'localstorage';
-  return raw;
-})();
 
 // ================================================================
 // fetch 工具
@@ -541,18 +529,16 @@ export async function handleDatabaseOperationFailure(
  *
  * 流程：
  * 1. SSR 环境 → 返回 fallback
- * 2. 非 localstorage 模式：
+ * 2. 未认证 → 返回缓存（如有）或 fallback，不触发 API 请求
+ * 3. 已认证 localdb 模式：
  *    a. 有缓存 → 返回缓存，后台 fetchApi，有差异则更新缓存+dispatch
  *    b. 无缓存 → await fetchApi → 缓存 → 返回
- * 3. localstorage 模式 → 从 localStorage 读取
  */
 export function createCacheFirstReader<T>(options: {
   getCached: () => T | null;
   setCached: (data: T) => void;
   fetchApi: () => Promise<T>;
   eventName: CacheUpdateEvent;
-  localStorageKey: string;
-  legacyKey?: string;
   fallback: T;
   /** 可选：自定义后台同步失败时是否调用 triggerGlobalError，默认 true */
   bgSyncErrorNotify?: boolean;
@@ -562,8 +548,6 @@ export function createCacheFirstReader<T>(options: {
     setCached,
     fetchApi,
     eventName,
-    localStorageKey,
-    legacyKey,
     fallback,
     bgSyncErrorNotify = true,
   } = options;
@@ -573,49 +557,42 @@ export function createCacheFirstReader<T>(options: {
       return fallback;
     }
 
-    if (STORAGE_TYPE !== 'localstorage') {
-      const cachedData = getCached();
-
-      if (cachedData) {
-        // 后台异步同步
-        fetchApi()
-          .then((freshData) => {
-            if (JSON.stringify(cachedData) !== JSON.stringify(freshData)) {
-              setCached(freshData);
-              window.dispatchEvent(
-                new CustomEvent(eventName, { detail: freshData }),
-              );
-            }
-          })
-          .catch((err) => {
-            console.warn(`后台同步${eventName}失败:`, err);
-            if (bgSyncErrorNotify) {
-              triggerGlobalError(`后台同步${eventName}失败`);
-            }
-          });
-
-        return cachedData;
-      } else {
-        try {
-          const freshData = await fetchApi();
-          setCached(freshData);
-          return freshData;
-        } catch (err) {
-          console.error(`获取${eventName}失败:`, err);
-          triggerGlobalError(`获取${eventName}失败`);
-          return fallback;
-        }
-      }
+    // 未认证用户：仅返回缓存或空数据，不发起 API 请求（避免 401 → 重定向循环）
+    const authInfo = getAuthInfoFromBrowserCookie();
+    if (!authInfo?.username) {
+      return getCached() ?? fallback;
     }
 
-    // localStorage 模式
+    const cachedData = getCached();
+
+    if (cachedData) {
+      // 后台异步同步
+      fetchApi()
+        .then((freshData) => {
+          if (JSON.stringify(cachedData) !== JSON.stringify(freshData)) {
+            setCached(freshData);
+            window.dispatchEvent(
+              new CustomEvent(eventName, { detail: freshData }),
+            );
+          }
+        })
+        .catch((err) => {
+          console.warn(`后台同步${eventName}失败:`, err);
+          if (bgSyncErrorNotify) {
+            triggerGlobalError(`后台同步${eventName}失败`);
+          }
+        });
+
+      return cachedData;
+    }
+
     try {
-      const raw = getStorageValueWithLegacy(localStorageKey, legacyKey);
-      if (!raw) return fallback;
-      return JSON.parse(raw) as T;
+      const freshData = await fetchApi();
+      setCached(freshData);
+      return freshData;
     } catch (err) {
-      console.error(`读取${eventName}失败:`, err);
-      triggerGlobalError(`读取${eventName}失败`);
+      console.error(`获取${eventName}失败:`, err);
+      triggerGlobalError(`获取${eventName}失败`);
       return fallback;
     }
   };
@@ -625,18 +602,15 @@ export function createCacheFirstReader<T>(options: {
  * 模式B：乐观更新（写/删操作）
  *
  * 流程：
- * 1. 非 localstorage 模式：
+ * 1. 未认证 → 抛出错误，阻止写操作
+ * 2. 已认证 localdb 模式：
  *    a. 读缓存 → mutateCached → 写回缓存 → dispatch → syncToServer
  *    b. 失败时由调用方决定是否 handleDatabaseOperationFailure
- * 2. localstorage 模式：
- *    a. 读 localStorage → mutateLocal → 写回 → dispatch
  */
 export function createOptimisticWriter<TCache>(options: {
   getCached: () => TCache | null;
   setCached: (data: TCache) => void;
   eventName: CacheUpdateEvent;
-  localStorageKey: string;
-  legacyKey?: string;
   emptyCacheFactory: () => TCache;
 }): (mutation: {
   mutateCached: (cached: TCache) => TCache;
@@ -645,68 +619,27 @@ export function createOptimisticWriter<TCache>(options: {
   eventDetail?: unknown;
   onServerError?: (err: unknown) => Promise<void>;
 }) => Promise<void> {
-  const {
-    getCached,
-    setCached,
-    eventName,
-    localStorageKey,
-    legacyKey,
-    emptyCacheFactory,
-  } = options;
+  const { getCached, setCached, eventName, emptyCacheFactory } = options;
 
   return async (mutation): Promise<void> => {
-    const {
-      mutateCached,
-      mutateLocal,
-      syncToServer,
-      eventDetail,
-      onServerError,
-    } = mutation;
+    const { mutateCached, syncToServer, eventDetail, onServerError } = mutation;
 
-    if (STORAGE_TYPE !== 'localstorage') {
-      const cached = getCached() || emptyCacheFactory();
-      const updated = mutateCached(cached);
-      setCached(updated);
+    const cached = getCached() || emptyCacheFactory();
+    const updated = mutateCached(cached);
+    setCached(updated);
 
-      window.dispatchEvent(
-        new CustomEvent(eventName, {
-          detail: eventDetail !== undefined ? eventDetail : updated,
-        }),
-      );
-
-      try {
-        await syncToServer();
-      } catch (err) {
-        if (onServerError) {
-          await onServerError(err);
-        }
-        throw err;
-      }
-      return;
-    }
-
-    // localStorage 模式
-    if (typeof window === 'undefined') return;
+    window.dispatchEvent(
+      new CustomEvent(eventName, {
+        detail: eventDetail !== undefined ? eventDetail : updated,
+      }),
+    );
 
     try {
-      const raw = getStorageValueWithLegacy(localStorageKey, legacyKey);
-      const stored: TCache = raw
-        ? (JSON.parse(raw) as TCache)
-        : emptyCacheFactory();
-      const updated = mutateLocal(stored);
-      setStorageValueWithLegacyCleanup(
-        localStorageKey,
-        JSON.stringify(updated),
-        legacyKey,
-      );
-      window.dispatchEvent(
-        new CustomEvent(eventName, {
-          detail: eventDetail !== undefined ? eventDetail : updated,
-        }),
-      );
+      await syncToServer();
     } catch (err) {
-      console.error(`${eventName}操作失败:`, err);
-      triggerGlobalError(`${eventName}操作失败`);
+      if (onServerError) {
+        await onServerError(err);
+      }
       throw err;
     }
   };

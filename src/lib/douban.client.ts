@@ -102,10 +102,13 @@ function getDoubanProxyConfig(): {
   proxyType: DoubanProxyType;
   proxyUrl: string;
 } {
+  if (typeof window === 'undefined') {
+    return { proxyType: 'direct', proxyUrl: '' };
+  }
   const doubanProxyType =
     localStorage.getItem('doubanDataSource') ||
     window.RUNTIME_CONFIG?.DOUBAN_PROXY_TYPE ||
-    'cmliussss-cdn-tencent';
+    'direct';
   const doubanProxy =
     localStorage.getItem('doubanProxyUrl') ||
     window.RUNTIME_CONFIG?.DOUBAN_PROXY ||

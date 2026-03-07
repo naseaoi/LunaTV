@@ -156,7 +156,7 @@ const ConfigFileComponent = ({
             </div>
 
             {/* 自动更新开关 */}
-            <div className='flex min-h-[96px] items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900'>
+            <div className='flex min-h-[96px] items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/55'>
               <div>
                 <p className='text-sm font-medium text-gray-900 dark:text-gray-100'>
                   自动更新

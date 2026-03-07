@@ -83,10 +83,7 @@ export async function requireActiveUser(
   }
 
   const secret = getOwnerPassword();
-  const signData =
-    authInfo.sessionType === 'localstorage'
-      ? `localstorage:${authInfo.expiresAt}`
-      : `${authInfo.username}:${authInfo.expiresAt}`;
+  const signData = `${authInfo.username}:${authInfo.expiresAt}`;
 
   const isValid = await verifySignature(signData, authInfo.signature, secret);
   if (!isValid) {

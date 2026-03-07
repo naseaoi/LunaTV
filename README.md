@@ -90,7 +90,6 @@ services:
     environment:
       - ICETV_USERNAME=admin
       - ICETV_PASSWORD=admin_password
-      - NEXT_PUBLIC_STORAGE_TYPE=localdb
       - LOCAL_DB_PATH=/data/icetv-data.sqlite
     volumes:
       - icetv-data:/data
@@ -164,7 +163,7 @@ IceTV 支持标准的苹果 CMS V10 API 格式。
 | ------------------------- | -------------------------------------- | --------------------- | ----------------------------------- |
 | ICETV_USERNAME            | 站长账号                               | 任意字符串            | 无默认，必填字段                    |
 | ICETV_PASSWORD            | 站长密码                               | 任意字符串            | 无默认，必填字段                    |
-| NEXT_PUBLIC_STORAGE_TYPE  | 播放记录/收藏的存储方式                | localdb               | 无默认，必填字段                    |
+| NEXT_PUBLIC_STORAGE_TYPE  | 播放记录/收藏的存储方式                | localdb               | `localdb`（可省略）                 |
 | LOCAL_DB_PATH             | 本地 SQLite 文件路径（`localdb` 模式） | 绝对路径              | `/data/icetv-data.sqlite`（Docker） |
 | AUTH_SESSION_TTL_HOURS    | 登录态有效期（小时）                   | 正整数                | 168                                 |
 | NEXT_PUBLIC_UPDATE_REPOS  | 版本检查仓库列表（逗号分隔）           | owner/repo,owner/repo | naseaoi/IceTV                       |

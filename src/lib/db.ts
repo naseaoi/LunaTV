@@ -2,24 +2,9 @@ import { AdminConfig } from './admin.types';
 import { LocalSqliteStorage } from './sqlite.db';
 import { Favorite, IStorage, PlayRecord, SkipConfig } from './types';
 
-// storage type 常量: 'localstorage' | 'localdb'，默认 'localdb'
-const STORAGE_TYPE =
-  (process.env.NEXT_PUBLIC_STORAGE_TYPE as
-    | 'localstorage'
-    | 'localdb'
-    | undefined) || 'localdb';
-
 // 创建存储实例
 function createStorage(): IStorage {
-  switch (STORAGE_TYPE) {
-    case 'localdb':
-      return new LocalSqliteStorage();
-    case 'localstorage':
-      // localstorage 仅用于前端缓存策略，服务端仍需可用存储承载用户/配置数据
-      return new LocalSqliteStorage();
-    default:
-      return new LocalSqliteStorage();
-  }
+  return new LocalSqliteStorage();
 }
 
 // 单例存储实例

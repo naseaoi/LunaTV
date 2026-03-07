@@ -4,6 +4,7 @@ import {
   ExternalLink,
   GitBranch,
   KeyRound,
+  LogIn,
   LogOut,
   Settings,
   Shield,
@@ -21,7 +22,15 @@ import {
 import { createPortal } from 'react-dom';
 
 import AdminSelect from '@/features/admin/components/AdminSelect';
+import AlertModal from '@/features/admin/components/AlertModal';
+import { useAlertModal } from '@/features/admin/hooks/useAlertModal';
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
+import {
+  doubanDataSourceOptions,
+  doubanImageProxyTypeOptions,
+  getThanksInfo,
+} from '@/lib/douban-options';
+import { getClientAuthRuntimeConfig } from '@/lib/runtime-config';
 import { CURRENT_VERSION } from '@/lib/version';
 import { checkForUpdates, UpdateStatus } from '@/lib/version_check';
 
@@ -50,7 +59,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isVersionPanelOpen, setIsVersionPanelOpen] = useState(false);
   const [authInfo, setAuthInfo] = useState<AuthInfo | null>(null);
-  const [storageType, setStorageType] = useState<string>('localstorage');
+  const [storageType, setStorageType] = useState<string>('localdb');
   const [mounted, setMounted] = useState(false);
 
   // Body 滚动锁定 - 使用 overflow 方式避免布局问题
@@ -81,38 +90,12 @@ export const UserMenu: React.FC<UserMenuProps> = ({
   const [enableOptimization, setEnableOptimization] = useState(true);
   const [fluidSearch, setFluidSearch] = useState(true);
   const [liveDirectConnect, setLiveDirectConnect] = useState(false);
-  const [doubanDataSource, setDoubanDataSource] = useState(
-    'cmliussss-cdn-tencent',
-  );
-  const [doubanImageProxyType, setDoubanImageProxyType] = useState(
-    'cmliussss-cdn-tencent',
-  );
+  const [doubanDataSource, setDoubanDataSource] = useState('direct');
+  const [doubanImageProxyType, setDoubanImageProxyType] = useState('direct');
   const [doubanImageProxyUrl, setDoubanImageProxyUrl] = useState('');
 
-  // 豆瓣数据源选项
-  const doubanDataSourceOptions = [
-    { value: 'direct', label: '直连（服务器直接请求豆瓣）' },
-    { value: 'cors-proxy-zwei', label: 'Cors Proxy By Zwei' },
-    {
-      value: 'cmliussss-cdn-tencent',
-      label: '豆瓣 CDN By CMLiussss（腾讯云）',
-    },
-    { value: 'cmliussss-cdn-ali', label: '豆瓣 CDN By CMLiussss（阿里云）' },
-    { value: 'custom', label: '自定义代理' },
-  ];
-
-  // 豆瓣图片代理选项
-  const doubanImageProxyTypeOptions = [
-    { value: 'direct', label: '直连（浏览器直接请求豆瓣）' },
-    { value: 'server', label: '服务器代理（由服务器代理请求豆瓣）' },
-    { value: 'img3', label: '豆瓣官方精品 CDN（阿里云）' },
-    {
-      value: 'cmliussss-cdn-tencent',
-      label: '豆瓣 CDN By CMLiussss（腾讯云）',
-    },
-    { value: 'cmliussss-cdn-ali', label: '豆瓣 CDN By CMLiussss（阿里云）' },
-    { value: 'custom', label: '自定义代理' },
-  ];
+  // 代理切换提示弹窗
+  const { alertModal, showAlert, hideAlert } = useAlertModal();
 
   // 修改密码相关状态
   const [oldPassword, setOldPassword] = useState('');
@@ -127,81 +110,90 @@ export const UserMenu: React.FC<UserMenuProps> = ({
 
   // 组件挂载：初始化认证信息、读取本地设置、检查版本
   useEffect(() => {
+    let cancelled = false;
+
     setMounted(true);
 
     if (typeof window !== 'undefined') {
-      // 认证信息和存储类型
-      const auth = getAuthInfoFromBrowserCookie();
-      setAuthInfo(auth);
-      const type = window.RUNTIME_CONFIG?.STORAGE_TYPE || 'localstorage';
-      setStorageType(type);
+      const loadClientState = async () => {
+        const auth = getAuthInfoFromBrowserCookie();
+        const { storageType } = await getClientAuthRuntimeConfig();
+        if (cancelled) {
+          return;
+        }
 
-      // 从 localStorage 读取设置
-      const savedAggregateSearch = localStorage.getItem(
-        'defaultAggregateSearch',
-      );
-      if (savedAggregateSearch !== null) {
-        setDefaultAggregateSearch(JSON.parse(savedAggregateSearch));
-      }
+        setAuthInfo(auth);
+        setStorageType(storageType);
 
-      const savedDoubanDataSource = localStorage.getItem('doubanDataSource');
-      const defaultDoubanProxyType =
-        window.RUNTIME_CONFIG?.DOUBAN_PROXY_TYPE || 'cmliussss-cdn-tencent';
-      if (savedDoubanDataSource !== null) {
-        setDoubanDataSource(savedDoubanDataSource);
-      } else if (defaultDoubanProxyType) {
-        setDoubanDataSource(defaultDoubanProxyType);
-      }
+        const savedAggregateSearch = localStorage.getItem(
+          'defaultAggregateSearch',
+        );
+        if (savedAggregateSearch !== null) {
+          setDefaultAggregateSearch(JSON.parse(savedAggregateSearch));
+        }
 
-      const savedDoubanProxyUrl = localStorage.getItem('doubanProxyUrl');
-      const defaultDoubanProxy = window.RUNTIME_CONFIG?.DOUBAN_PROXY || '';
-      if (savedDoubanProxyUrl !== null) {
-        setDoubanProxyUrl(savedDoubanProxyUrl);
-      } else if (defaultDoubanProxy) {
-        setDoubanProxyUrl(defaultDoubanProxy);
-      }
+        const defaultDoubanProxyType =
+          window.RUNTIME_CONFIG?.DOUBAN_PROXY_TYPE || 'direct';
+        const savedDoubanDataSource = localStorage.getItem('doubanDataSource');
+        if (savedDoubanDataSource !== null) {
+          setDoubanDataSource(savedDoubanDataSource);
+        } else if (defaultDoubanProxyType) {
+          setDoubanDataSource(defaultDoubanProxyType);
+        }
 
-      const savedDoubanImageProxyType = localStorage.getItem(
-        'doubanImageProxyType',
-      );
-      const defaultDoubanImageProxyType =
-        window.RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE ||
-        'cmliussss-cdn-tencent';
-      if (savedDoubanImageProxyType !== null) {
-        setDoubanImageProxyType(savedDoubanImageProxyType);
-      } else if (defaultDoubanImageProxyType) {
-        setDoubanImageProxyType(defaultDoubanImageProxyType);
-      }
+        const defaultDoubanProxy = window.RUNTIME_CONFIG?.DOUBAN_PROXY || '';
+        const savedDoubanProxyUrl = localStorage.getItem('doubanProxyUrl');
+        if (savedDoubanProxyUrl !== null) {
+          setDoubanProxyUrl(savedDoubanProxyUrl);
+        } else if (defaultDoubanProxy) {
+          setDoubanProxyUrl(defaultDoubanProxy);
+        }
 
-      const savedDoubanImageProxyUrl = localStorage.getItem(
-        'doubanImageProxyUrl',
-      );
-      const defaultDoubanImageProxyUrl =
-        window.RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY || '';
-      if (savedDoubanImageProxyUrl !== null) {
-        setDoubanImageProxyUrl(savedDoubanImageProxyUrl);
-      } else if (defaultDoubanImageProxyUrl) {
-        setDoubanImageProxyUrl(defaultDoubanImageProxyUrl);
-      }
+        const defaultDoubanImageProxyType =
+          window.RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE || 'direct';
+        const savedDoubanImageProxyType = localStorage.getItem(
+          'doubanImageProxyType',
+        );
+        if (savedDoubanImageProxyType !== null) {
+          setDoubanImageProxyType(savedDoubanImageProxyType);
+        } else if (defaultDoubanImageProxyType) {
+          setDoubanImageProxyType(defaultDoubanImageProxyType);
+        }
 
-      const savedEnableOptimization =
-        localStorage.getItem('enableOptimization');
-      if (savedEnableOptimization !== null) {
-        setEnableOptimization(JSON.parse(savedEnableOptimization));
-      }
+        const defaultDoubanImageProxyUrl =
+          window.RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY || '';
+        const savedDoubanImageProxyUrl = localStorage.getItem(
+          'doubanImageProxyUrl',
+        );
+        if (savedDoubanImageProxyUrl !== null) {
+          setDoubanImageProxyUrl(savedDoubanImageProxyUrl);
+        } else if (defaultDoubanImageProxyUrl) {
+          setDoubanImageProxyUrl(defaultDoubanImageProxyUrl);
+        }
 
-      const savedFluidSearch = localStorage.getItem('fluidSearch');
-      const defaultFluidSearch = window.RUNTIME_CONFIG?.FLUID_SEARCH !== false;
-      if (savedFluidSearch !== null) {
-        setFluidSearch(JSON.parse(savedFluidSearch));
-      } else if (defaultFluidSearch !== undefined) {
-        setFluidSearch(defaultFluidSearch);
-      }
+        const savedEnableOptimization =
+          localStorage.getItem('enableOptimization');
+        if (savedEnableOptimization !== null) {
+          setEnableOptimization(JSON.parse(savedEnableOptimization));
+        }
 
-      const savedLiveDirectConnect = localStorage.getItem('liveDirectConnect');
-      if (savedLiveDirectConnect !== null) {
-        setLiveDirectConnect(JSON.parse(savedLiveDirectConnect));
-      }
+        const savedFluidSearch = localStorage.getItem('fluidSearch');
+        const defaultFluidSearch =
+          window.RUNTIME_CONFIG?.FLUID_SEARCH !== false;
+        if (savedFluidSearch !== null) {
+          setFluidSearch(JSON.parse(savedFluidSearch));
+        } else {
+          setFluidSearch(defaultFluidSearch);
+        }
+
+        const savedLiveDirectConnect =
+          localStorage.getItem('liveDirectConnect');
+        if (savedLiveDirectConnect !== null) {
+          setLiveDirectConnect(JSON.parse(savedLiveDirectConnect));
+        }
+      };
+
+      loadClientState();
     }
 
     // 版本检查
@@ -216,6 +208,10 @@ export const UserMenu: React.FC<UserMenuProps> = ({
       }
     };
     checkUpdate();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const computeMenuPos = useMemo(() => {
@@ -279,6 +275,14 @@ export const UserMenu: React.FC<UserMenuProps> = ({
 
   const handleCloseMenu = () => {
     setIsOpen(false);
+  };
+
+  const handleLogin = () => {
+    const redirect =
+      typeof window !== 'undefined'
+        ? `${window.location.pathname}${window.location.search}`
+        : '/';
+    router.push(`/login?redirect=${encodeURIComponent(redirect)}`);
   };
 
   const handleLogout = async () => {
@@ -409,11 +413,21 @@ export const UserMenu: React.FC<UserMenuProps> = ({
     }
   };
 
+  const showProxyToast = () => {
+    showAlert({
+      type: 'success',
+      title: '更换成功',
+      message: '刷新页面后生效',
+      timer: 2000,
+    });
+  };
+
   const handleDoubanDataSourceChange = (value: string) => {
     setDoubanDataSource(value);
     if (typeof window !== 'undefined') {
       localStorage.setItem('doubanDataSource', value);
     }
+    showProxyToast();
   };
 
   const handleDoubanImageProxyTypeChange = (value: string) => {
@@ -421,6 +435,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
     if (typeof window !== 'undefined') {
       localStorage.setItem('doubanImageProxyType', value);
     }
+    showProxyToast();
   };
 
   const handleDoubanImageProxyUrlChange = (value: string) => {
@@ -430,31 +445,12 @@ export const UserMenu: React.FC<UserMenuProps> = ({
     }
   };
 
-  // 获取感谢信息
-  const getThanksInfo = (dataSource: string) => {
-    switch (dataSource) {
-      case 'cors-proxy-zwei':
-        return {
-          text: 'Thanks to @Zwei',
-          url: 'https://github.com/bestzwei',
-        };
-      case 'cmliussss-cdn-tencent':
-      case 'cmliussss-cdn-ali':
-        return {
-          text: 'Thanks to @CMLiussss',
-          url: 'https://github.com/cmliu',
-        };
-      default:
-        return null;
-    }
-  };
-
   const handleResetSettings = () => {
     const defaultDoubanProxyType =
-      window.RUNTIME_CONFIG?.DOUBAN_PROXY_TYPE || 'cmliussss-cdn-tencent';
+      window.RUNTIME_CONFIG?.DOUBAN_PROXY_TYPE || 'direct';
     const defaultDoubanProxy = window.RUNTIME_CONFIG?.DOUBAN_PROXY || '';
     const defaultDoubanImageProxyType =
-      window.RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE || 'cmliussss-cdn-tencent';
+      window.RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE || 'direct';
     const defaultDoubanImageProxyUrl =
       window.RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY || '';
     const defaultFluidSearch = window.RUNTIME_CONFIG?.FLUID_SEARCH !== false;
@@ -483,10 +479,10 @@ export const UserMenu: React.FC<UserMenuProps> = ({
   // 检查是否显示管理面板按钮
   const showAdminPanel =
     authInfo?.role === 'owner' || authInfo?.role === 'admin';
+  const isAuthenticated = Boolean(authInfo?.username);
 
   // 检查是否显示修改密码按钮
-  const showChangePassword =
-    authInfo?.role !== 'owner' && storageType !== 'localstorage';
+  const showChangePassword = isAuthenticated && authInfo?.role !== 'owner';
 
   // 角色中文映射
   const getRoleText = (role?: string) => {
@@ -528,11 +524,11 @@ export const UserMenu: React.FC<UserMenuProps> = ({
       version: true,
     },
     {
-      icon: LogOut,
-      label: '登出',
-      onClick: handleLogout,
+      icon: isAuthenticated ? LogOut : LogIn,
+      label: isAuthenticated ? '登出' : '登录',
+      onClick: isAuthenticated ? handleLogout : handleLogin,
       show: true,
-      danger: true,
+      danger: isAuthenticated,
     },
   ].filter((a) => a.show);
 
@@ -567,22 +563,26 @@ export const UserMenu: React.FC<UserMenuProps> = ({
               <User className='h-6 w-6' />
             </div>
             <div className='mt-2.5 max-w-full truncate text-sm font-semibold text-gray-900 dark:text-gray-100'>
-              {authInfo?.username || 'default'}
+              {authInfo?.username || '未登录'}
             </div>
             <div className='mt-1 flex items-center gap-2'>
               <span
                 className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                  (authInfo?.role || 'user') === 'owner'
-                    ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200'
-                    : (authInfo?.role || 'user') === 'admin'
-                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200'
-                      : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'
+                  !isAuthenticated
+                    ? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                    : (authInfo?.role || 'user') === 'owner'
+                      ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200'
+                      : (authInfo?.role || 'user') === 'admin'
+                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200'
+                        : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'
                 }`}
               >
-                {getRoleText(authInfo?.role || 'user')}
+                {isAuthenticated
+                  ? getRoleText(authInfo?.role || 'user')
+                  : '游客'}
               </span>
               <span className='text-[10px] text-gray-400 dark:text-gray-500'>
-                {storageType === 'localstorage' ? '本地存储' : storageType}
+                {storageType}
               </span>
             </div>
           </div>
@@ -919,6 +919,14 @@ export const UserMenu: React.FC<UserMenuProps> = ({
           </div>
         </div>
       </div>
+      <AlertModal
+        isOpen={alertModal.isOpen}
+        onClose={hideAlert}
+        type={alertModal.type}
+        title={alertModal.title}
+        message={alertModal.message}
+        timer={alertModal.timer}
+      />
     </>
   );
 

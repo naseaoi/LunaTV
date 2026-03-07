@@ -79,9 +79,13 @@ export function useSearchExecution({
   const pendingResultsRef = useRef<SearchResult[]>([]);
   const flushTimerRef = useRef<number | null>(null);
 
+  // 提取 query 值作为 effect 依赖，避免 searchParams 引用变化导致重复触发
+  const query = (searchParams.get('q') || '').trim();
+
   // 核心搜索 effect
   useEffect(() => {
-    const query = (searchParams.get('q') || '').trim();
+    // 相同关键词不重复搜索
+    if (query === currentQueryRef.current) return;
     currentQueryRef.current = query;
 
     if (eventSourceRef.current) {
@@ -266,7 +270,7 @@ export function useSearchExecution({
       setIsLoading(false);
       setShowResults(false);
     }
-  }, [searchParams]);
+  }, [query]);
 
   useEffect(() => {
     const query = currentQueryRef.current;

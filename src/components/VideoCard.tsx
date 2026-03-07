@@ -24,6 +24,7 @@ import {
   generateStorageKey,
   saveFavorite,
 } from '@/lib/db.client';
+import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 import { SearchResult } from '@/lib/types';
 import { useLongPress } from '@/hooks/useLongPress';
 
@@ -319,6 +320,15 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
     }, [isAggregate, aggregateGroup]);
 
     const handleClick = useCallback(() => {
+      // 游客拦截：未认证用户点击视频卡片时跳转登录页
+      const authInfo = getAuthInfoFromBrowserCookie();
+      if (!authInfo?.username) {
+        const currentUrl = window.location.pathname + window.location.search;
+        const loginUrl = `/login?redirect=${encodeURIComponent(currentUrl)}`;
+        router.push(loginUrl);
+        return;
+      }
+
       if (origin === 'live' && actualSource && actualId) {
         // 直播内容跳转到直播页面
         const url = `/live?source=${actualSource.replace(
@@ -365,6 +375,17 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
 
     // 新标签页播放处理函数
     const handlePlayInNewTab = useCallback(() => {
+      // 游客拦截：未认证用户跳转登录页
+      const authInfo = getAuthInfoFromBrowserCookie();
+      if (!authInfo?.username) {
+        const currentUrl = window.location.pathname + window.location.search;
+        window.open(
+          `/login?redirect=${encodeURIComponent(currentUrl)}`,
+          '_blank',
+        );
+        return;
+      }
+
       if (origin === 'live' && actualSource && actualId) {
         // 直播内容跳转到直播页面
         const url = `/live?source=${actualSource.replace(

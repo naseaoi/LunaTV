@@ -178,38 +178,40 @@ export default function SearchPageClient() {
     };
   }, []);
 
+  // 提取 query 值，避免 searchParams 引用变化导致重复触发
+  const urlQuery = searchParams.get('q') || '';
+
   // searchParams 变化时同步 searchQuery 和 suggestions
   useEffect(() => {
-    const query = searchParams.get('q') || '';
-    if (query) {
-      setSearchQuery(query);
+    if (urlQuery) {
+      setSearchQuery(urlQuery);
       setShowSuggestions(false);
     } else {
       setShowSuggestions(false);
     }
-  }, [searchParams]);
+  }, [urlQuery]);
 
   // 按关键词恢复聚合开关状态（用于返回搜索页时保持原视图）
   useEffect(() => {
-    const query = (searchParams.get('q') || '').trim();
-    if (!query) {
+    const trimmed = urlQuery.trim();
+    if (!trimmed) {
       return;
     }
 
-    const cachedMode = getSearchViewModeByQuery(query);
+    const cachedMode = getSearchViewModeByQuery(trimmed);
     if (cachedMode && cachedMode !== viewMode) {
       setViewMode(cachedMode);
     }
-  }, [searchParams]);
+  }, [urlQuery]);
 
   // 按关键词保存当前聚合开关状态
   useEffect(() => {
-    const query = (searchParams.get('q') || '').trim();
-    if (!query) {
+    const trimmed = urlQuery.trim();
+    if (!trimmed) {
       return;
     }
-    setSearchViewModeByQuery(query, viewMode);
-  }, [searchParams, viewMode]);
+    setSearchViewModeByQuery(trimmed, viewMode);
+  }, [urlQuery, viewMode]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -229,8 +231,6 @@ export default function SearchPageClient() {
     if (!trimmed) return;
 
     setSearchQuery(trimmed);
-    setIsLoading(true);
-    setShowResults(true);
     setShowSuggestions(false);
 
     router.push(`/search?q=${encodeURIComponent(trimmed)}`);
@@ -239,9 +239,6 @@ export default function SearchPageClient() {
   const handleSuggestionSelect = (suggestion: string) => {
     setSearchQuery(suggestion);
     setShowSuggestions(false);
-
-    setIsLoading(true);
-    setShowResults(true);
 
     router.push(`/search?q=${encodeURIComponent(suggestion)}`);
   };
@@ -301,8 +298,6 @@ export default function SearchPageClient() {
                   if (!trimmed) return;
 
                   setSearchQuery(trimmed);
-                  setIsLoading(true);
-                  setShowResults(true);
                   setShowSuggestions(false);
 
                   router.push(`/search?q=${encodeURIComponent(trimmed)}`);

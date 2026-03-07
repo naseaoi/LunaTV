@@ -12,6 +12,11 @@ import { buttonStyles } from '@/features/admin/lib/buttonStyles';
 import { showError, showSuccess } from '@/features/admin/lib/notifications';
 import { AdminConfig } from '@/features/admin/types/api';
 import { SiteConfig } from '@/features/admin/types';
+import {
+  doubanDataSourceOptions,
+  doubanImageProxyTypeOptions,
+  getThanksInfo,
+} from '@/lib/douban-options';
 
 const SiteConfigComponent = ({
   config,
@@ -41,50 +46,6 @@ const SiteConfigComponent = ({
   const [iconPreview, setIconPreview] = useState<string>('');
   const [iconUploading, setIconUploading] = useState(false);
   const iconFileRef = useRef<HTMLInputElement>(null);
-
-  // 豆瓣数据源选项
-  const doubanDataSourceOptions = [
-    { value: 'direct', label: '直连（服务器直接请求豆瓣）' },
-    { value: 'cors-proxy-zwei', label: 'Cors Proxy By Zwei' },
-    {
-      value: 'cmliussss-cdn-tencent',
-      label: '豆瓣 CDN By CMLiussss（腾讯云）',
-    },
-    { value: 'cmliussss-cdn-ali', label: '豆瓣 CDN By CMLiussss（阿里云）' },
-    { value: 'custom', label: '自定义代理' },
-  ];
-
-  // 豆瓣图片代理选项
-  const doubanImageProxyTypeOptions = [
-    { value: 'direct', label: '直连（浏览器直接请求豆瓣）' },
-    { value: 'server', label: '服务器代理（由服务器代理请求豆瓣）' },
-    { value: 'img3', label: '豆瓣官方精品 CDN（阿里云）' },
-    {
-      value: 'cmliussss-cdn-tencent',
-      label: '豆瓣 CDN By CMLiussss（腾讯云）',
-    },
-    { value: 'cmliussss-cdn-ali', label: '豆瓣 CDN By CMLiussss（阿里云）' },
-    { value: 'custom', label: '自定义代理' },
-  ];
-
-  // 获取感谢信息
-  const getThanksInfo = (dataSource: string) => {
-    switch (dataSource) {
-      case 'cors-proxy-zwei':
-        return {
-          text: 'Thanks to @Zwei',
-          url: 'https://github.com/bestzwei',
-        };
-      case 'cmliussss-cdn-tencent':
-      case 'cmliussss-cdn-ali':
-        return {
-          text: 'Thanks to @CMLiussss',
-          url: 'https://github.com/cmliu',
-        };
-      default:
-        return null;
-    }
-  };
 
   useEffect(() => {
     if (config?.SiteConfig) {
@@ -457,7 +418,7 @@ const SiteConfigComponent = ({
       </div>
 
       <div className='grid grid-cols-1 gap-6 md:grid-cols-2'>
-        <div className='flex min-h-[96px] items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900'>
+        <div className='flex min-h-[96px] items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/55'>
           <div>
             <p className='text-sm font-medium text-gray-900 dark:text-gray-100'>
               显示直播入口
@@ -492,7 +453,7 @@ const SiteConfigComponent = ({
           </button>
         </div>
 
-        <div className='flex min-h-[96px] items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900'>
+        <div className='flex min-h-[96px] items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/55'>
           <div>
             <p className='text-sm font-medium text-gray-900 dark:text-gray-100'>
               NSFW模式
@@ -527,7 +488,7 @@ const SiteConfigComponent = ({
           </button>
         </div>
 
-        <div className='flex min-h-[96px] items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900'>
+        <div className='flex min-h-[96px] items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/55'>
           <div>
             <p className='text-sm font-medium text-gray-900 dark:text-gray-100'>
               启用流式搜索

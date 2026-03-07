@@ -10,9 +10,25 @@ export async function GET(_request: NextRequest) {
   const result = {
     SiteName: config.SiteConfig.SiteName,
     SiteIcon: config.SiteConfig.SiteIcon || '',
-    StorageType: process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage',
+    StorageType: 'localdb',
     Version: CURRENT_VERSION,
     OpenRegister: !!config.UserConfig.OpenRegister,
+    UpdateRepos: process.env.NEXT_PUBLIC_UPDATE_REPOS || 'naseaoi/IceTV',
+    UpdateBranch: process.env.NEXT_PUBLIC_UPDATE_BRANCH || 'main',
+    DoubanProxyType: config.SiteConfig.DoubanProxyType,
+    DoubanProxy: config.SiteConfig.DoubanProxy || '',
+    DoubanImageProxyType: config.SiteConfig.DoubanImageProxyType,
+    DoubanImageProxy: config.SiteConfig.DoubanImageProxy || '',
+    DisableYellowFilter: config.SiteConfig.DisableYellowFilter,
+    EnableLiveEntry: config.SiteConfig.EnableLiveEntry,
+    CustomCategories: config.CustomCategories.filter(
+      (category) => !category.disabled,
+    ).map((category) => ({
+      name: category.name || '',
+      type: category.type,
+      query: category.query,
+    })),
+    FluidSearch: config.SiteConfig.FluidSearch,
   };
   return NextResponse.json(result);
 }

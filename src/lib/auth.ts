@@ -7,7 +7,7 @@ export type AuthCookiePayload = {
   signature?: string;
   expiresAt?: number;
   role?: AuthRole;
-  sessionType?: 'localstorage' | 'account';
+  sessionType?: 'account';
 };
 
 export type AuthMetaPayload = {

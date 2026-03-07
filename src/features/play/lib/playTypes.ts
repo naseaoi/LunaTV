@@ -10,13 +10,11 @@ declare global {
 export type SessionLostReason =
   | 'ok'
   | 'missing_cookie'
-  | 'invalid_local_password'
   | 'invalid_signature'
   | 'missing_signature'
   | 'missing_username'
   | 'user_not_found'
   | 'user_banned'
-  | 'no_password_config'
   | 'server_error';
 
 export type SessionLostDetail = {
