@@ -9,6 +9,7 @@ import {
 import { useRouter } from 'next/navigation';
 import React, {
   forwardRef,
+  useId,
   memo,
   useCallback,
   useEffect,
@@ -21,16 +22,16 @@ import {
   deleteFavorite,
   deletePlayRecord,
   generateStorageKey,
-  isFavorited,
   saveFavorite,
-  subscribeToDataUpdates,
 } from '@/lib/db.client';
 import { SearchResult } from '@/lib/types';
 import { useLongPress } from '@/hooks/useLongPress';
 
-import ConfirmModal from '@/components/modals/ConfirmModal';
+import {
+  useCardInteractionManager,
+  useFavoriteStatus,
+} from '@/components/CardInteractionProvider';
 import CoverImage from '@/components/CoverImage';
-import MobileActionSheet from '@/components/MobileActionSheet';
 
 export interface VideoCardProps {
   id?: string;
@@ -61,6 +62,77 @@ export type VideoCardHandle = {
   setDoubanId: (id?: number) => void;
 };
 
+function isSameStringArray(prev?: string[], next?: string[]): boolean {
+  if (prev === next) {
+    return true;
+  }
+  if (!prev || !next) {
+    return !prev && !next;
+  }
+  if (prev.length !== next.length) {
+    return false;
+  }
+
+  return prev.every((item, index) => item === next[index]);
+}
+
+function isSameAggregateGroup(
+  prev?: SearchResult[],
+  next?: SearchResult[],
+): boolean {
+  if (prev === next) {
+    return true;
+  }
+  if (!prev || !next) {
+    return !prev && !next;
+  }
+  if (prev.length !== next.length) {
+    return false;
+  }
+
+  return prev.every((item, index) => {
+    const nextItem = next[index];
+    return (
+      item.id === nextItem.id &&
+      item.source === nextItem.source &&
+      item.title === nextItem.title &&
+      item.poster === nextItem.poster &&
+      item.year === nextItem.year &&
+      item.source_name === nextItem.source_name &&
+      item.douban_id === nextItem.douban_id &&
+      item.episodes.length === nextItem.episodes.length &&
+      item.episodes_titles.length === nextItem.episodes_titles.length
+    );
+  });
+}
+
+function areVideoCardPropsEqual(
+  prev: Readonly<VideoCardProps>,
+  next: Readonly<VideoCardProps>,
+): boolean {
+  return (
+    prev.id === next.id &&
+    prev.source === next.source &&
+    prev.title === next.title &&
+    prev.query === next.query &&
+    prev.poster === next.poster &&
+    prev.episodes === next.episodes &&
+    prev.source_name === next.source_name &&
+    isSameStringArray(prev.source_names, next.source_names) &&
+    prev.progress === next.progress &&
+    prev.year === next.year &&
+    prev.from === next.from &&
+    prev.currentEpisode === next.currentEpisode &&
+    prev.douban_id === next.douban_id &&
+    prev.rate === next.rate &&
+    prev.type === next.type &&
+    prev.isBangumi === next.isBangumi &&
+    prev.isAggregate === next.isAggregate &&
+    prev.origin === next.origin &&
+    isSameAggregateGroup(prev.aggregateGroup, next.aggregateGroup)
+  );
+}
+
 const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
   function VideoCard(
     {
@@ -88,7 +160,14 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
     ref,
   ) {
     const router = useRouter();
-    const [favorited, setFavorited] = useState(false);
+    const interactionId = useId();
+    const {
+      showActionSheet,
+      hideActionSheet,
+      showConfirm,
+      ensureFavoritesLoaded,
+      getFavoriteStatus,
+    } = useCardInteractionManager();
     const [showMobileActions, setShowMobileActions] = useState(false);
     const [actionSheetAnchorRect, setActionSheetAnchorRect] = useState<{
       top: number;
@@ -99,8 +178,6 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
     const [searchFavorited, setSearchFavorited] = useState<boolean | null>(
       null,
     ); // 搜索结果的收藏状态
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-
     // 可外部修改的可控字段
     const [dynamicEpisodes, setDynamicEpisodes] = useState<number | undefined>(
       episodes,
@@ -143,36 +220,11 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
         ? 'movie'
         : 'tv'
       : type;
-
-    // 获取收藏状态（搜索结果页面不检查）
-    useEffect(() => {
-      if (from === 'douban' || from === 'search' || !actualSource || !actualId)
-        return;
-
-      const fetchFavoriteStatus = async () => {
-        try {
-          const fav = await isFavorited(actualSource, actualId);
-          setFavorited(fav);
-        } catch (err) {
-          throw new Error('检查收藏状态失败');
-        }
-      };
-
-      fetchFavoriteStatus();
-
-      // 监听收藏状态更新事件
-      const storageKey = generateStorageKey(actualSource, actualId);
-      const unsubscribe = subscribeToDataUpdates(
-        'favoritesUpdated',
-        (newFavorites: Record<string, any>) => {
-          // 检查当前项目是否在新的收藏列表中
-          const isNowFavorited = !!newFavorites[storageKey];
-          setFavorited(isNowFavorited);
-        },
-      );
-
-      return unsubscribe;
-    }, [from, actualSource, actualId]);
+    const favorited = useFavoriteStatus(
+      actualSource,
+      actualId,
+      from !== 'douban' && from !== 'search' && !!actualSource && !!actualId,
+    );
 
     const handleToggleFavorite = useCallback(
       async (e: React.MouseEvent) => {
@@ -190,8 +242,6 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
             await deleteFavorite(actualSource, actualId);
             if (from === 'search') {
               setSearchFavorited(false);
-            } else {
-              setFavorited(false);
             }
           } else {
             // 如果未收藏，添加收藏
@@ -205,8 +255,6 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
             });
             if (from === 'search') {
               setSearchFavorited(true);
-            } else {
-              setFavorited(true);
             }
           }
         } catch (err) {
@@ -232,22 +280,29 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
         e.preventDefault();
         e.stopPropagation();
         if (from !== 'playrecord' || !actualSource || !actualId) return;
-        setShowDeleteConfirm(true);
-      },
-      [from, actualSource, actualId],
-    );
 
-    const confirmDeleteRecord = useCallback(async () => {
-      if (!actualSource || !actualId) return;
-      try {
-        await deletePlayRecord(actualSource, actualId);
-        onDelete?.();
-      } catch (err) {
-        throw new Error('删除播放记录失败');
-      } finally {
-        setShowDeleteConfirm(false);
-      }
-    }, [actualSource, actualId, onDelete]);
+        showConfirm(interactionId, {
+          title: '确认删除该记录？',
+          message: `确认删除「${actualTitle}」的观看记录吗？删除后无法恢复。`,
+          danger: true,
+          cancelText: '取消',
+          confirmText: '确认删除',
+          onConfirm: async () => {
+            await deletePlayRecord(actualSource, actualId);
+            onDelete?.();
+          },
+        });
+      },
+      [
+        from,
+        actualSource,
+        actualId,
+        showConfirm,
+        interactionId,
+        actualTitle,
+        onDelete,
+      ],
+    );
 
     // 聚合模式跳转前，把完整的 group 数据写入 sessionStorage 供播放页复用
     const saveAggregateGroup = useCallback(() => {
@@ -363,13 +418,36 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
         searchFavorited === null
       ) {
         try {
-          const fav = await isFavorited(actualSource, actualId);
-          setSearchFavorited(fav);
+          await ensureFavoritesLoaded();
+          setSearchFavorited(
+            getFavoriteStatus(generateStorageKey(actualSource, actualId)),
+          );
         } catch (err) {
           setSearchFavorited(false);
         }
       }
-    }, [from, isAggregate, actualSource, actualId, searchFavorited]);
+    }, [
+      from,
+      isAggregate,
+      actualSource,
+      actualId,
+      searchFavorited,
+      ensureFavoritesLoaded,
+      getFavoriteStatus,
+    ]);
+
+    const aggregateSources = useMemo(
+      () =>
+        isAggregate && dynamicSourceNames
+          ? Array.from(new Set(dynamicSourceNames))
+          : undefined,
+      [dynamicSourceNames, isAggregate],
+    );
+
+    const closeActionSheet = useCallback(() => {
+      setShowMobileActions(false);
+      setActionSheetAnchorRect(null);
+    }, []);
 
     // 长按操作
     const handleLongPress = useCallback(() => {
@@ -594,6 +672,50 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
       handleClick,
       handleToggleFavorite,
       handleDeleteRecord,
+    ]);
+
+    useEffect(() => {
+      if (!showMobileActions) {
+        hideActionSheet(interactionId);
+        return;
+      }
+
+      showActionSheet(
+        interactionId,
+        {
+          title: actualTitle,
+          poster: actualPoster,
+          actions: mobileActions,
+          sources: aggregateSources,
+          isAggregate,
+          sourceName: source_name,
+          currentEpisode,
+          totalEpisodes: actualEpisodes,
+          origin,
+          anchorRect: actionSheetAnchorRect,
+        },
+        closeActionSheet,
+      );
+
+      return () => {
+        hideActionSheet(interactionId);
+      };
+    }, [
+      actionSheetAnchorRect,
+      actualEpisodes,
+      actualPoster,
+      actualTitle,
+      aggregateSources,
+      closeActionSheet,
+      currentEpisode,
+      hideActionSheet,
+      interactionId,
+      isAggregate,
+      mobileActions,
+      origin,
+      showActionSheet,
+      showMobileActions,
+      source_name,
     ]);
 
     return (
@@ -1202,43 +1324,9 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
             )}
           </div>
         </div>
-
-        {/* 操作菜单 - 支持右键和长按触发 */}
-        <MobileActionSheet
-          isOpen={showMobileActions}
-          onClose={() => {
-            setShowMobileActions(false);
-          }}
-          title={actualTitle}
-          poster={actualPoster}
-          actions={mobileActions}
-          sources={
-            isAggregate && dynamicSourceNames
-              ? Array.from(new Set(dynamicSourceNames))
-              : undefined
-          }
-          isAggregate={isAggregate}
-          sourceName={source_name}
-          currentEpisode={currentEpisode}
-          totalEpisodes={actualEpisodes}
-          origin={origin}
-          anchorRect={actionSheetAnchorRect}
-        />
-
-        {/* 删除播放记录确认弹窗 */}
-        <ConfirmModal
-          isOpen={showDeleteConfirm}
-          title='确认删除该记录？'
-          message={`确认删除「${actualTitle}」的观看记录吗？删除后无法恢复。`}
-          danger
-          cancelText='取消'
-          confirmText='确认删除'
-          onCancel={() => setShowDeleteConfirm(false)}
-          onConfirm={confirmDeleteRecord}
-        />
       </>
     );
   },
 );
 
-export default memo(VideoCard);
+export default memo(VideoCard, areVideoCardPropsEqual);

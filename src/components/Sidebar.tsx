@@ -19,6 +19,7 @@ import {
   useContext,
   useEffect,
   useLayoutEffect,
+  useRef,
   useState,
 } from 'react';
 
@@ -100,6 +101,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
   const [isCollapsed, setIsCollapsed] = useState<boolean>(
     getInitialSidebarCollapsed,
   );
+  const prefetchedRoutesRef = useRef<Set<string>>(new Set());
 
   // 当折叠状态变化时，同步到 <html> data 属性，供首屏 CSS 使用
   useLayoutEffect(() => {
@@ -139,18 +141,58 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
     onToggle?.(newState);
   }, [isCollapsed, onToggle]);
 
+  const prefetchRoute = useCallback(
+    (href: string) => {
+      if (prefetchedRoutesRef.current.has(href)) {
+        return;
+      }
+      prefetchedRoutesRef.current.add(href);
+      router.prefetch(href);
+    },
+    [router],
+  );
+
   useEffect(() => {
-    router.prefetch('/');
-    router.prefetch('/search');
-    router.prefetch('/douban?type=movie');
-    router.prefetch('/douban?type=tv');
-    router.prefetch('/douban?type=anime');
-    router.prefetch('/douban?type=show');
-    router.prefetch('/douban?type=custom');
+    const routes = [
+      '/',
+      '/search',
+      '/douban?type=movie',
+      '/douban?type=tv',
+      '/douban?type=anime',
+      '/douban?type=show',
+      '/douban?type=custom',
+    ];
+
     if (window.RUNTIME_CONFIG?.ENABLE_LIVE_ENTRY) {
-      router.prefetch('/live');
+      routes.push('/live');
     }
-  }, [router]);
+
+    const prefetchAll = () => {
+      routes.forEach(prefetchRoute);
+    };
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let idleId: number | null = null;
+
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      idleId = window.requestIdleCallback(prefetchAll, { timeout: 1500 });
+    } else {
+      timeoutId = setTimeout(prefetchAll, 800);
+    }
+
+    return () => {
+      if (
+        idleId !== null &&
+        typeof window !== 'undefined' &&
+        'cancelIdleCallback' in window
+      ) {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [prefetchRoute]);
 
   const contextValue = {
     isCollapsed,
@@ -289,7 +331,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
               <Link
                 href='/search'
                 onClick={() => setActive('/search')}
-                onMouseEnter={() => router.prefetch('/search')}
+                onMouseEnter={() => prefetchRoute('/search')}
                 data-active={active === '/search'}
                 className={`group flex min-h-[40px] items-center rounded-lg px-2 py-2 pl-4 font-medium text-gray-700 transition-colors duration-200 hover:bg-gray-100/30 hover:text-green-600 data-[active=true]:bg-green-500/20 data-[active=true]:text-green-700 dark:text-gray-300 dark:hover:text-green-400 dark:data-[active=true]:bg-green-500/10 dark:data-[active=true]:text-green-400 ${
                   isCollapsed ? 'mx-0 w-full max-w-none' : 'mx-0'
@@ -331,7 +373,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
                       key={item.label}
                       href={item.href}
                       onClick={() => setActive(item.href)}
-                      onMouseEnter={() => router.prefetch(item.href)}
+                      onMouseEnter={() => prefetchRoute(item.href)}
                       data-active={isActive}
                       className={`group flex min-h-[40px] items-center rounded-lg px-2 py-2 pl-4 text-sm text-gray-700 transition-colors duration-200 hover:bg-gray-100/30 hover:text-green-600 data-[active=true]:bg-green-500/20 data-[active=true]:text-green-700 dark:text-gray-300 dark:hover:text-green-400 dark:data-[active=true]:bg-green-500/10 dark:data-[active=true]:text-green-400 ${
                         isCollapsed ? 'mx-0 w-full max-w-none' : 'mx-0'

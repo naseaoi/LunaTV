@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { AdminConfig } from '@/features/admin/types/api';
 import { isGuardFailure, requireActiveUser } from '@/lib/api-auth';
 import { getAvailableApiSites, getConfig } from '@/lib/config';
-import { searchFromApi } from '@/lib/downstream';
+import { searchFirstPageFromApi } from '@/lib/downstream';
 import { yellowWords } from '@/lib/yellow';
 
 export const runtime = 'nodejs';
@@ -67,7 +67,7 @@ async function generateSuggestions(
   if (apiSites.length > 0) {
     // 取第一个可用的数据源进行搜索
     const firstSite = apiSites[0];
-    const results = await searchFromApi(firstSite, query);
+    const results = await searchFirstPageFromApi(firstSite, query);
 
     realKeywords = Array.from(
       new Set(

@@ -561,6 +561,30 @@ export async function searchFromApi(
   }
 }
 
+export async function searchFirstPageFromApi(
+  apiSite: ApiSite,
+  query: string,
+): Promise<SearchResult[]> {
+  if (isGirigiriSource(apiSite)) {
+    return searchFromGirigiri(apiSite, query);
+  }
+
+  try {
+    const apiUrl =
+      apiSite.api + API_CONFIG.search.path + encodeURIComponent(query);
+    const firstPageResult = await searchWithCache(
+      apiSite,
+      query,
+      1,
+      apiUrl,
+      6000,
+    );
+    return firstPageResult.results;
+  } catch {
+    return [];
+  }
+}
+
 // 匹配 m3u8 链接的正则
 const M3U8_PATTERN = /(https?:\/\/[^"'\s]+?\.m3u8)/g;
 

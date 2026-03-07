@@ -17,6 +17,20 @@ export type FilterState = {
   yearOrder: 'none' | 'asc' | 'desc';
 };
 
+export type AggregatedResultItem = {
+  mapKey: string;
+  group: SearchResult[];
+  title: string;
+  poster: string;
+  year: string;
+  type: 'movie' | 'tv';
+  stats: {
+    episodes: number;
+    source_names: string[];
+    douban_id?: number;
+  };
+};
+
 interface UseSearchAggregationParams {
   searchResults: SearchResult[];
   filterAll: FilterState;
@@ -49,6 +63,8 @@ export function useSearchAggregation({
     }
     return ref;
   };
+
+  const trimmedSearchQuery = useMemo(() => searchQuery.trim(), [searchQuery]);
 
   // 聚合后的结果（按标题和年份分组）
   const aggregatedResults = useMemo(() => {
@@ -109,10 +125,44 @@ export function useSearchAggregation({
     return groupedResults;
   }, [searchResults]);
 
+  const aggregatedResultItems = useMemo<AggregatedResultItem[]>(() => {
+    return aggregatedResults.map(([mapKey, group]) => {
+      const title = group[0]?.title || '';
+      const poster = group[0]?.poster || '';
+      const year = group[0]?.year || 'unknown';
+      const stats = computeGroupStats(group);
+
+      return {
+        mapKey,
+        group,
+        title,
+        poster,
+        year,
+        type: stats.episodes === 1 ? 'movie' : 'tv',
+        stats,
+      };
+    });
+  }, [aggregatedResults]);
+
   // 聚合增量更新：对比变化并调用卡片 ref 的 set 方法
   useEffect(() => {
-    aggregatedResults.forEach(([mapKey, group]) => {
-      const stats = computeGroupStats(group);
+    const activeKeys = new Set(
+      aggregatedResultItems.map((item) => item.mapKey),
+    );
+
+    groupRefs.current.forEach((_, key) => {
+      if (!activeKeys.has(key)) {
+        groupRefs.current.delete(key);
+      }
+    });
+
+    groupStatsRef.current.forEach((_, key) => {
+      if (!activeKeys.has(key)) {
+        groupStatsRef.current.delete(key);
+      }
+    });
+
+    aggregatedResultItems.forEach(({ mapKey, stats }) => {
       const prev = groupStatsRef.current.get(mapKey);
       if (!prev) {
         groupStatsRef.current.set(mapKey, stats);
@@ -134,7 +184,7 @@ export function useSearchAggregation({
         groupStatsRef.current.set(mapKey, stats);
       }
     });
-  }, [aggregatedResults]);
+  }, [aggregatedResultItems]);
 
   // 构建筛选选项
   const filterOptions = useMemo(() => {
@@ -208,8 +258,8 @@ export function useSearchAggregation({
       const yearComp = compareYear(a.year, b.year, yearOrder);
       if (yearComp !== 0) return yearComp;
 
-      const aExactMatch = a.title === searchQuery.trim();
-      const bExactMatch = b.title === searchQuery.trim();
+      const aExactMatch = a.title === trimmedSearchQuery;
+      const bExactMatch = b.title === trimmedSearchQuery;
       if (aExactMatch && !bExactMatch) return -1;
       if (!aExactMatch && bExactMatch) return 1;
 
@@ -217,16 +267,18 @@ export function useSearchAggregation({
         ? a.title.localeCompare(b.title)
         : b.title.localeCompare(a.title);
     });
-  }, [searchResults, filterAll, searchQuery]);
+  }, [searchResults, filterAll, trimmedSearchQuery]);
 
   // 聚合筛选+排序
   const filteredAggResults = useMemo(() => {
     const { source, title, year, yearOrder } = filterAgg;
-    const filtered = aggregatedResults.filter(([, group]) => {
-      const gTitle = group[0]?.title ?? '';
-      const gYear = group[0]?.year ?? 'unknown';
+    const filtered = aggregatedResultItems.filter((item) => {
+      const gTitle = item.title;
+      const gYear = item.year;
       const hasSource =
-        source === 'all' ? true : group.some((item) => item.source === source);
+        source === 'all'
+          ? true
+          : item.group.some((groupItem) => groupItem.source === source);
       if (!hasSource) return false;
       if (title !== 'all' && gTitle !== title) return false;
       if (year !== 'all' && gYear !== year) return false;
@@ -238,30 +290,28 @@ export function useSearchAggregation({
     }
 
     return filtered.sort((a, b) => {
-      const aYear = a[1][0].year;
-      const bYear = b[1][0].year;
+      const aYear = a.year;
+      const bYear = b.year;
       const yearComp = compareYear(aYear, bYear, yearOrder);
       if (yearComp !== 0) return yearComp;
 
-      const aExactMatch = a[1][0].title === searchQuery.trim();
-      const bExactMatch = b[1][0].title === searchQuery.trim();
+      const aExactMatch = a.title === trimmedSearchQuery;
+      const bExactMatch = b.title === trimmedSearchQuery;
       if (aExactMatch && !bExactMatch) return -1;
       if (!aExactMatch && bExactMatch) return 1;
 
-      const aTitle = a[1][0].title;
-      const bTitle = b[1][0].title;
+      const aTitle = a.title;
+      const bTitle = b.title;
       return yearOrder === 'asc'
         ? aTitle.localeCompare(bTitle)
         : bTitle.localeCompare(aTitle);
     });
-  }, [aggregatedResults, filterAgg, searchQuery]);
+  }, [aggregatedResultItems, filterAgg, trimmedSearchQuery]);
 
   return {
-    aggregatedResults,
     filterOptions,
     filteredAllResults,
     filteredAggResults,
     getGroupRef,
-    groupStatsRef,
   };
 }

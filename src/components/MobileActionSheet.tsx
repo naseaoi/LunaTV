@@ -3,13 +3,20 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import CoverImage from '@/components/CoverImage';
 
-interface ActionItem {
+export interface ActionItem {
   id: string;
   label: string;
   icon: React.ReactNode;
   onClick: (e?: React.MouseEvent) => void | Promise<void>;
   color?: 'default' | 'danger' | 'primary';
   disabled?: boolean;
+}
+
+export interface ActionSheetAnchorRect {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
 }
 
 interface MobileActionSheetProps {
@@ -24,12 +31,7 @@ interface MobileActionSheetProps {
   currentEpisode?: number; // 当前集数
   totalEpisodes?: number; // 总集数
   origin?: 'vod' | 'live';
-  anchorRect?: {
-    top: number;
-    left: number;
-    width: number;
-    height: number;
-  } | null;
+  anchorRect?: ActionSheetAnchorRect | null;
 }
 
 const MobileActionSheet: React.FC<MobileActionSheetProps> = ({

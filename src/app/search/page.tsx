@@ -2,7 +2,7 @@
 
 import { ChevronUp, Search, X } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import React, { Suspense, useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
 
 import { getSearchHistory, subscribeToDataUpdates } from '@/lib/db.client';
 
@@ -11,7 +11,6 @@ import SearchResultFilter from '@/components/SearchResultFilter';
 import SearchSuggestions from '@/components/SearchSuggestions';
 import VideoCard from '@/components/VideoCard';
 
-import { computeGroupStats } from '@/features/search/lib/searchUtils';
 import {
   useSearchExecution,
   clearSearchSnapshotCache,
@@ -124,18 +123,15 @@ function SearchPageClient() {
   });
 
   // 聚合、筛选、排序
-  const {
-    filterOptions,
-    filteredAllResults,
-    filteredAggResults,
-    getGroupRef,
-    groupStatsRef,
-  } = useSearchAggregation({
-    searchResults,
-    filterAll,
-    filterAgg,
-    searchQuery,
-  });
+  const { filterOptions, filteredAllResults, filteredAggResults, getGroupRef } =
+    useSearchAggregation({
+      searchResults,
+      filterAll,
+      filterAgg,
+      searchQuery,
+    });
+
+  const trimmedSearchQuery = useMemo(() => searchQuery.trim(), [searchQuery]);
 
   // 初始化：搜索历史、滚动监听、流式搜索设置
   useEffect(() => {
@@ -150,30 +146,35 @@ function SearchPageClient() {
       },
     );
 
-    const getScrollTop = () => document.body.scrollTop || 0;
+    const getScrollTop = () =>
+      window.scrollY ||
+      document.documentElement.scrollTop ||
+      document.body.scrollTop ||
+      0;
 
-    let isRunning = false;
+    let frameId: number | null = null;
     const checkScrollPosition = () => {
-      if (!isRunning) return;
-      const scrollTop = getScrollTop();
-      setShowBackToTop(scrollTop > 300);
-      requestAnimationFrame(checkScrollPosition);
+      frameId = null;
+      setShowBackToTop(getScrollTop() > 300);
     };
-
-    isRunning = true;
-    checkScrollPosition();
 
     const handleScroll = () => {
-      const scrollTop = getScrollTop();
-      setShowBackToTop(scrollTop > 300);
+      if (frameId !== null) {
+        return;
+      }
+      frameId = window.requestAnimationFrame(checkScrollPosition);
     };
 
-    document.body.addEventListener('scroll', handleScroll, { passive: true });
+    checkScrollPosition();
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
 
     return () => {
       unsubscribe();
-      isRunning = false;
-      document.body.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('scroll', handleScroll);
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
     };
   }, []);
 
@@ -384,41 +385,26 @@ function SearchPageClient() {
                   className='grid grid-cols-3 justify-start gap-x-2 gap-y-14 px-0 sm:grid-cols-[repeat(auto-fill,_minmax(11rem,_1fr))] sm:gap-x-8 sm:gap-y-20 sm:px-2'
                 >
                   {viewMode === 'agg'
-                    ? filteredAggResults.map(([mapKey, group]) => {
-                        const title = group[0]?.title || '';
-                        const poster = group[0]?.poster || '';
-                        const year = group[0]?.year || 'unknown';
-                        const { episodes, source_names, douban_id } =
-                          computeGroupStats(group);
-                        const type = episodes === 1 ? 'movie' : 'tv';
-
-                        if (!groupStatsRef.current.has(mapKey)) {
-                          groupStatsRef.current.set(mapKey, {
-                            episodes,
-                            source_names,
-                            douban_id,
-                          });
-                        }
-
+                    ? filteredAggResults.map((item) => {
                         return (
-                          <div key={`agg-${mapKey}`} className='w-full'>
+                          <div key={`agg-${item.mapKey}`} className='w-full'>
                             <VideoCard
-                              ref={getGroupRef(mapKey)}
+                              ref={getGroupRef(item.mapKey)}
                               from='search'
                               isAggregate={true}
-                              title={title}
-                              poster={poster}
-                              year={year}
-                              episodes={episodes}
-                              source_names={source_names}
-                              douban_id={douban_id}
+                              title={item.title}
+                              poster={item.poster}
+                              year={item.year}
+                              episodes={item.stats.episodes}
+                              source_names={item.stats.source_names}
+                              douban_id={item.stats.douban_id}
                               query={
-                                searchQuery.trim() !== title
-                                  ? searchQuery.trim()
+                                trimmedSearchQuery !== item.title
+                                  ? trimmedSearchQuery
                                   : ''
                               }
-                              type={type}
-                              aggregateGroup={group}
+                              type={item.type}
+                              aggregateGroup={item.group}
                             />
                           </div>
                         );
@@ -437,8 +423,8 @@ function SearchPageClient() {
                             source_name={item.source_name}
                             douban_id={item.douban_id}
                             query={
-                              searchQuery.trim() !== item.title
-                                ? searchQuery.trim()
+                              trimmedSearchQuery !== item.title
+                                ? trimmedSearchQuery
                                 : ''
                             }
                             year={item.year}

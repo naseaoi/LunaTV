@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { unstable_noStore as noStore } from 'next/cache';
 import { Inter } from 'next/font/google';
 
 import './globals.css';
@@ -6,6 +7,7 @@ import './globals.css';
 import { getConfig } from '@/lib/config';
 
 import { GlobalErrorIndicator } from '../components/GlobalErrorIndicator';
+import { CardInteractionProvider } from '../components/CardInteractionProvider';
 import { SiteProvider } from '../components/SiteProvider';
 import { ThemeProvider } from '../components/ThemeProvider';
 
@@ -21,14 +23,17 @@ const inter = Inter({
     'sans-serif',
   ],
 });
-export const dynamic = 'force-dynamic';
+
+const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
+const shouldUseDynamicConfig = storageType !== 'localstorage';
 
 // 动态生成 metadata，支持配置更新后的标题变化
 export async function generateMetadata(): Promise<Metadata> {
-  const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
-  const config = await getConfig();
   let siteName = process.env.NEXT_PUBLIC_SITE_NAME || 'IceTV';
-  if (storageType !== 'localstorage') {
+
+  if (shouldUseDynamicConfig) {
+    noStore();
+    const config = await getConfig();
     siteName = config.SiteConfig.SiteName;
   }
 
@@ -48,7 +53,9 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
+  if (shouldUseDynamicConfig) {
+    noStore();
+  }
 
   let siteName = process.env.NEXT_PUBLIC_SITE_NAME || 'IceTV';
   let siteIcon = '';
@@ -71,7 +78,7 @@ export default async function RootLayout({
     type: 'movie' | 'tv';
     query: string;
   }[];
-  if (storageType !== 'localstorage') {
+  if (shouldUseDynamicConfig) {
     const config = await getConfig();
     siteName = config.SiteConfig.SiteName;
     siteIcon = config.SiteConfig.SiteIcon || '';
@@ -96,7 +103,7 @@ export default async function RootLayout({
 
   // 将运行时配置注入到全局 window 对象，供客户端在运行时读取
   const runtimeConfig = {
-    STORAGE_TYPE: process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage',
+    STORAGE_TYPE: storageType,
     OPEN_REGISTER: openRegister,
     UPDATE_REPOS: process.env.NEXT_PUBLIC_UPDATE_REPOS || 'naseaoi/IceTV',
     UPDATE_BRANCH: process.env.NEXT_PUBLIC_UPDATE_BRANCH || 'main',
@@ -154,8 +161,10 @@ export default async function RootLayout({
             siteIcon={siteIcon}
             announcement={announcement}
           >
-            {children}
-            <GlobalErrorIndicator />
+            <CardInteractionProvider>
+              {children}
+              <GlobalErrorIndicator />
+            </CardInteractionProvider>
           </SiteProvider>
         </ThemeProvider>
       </body>
