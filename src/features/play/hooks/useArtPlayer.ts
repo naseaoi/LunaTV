@@ -5,47 +5,18 @@ import type HlsType from 'hls.js';
 
 import { SearchResult } from '@/lib/types';
 import { isServerProxy } from '@/lib/proxy-modes';
+import {
+  ensureVideoSource,
+  formatTime,
+  formatBytesPerSecond,
+  createHlsConfig,
+  createArtPlayerConfig,
+  configureArtplayerStatics,
+  handleHlsFatalError,
+} from '@/lib/player-utils';
 
 import { WakeLockSentinel } from '@/features/play/lib/playTypes';
 import { filterAdsFromM3U8 } from '@/features/play/lib/playUtils';
-
-// ---------------------------------------------------------------------------
-// 内部工具函数
-// ---------------------------------------------------------------------------
-
-function ensureVideoSource(video: HTMLVideoElement | null, url: string) {
-  if (!video || !url) return;
-  const sources = Array.from(video.getElementsByTagName('source'));
-  const existed = sources.some((s) => s.src === url);
-  if (!existed) {
-    sources.forEach((s) => s.remove());
-    const sourceEl = document.createElement('source');
-    sourceEl.src = url;
-    video.appendChild(sourceEl);
-  }
-  video.disableRemotePlayback = false;
-  if (video.hasAttribute('disableRemotePlayback')) {
-    video.removeAttribute('disableRemotePlayback');
-  }
-}
-
-function formatTime(seconds: number): string {
-  if (seconds === 0) return '00:00';
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const remainingSeconds = Math.round(seconds % 60);
-  if (hours === 0) {
-    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-  }
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-}
-
-function formatBytesPerSecond(bytesPerSecond: number): string {
-  if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) return '0 KB/s';
-  const kb = bytesPerSecond / 1024;
-  if (kb >= 1024) return `${(kb / 1024).toFixed(1)} MB/s`;
-  return `${kb.toFixed(1)} KB/s`;
-}
 
 // ---------------------------------------------------------------------------
 // 类型
@@ -231,41 +202,18 @@ export function useArtPlayer(params: UseArtPlayerParams) {
         }
 
         try {
+          configureArtplayerStatics(Artplayer);
           Artplayer.PLAYBACK_RATE = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
-          Artplayer.USE_RAF = false;
-          Artplayer.FULLSCREEN_WEB_IN_BODY = true;
 
           artPlayerRef.current = new Artplayer({
             container: artRef.current,
             url: videoUrl,
-            volume: 0.7,
-            isLive: false,
-            muted: false,
-            autoplay: true,
-            pip: true,
-            autoSize: false,
-            autoMini: false,
-            screenshot: false,
-            setting: true,
-            loop: false,
-            flip: false,
-            playbackRate: true,
-            aspectRatio: false,
-            fullscreen: true,
-            fullscreenWeb: true,
-            subtitleOffset: false,
-            miniProgressBar: false,
-            mutex: true,
-            playsInline: true,
-            autoPlayback: false,
-            airplay: true,
-            theme: '#3b82f6',
-            lang: 'zh-cn',
-            hotkey: false,
-            fastForward: true,
-            autoOrientation: true,
-            lock: true,
-            moreVideoAttr: { crossOrigin: 'anonymous' },
+            ...createArtPlayerConfig({
+              isLive: false,
+              setting: true,
+              playbackRate: true,
+              fastForward: true,
+            }),
             customType: {
               m3u8: function (video: HTMLVideoElement, url: string) {
                 if (!Hls) {
@@ -277,12 +225,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
                   video.hls.destroy();
                 }
                 const hls = new Hls({
-                  debug: false,
-                  enableWorker: true,
-                  lowLatencyMode: true,
-                  maxBufferLength: 30,
-                  backBufferLength: 30,
-                  maxBufferSize: 60 * 1000 * 1000,
+                  ...createHlsConfig(),
                   loader: blockAdEnabledRef.current
                     ? (CustomHlsJsLoader as unknown as typeof Hls.DefaultConfig.loader)
                     : Hls.DefaultConfig.loader,
@@ -312,17 +255,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
                 hls.on(Hls.Events.ERROR, function (_event, data) {
                   console.error('HLS Error:', _event, data);
                   if (data.fatal) {
-                    switch (data.type) {
-                      case Hls.ErrorTypes.NETWORK_ERROR:
-                        hls.startLoad();
-                        break;
-                      case Hls.ErrorTypes.MEDIA_ERROR:
-                        hls.recoverMediaError();
-                        break;
-                      default:
-                        hls.destroy();
-                        break;
-                    }
+                    handleHlsFatalError(hls, data.type, Hls.ErrorTypes);
                   }
                 });
 
@@ -389,10 +322,6 @@ export function useArtPlayer(params: UseArtPlayerParams) {
                 video.hls = hls;
                 ensureVideoSource(video, targetUrl);
               },
-            },
-            icons: {
-              loading:
-                '<img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MCIgaGVpZ2h0PSI1MCIgdmlld0JveD0iMCAwIDUwIDUwIj48cGF0aCBkPSJNMjUuMjUxIDYuNDYxYy0xMC4zMTggMC0xOC42ODMgOC4zNjUtMTguNjgzIDE4LjY4M2g0LjA2OGMwLTguMDcgNi41NDUtMTQuNjE1IDE0LjYxNS0xNC42MTVWNi40NjF6IiBmaWxsPSIjMDA5Njg4Ij48YW5pbWF0ZVRyYW5zZm9ybSBhdHRyaWJ1dGVOYW1lPSJ0cmFuc2Zvcm0iIGF0dHJpYnV0ZVR5cGU9IlhNTCIgZHVyPSIxcyIgZnJvbT0iMCAyNSAyNSIgcmVwZWF0Q291bnQ9ImluZGVmaW5pdGUiIHRvPSIzNjAgMjUgMjUiIHR5cGU9InJvdGF0ZSIvPjwvcGF0aD48L3N2Zz4=">',
             },
             settings: [
               {

@@ -20,6 +20,7 @@ export async function preferBestSource(
       Map<string, { quality: string; loadSpeed: string; pingTime: number }>
     >
   >,
+  signal?: AbortSignal,
 ): Promise<SearchResult> {
   if (sources.length === 1) return sources[0];
 
@@ -28,6 +29,7 @@ export async function preferBestSource(
 
   // 预先获取流量路由配置（在 Promise 构造器外 await）
   const proxyModes = await getProxyModes();
+  if (signal?.aborted) return sources[0];
 
   type TestResult = {
     source: SearchResult;
@@ -39,6 +41,20 @@ export async function preferBestSource(
   let settled = false;
 
   return new Promise<SearchResult>((resolveMain) => {
+    // 外部中止时立即返回首个源
+    if (signal?.aborted) {
+      resolveMain(sources[0]);
+      return;
+    }
+    const onAbort = () => {
+      if (!settled) {
+        settled = true;
+        if (harvestTimer) clearTimeout(harvestTimer);
+        resolveMain(sources[0]);
+      }
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+
     // 最终从已收集结果中选出最优源并返回
     const finalize = () => {
       if (settled) return;
@@ -261,6 +277,9 @@ export function usePlayInit({
   setPrecomputedVideoInfo,
 }: UsePlayInitParams) {
   useEffect(() => {
+    const abortController = new AbortController();
+    const { signal } = abortController;
+
     const fetchSourceDetail = async (
       source: string,
       id: string,
@@ -268,6 +287,7 @@ export function usePlayInit({
       try {
         const detailResponse = await fetch(
           `/api/detail?source=${source}&id=${id}`,
+          { signal },
         );
         if (!detailResponse.ok) {
           throw new Error('获取视频详情失败');
@@ -275,10 +295,11 @@ export function usePlayInit({
         const detailData = (await detailResponse.json()) as SearchResult;
         return detailData;
       } catch (err) {
+        if (signal.aborted) return null;
         console.error('获取视频详情失败:', err);
         return null;
       } finally {
-        setSourceSearchLoading(false);
+        if (!signal.aborted) setSourceSearchLoading(false);
       }
     };
 
@@ -286,6 +307,7 @@ export function usePlayInit({
       try {
         const response = await fetch(
           `/api/search?q=${encodeURIComponent(query.trim())}`,
+          { signal },
         );
         if (!response.ok) {
           throw new Error('搜索失败');
@@ -301,11 +323,12 @@ export function usePlayInit({
         setAvailableSources(results);
         return results;
       } catch (err) {
+        if (signal.aborted) return [];
         setSourceSearchError(err instanceof Error ? err.message : '搜索失败');
         setAvailableSources([]);
         return [];
       } finally {
-        setSourceSearchLoading(false);
+        if (!signal.aborted) setSourceSearchLoading(false);
       }
     };
 
@@ -325,6 +348,7 @@ export function usePlayInit({
     };
 
     const initAll = async () => {
+      if (signal.aborted) return;
       if (!currentSource && !currentId && !videoTitle && !searchTitle) {
         setError('缺少必要参数');
         setLoading(false);
@@ -353,6 +377,7 @@ export function usePlayInit({
       } else {
         sourcesInfo = await fetchSourcesData(searchTitle || videoTitle);
       }
+      if (signal.aborted) return;
       if (currentSource && currentId) {
         const detailedSource = await fetchSourceDetail(
           currentSource,
@@ -377,6 +402,7 @@ export function usePlayInit({
         }
         setAvailableSources(sourcesInfo);
       }
+      if (signal.aborted) return;
       if (sourcesInfo.length === 0) {
         setError('未找到匹配结果');
         setLoading(false);
@@ -408,8 +434,10 @@ export function usePlayInit({
         detailData = await preferBestSource(
           sourcesInfo,
           setPrecomputedVideoInfo,
+          signal,
         );
       }
+      if (signal.aborted) return;
 
       // 选定源的 episodes 为空（搜索阶段的残缺数据），补调 detail 获取完整信息
       if (!detailData.episodes || detailData.episodes.length === 0) {
@@ -435,6 +463,7 @@ export function usePlayInit({
         }
       }
 
+      if (signal.aborted) return;
       setNeedPrefer(false);
       setCurrentSource(detailData.source);
       setCurrentId(detailData.id);
@@ -469,5 +498,9 @@ export function usePlayInit({
     };
 
     initAll();
+
+    return () => {
+      abortController.abort();
+    };
   }, []);
 }

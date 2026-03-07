@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isGuardFailure, requireActiveUser } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { PlayRecord } from '@/lib/types';
+import { parseStorageKey } from '@/lib/utils';
 
 export const runtime = 'nodejs';
 
@@ -46,8 +47,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 从key中解析source和id
-    const [source, id] = key.split('+');
-    if (!source || !id) {
+    const parsed = parseStorageKey(key);
+    if (!parsed) {
       return NextResponse.json(
         { error: 'Invalid key format' },
         { status: 400 },
@@ -59,7 +60,12 @@ export async function POST(request: NextRequest) {
       save_time: record.save_time ?? Date.now(),
     } as PlayRecord;
 
-    await db.savePlayRecord(guardResult.username, source, id, finalRecord);
+    await db.savePlayRecord(
+      guardResult.username,
+      parsed.source,
+      parsed.id,
+      finalRecord,
+    );
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (err) {
@@ -82,23 +88,22 @@ export async function DELETE(request: NextRequest) {
 
     if (key) {
       // 如果提供了 key，删除单条播放记录
-      const [source, id] = key.split('+');
-      if (!source || !id) {
+      const parsed = parseStorageKey(key);
+      if (!parsed) {
         return NextResponse.json(
           { error: 'Invalid key format' },
           { status: 400 },
         );
       }
 
-      await db.deletePlayRecord(username, source, id);
+      await db.deletePlayRecord(username, parsed.source, parsed.id);
     } else {
       // 未提供 key，则清空全部播放记录
-      // 目前 DbManager 没有对应方法，这里直接遍历删除
       const all = await db.getAllPlayRecords(username);
       await Promise.all(
         Object.keys(all).map(async (k) => {
-          const [s, i] = k.split('+');
-          if (s && i) await db.deletePlayRecord(username, s, i);
+          const p = parseStorageKey(k);
+          if (p) await db.deletePlayRecord(username, p.source, p.id);
         }),
       );
     }

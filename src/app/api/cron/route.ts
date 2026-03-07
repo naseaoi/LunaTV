@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getConfig, refineConfig } from '@/lib/config';
 import { db } from '@/lib/db';
+import { parseStorageKey } from '@/lib/utils';
 import { getOwnerUsername } from '@/lib/env.server';
 import { fetchVideoDetail } from '@/lib/fetchVideoDetail';
 import { refreshLiveChannels } from '@/lib/live';
@@ -161,13 +162,17 @@ async function refreshRecordAndFavorites() {
 
         for (const [key, record] of Object.entries(playRecords)) {
           try {
-            const [source, id] = key.split('+');
-            if (!source || !id) {
+            const parsed = parseStorageKey(key);
+            if (!parsed) {
               console.warn(`跳过无效的播放记录键: ${key}`);
               continue;
             }
 
-            const detail = await getDetail(source, id, record.title);
+            const detail = await getDetail(
+              parsed.source,
+              parsed.id,
+              record.title,
+            );
             if (!detail) {
               console.warn(`跳过无法获取详情的播放记录: ${key}`);
               continue;
@@ -175,7 +180,7 @@ async function refreshRecordAndFavorites() {
 
             const episodeCount = detail.episodes?.length || 0;
             if (episodeCount > 0 && episodeCount !== record.total_episodes) {
-              await db.savePlayRecord(user, source, id, {
+              await db.savePlayRecord(user, parsed.source, parsed.id, {
                 title: detail.title || record.title,
                 source_name: record.source_name,
                 cover: detail.poster || record.cover,
@@ -215,13 +220,17 @@ async function refreshRecordAndFavorites() {
 
         for (const [key, fav] of Object.entries(favorites)) {
           try {
-            const [source, id] = key.split('+');
-            if (!source || !id) {
+            const parsed = parseStorageKey(key);
+            if (!parsed) {
               console.warn(`跳过无效的收藏键: ${key}`);
               continue;
             }
 
-            const favDetail = await getDetail(source, id, fav.title);
+            const favDetail = await getDetail(
+              parsed.source,
+              parsed.id,
+              fav.title,
+            );
             if (!favDetail) {
               console.warn(`跳过无法获取详情的收藏: ${key}`);
               continue;
@@ -229,7 +238,7 @@ async function refreshRecordAndFavorites() {
 
             const favEpisodeCount = favDetail.episodes?.length || 0;
             if (favEpisodeCount > 0 && favEpisodeCount !== fav.total_episodes) {
-              await db.saveFavorite(user, source, id, {
+              await db.saveFavorite(user, parsed.source, parsed.id, {
                 title: favDetail.title || fav.title,
                 source_name: fav.source_name,
                 cover: favDetail.poster || fav.cover,

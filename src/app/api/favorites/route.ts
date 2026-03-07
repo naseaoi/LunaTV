@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isGuardFailure, requireActiveUser } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { Favorite } from '@/lib/types';
+import { parseStorageKey } from '@/lib/utils';
 
 export const runtime = 'nodejs';
 
@@ -23,14 +24,18 @@ export async function GET(request: NextRequest) {
 
     // 查询单条收藏
     if (key) {
-      const [source, id] = key.split('+');
-      if (!source || !id) {
+      const parsed = parseStorageKey(key);
+      if (!parsed) {
         return NextResponse.json(
           { error: 'Invalid key format' },
           { status: 400 },
         );
       }
-      const fav = await db.getFavorite(guardResult.username, source, id);
+      const fav = await db.getFavorite(
+        guardResult.username,
+        parsed.source,
+        parsed.id,
+      );
       return NextResponse.json(fav, { status: 200 });
     }
 
@@ -73,8 +78,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const [source, id] = key.split('+');
-    if (!source || !id) {
+    const parsed = parseStorageKey(key);
+    if (!parsed) {
       return NextResponse.json(
         { error: 'Invalid key format' },
         { status: 400 },
@@ -86,7 +91,12 @@ export async function POST(request: NextRequest) {
       save_time: favorite.save_time ?? Date.now(),
     } as Favorite;
 
-    await db.saveFavorite(guardResult.username, source, id, finalFavorite);
+    await db.saveFavorite(
+      guardResult.username,
+      parsed.source,
+      parsed.id,
+      finalFavorite,
+    );
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (err) {
@@ -115,21 +125,21 @@ export async function DELETE(request: NextRequest) {
 
     if (key) {
       // 删除单条
-      const [source, id] = key.split('+');
-      if (!source || !id) {
+      const parsed = parseStorageKey(key);
+      if (!parsed) {
         return NextResponse.json(
           { error: 'Invalid key format' },
           { status: 400 },
         );
       }
-      await db.deleteFavorite(username, source, id);
+      await db.deleteFavorite(username, parsed.source, parsed.id);
     } else {
       // 清空全部
       const all = await db.getAllFavorites(username);
       await Promise.all(
         Object.keys(all).map(async (k) => {
-          const [s, i] = k.split('+');
-          if (s && i) await db.deleteFavorite(username, s, i);
+          const p = parseStorageKey(k);
+          if (p) await db.deleteFavorite(username, p.source, p.id);
         }),
       );
     }

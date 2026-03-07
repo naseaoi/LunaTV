@@ -23,6 +23,12 @@ export default function ModalShell({
   const [mounted, setMounted] = useState(false);
   const [visible, setVisible] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
+  // 冻结 children 快照：关闭动画期间仍显示关闭前的内容，
+  // 避免调用方同步清空数据导致"文字先消失、面板后淡出"的视觉割裂。
+  const childrenSnapshot = useRef<ReactNode>(children);
+  if (isOpen) {
+    childrenSnapshot.current = children;
+  }
 
   useEffect(() => {
     if (isOpen) {
@@ -88,7 +94,7 @@ export default function ModalShell({
     <div
       ref={overlayRef}
       tabIndex={-1}
-      className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 transition-opacity duration-200 outline-none ${
+      className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 outline-none transition-opacity duration-200 ${
         visible ? 'opacity-100' : 'opacity-0'
       }`}
       onClick={() => {
@@ -99,12 +105,12 @@ export default function ModalShell({
       role='presentation'
     >
       <div
-        className={`w-full transform rounded-2xl border border-gray-200/70 bg-white/80 shadow-2xl backdrop-blur-xl ring-1 ring-black/10 transition-all duration-200 dark:border-white/10 dark:bg-gray-900/70 dark:ring-white/10 ${
-          visible ? 'scale-100 translate-y-0' : 'scale-95 translate-y-2'
+        className={`w-full transform rounded-2xl border border-gray-200/70 bg-white/80 shadow-2xl ring-1 ring-black/10 backdrop-blur-xl transition-all duration-200 dark:border-white/10 dark:bg-gray-900/70 dark:ring-white/10 ${
+          visible ? 'translate-y-0 scale-100' : 'translate-y-2 scale-95'
         } ${panelClassName || ''}`}
         onClick={(event) => event.stopPropagation()}
       >
-        {children}
+        {childrenSnapshot.current}
       </div>
     </div>,
     document.body,

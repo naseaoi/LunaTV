@@ -1,19 +1,7 @@
-import {
-  Dispatch,
-  MutableRefObject,
-  SetStateAction,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { MutableRefObject, useRef, useState } from 'react';
 
-import {
-  deleteFavorite,
-  generateStorageKey,
-  isFavorited as checkIsFavorited,
-  saveFavorite,
-  subscribeToDataUpdates,
-} from '@/lib/db.client';
+import { deleteFavorite, saveFavorite } from '@/lib/db.client';
+import { useFavoriteSync } from '@/hooks/useFavoriteSync';
 
 import type { LiveChannel, LiveSource } from '../types';
 
@@ -33,44 +21,14 @@ export function useLiveFavorite({
   const [favorited, setFavorited] = useState(false);
   const favoritedRef = useRef(false);
 
-  // 检查收藏状态
-  useEffect(() => {
-    if (!currentSource || !currentChannel) return;
-    (async () => {
-      try {
-        const fav = await checkIsFavorited(
-          `live_${currentSource.key}`,
-          `live_${currentChannel.id}`,
-        );
-        setFavorited(fav);
-        favoritedRef.current = fav;
-      } catch (err) {
-        console.error('检查收藏状态失败:', err);
-      }
-    })();
-  }, [currentSource, currentChannel]);
+  // 复用通用的"检查+订阅"逻辑，拼接 live_ 前缀
+  const liveSource = currentSource ? `live_${currentSource.key}` : null;
+  const liveId = currentChannel ? `live_${currentChannel.id}` : null;
+  useFavoriteSync(liveSource, liveId, setFavorited, (isFav) => {
+    favoritedRef.current = isFav;
+  });
 
-  // 监听收藏数据更新事件
-  useEffect(() => {
-    if (!currentSource || !currentChannel) return;
-
-    const unsubscribe = subscribeToDataUpdates(
-      'favoritesUpdated',
-      (favorites: Record<string, unknown>) => {
-        const key = generateStorageKey(
-          `live_${currentSource.key}`,
-          `live_${currentChannel.id}`,
-        );
-        const isFav = !!favorites[key];
-        setFavorited(isFav);
-        favoritedRef.current = isFav;
-      },
-    );
-
-    return unsubscribe;
-  }, [currentSource, currentChannel]);
-
-  // 切换收藏
+  // 切换收藏（乐观更新 + 回滚）
   const handleToggleFavorite = async () => {
     if (!currentSourceRef.current || !currentChannelRef.current) return;
 

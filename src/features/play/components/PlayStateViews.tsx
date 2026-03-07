@@ -30,30 +30,35 @@ interface PlayErrorViewProps {
 
 function getLoadingStageIcon(loadingStage: LoadingStage): ReactNode {
   if (loadingStage === 'searching') {
-    return <Search className='w-10 h-10' />;
+    return <Search className='h-10 w-10' />;
   }
   if (loadingStage === 'preferring') {
-    return <Zap className='w-10 h-10' />;
+    return <Zap className='h-10 w-10' />;
   }
   if (loadingStage === 'fetching') {
-    return <Clapperboard className='w-10 h-10' />;
+    return <Clapperboard className='h-10 w-10' />;
   }
-  return <CheckCircle2 className='w-10 h-10' />;
+  return <CheckCircle2 className='h-10 w-10' />;
 }
 
 /**
  * 平滑进度 hook：进度条从当前值平滑过渡到目标值，
- * 使用线性步进确保各阶段视觉增长长度一致。
+ * 到达目标后以极慢速率继续爬升（不超过下一阶段 -1），
+ * 确保进度条始终有"仍在进行中"的视觉反馈。
  */
 function useSmoothProgress(targetProgress: number) {
   const [display, setDisplay] = useState(0);
   const rafRef = useRef(0);
   const currentRef = useRef(0);
   const prevTargetRef = useRef(0);
+  // 到达目标后的蠕动帧计数
+  const creepFrameRef = useRef(0);
 
   useEffect(() => {
     const prevTarget = prevTargetRef.current;
     prevTargetRef.current = targetProgress;
+    // 目标变化时重置蠕动帧计数
+    creepFrameRef.current = 0;
 
     // 阶段跳变（目标值大幅变化）时，先快速追到前一个目标附近
     if (targetProgress - prevTarget > 10) {
@@ -63,12 +68,25 @@ function useSmoothProgress(targetProgress: number) {
     const animate = () => {
       const target = targetProgress;
       const cur = currentRef.current;
+
       if (cur < target) {
-        // 固定步进速度，确保各阶段增长匀速
+        // 追赶阶段：固定步进
         const step = 0.5;
         currentRef.current = Math.min(cur + step, target);
         setDisplay(Math.round(currentRef.current));
+      } else if (target < 100) {
+        // 蠕动阶段：到达当前目标后缓慢爬升，但不超过 target + 20（给下一阶段留空间）
+        // 每 8 帧（约 133ms）爬升 0.1%，视觉上是极慢的蠕动
+        creepFrameRef.current += 1;
+        if (creepFrameRef.current % 8 === 0) {
+          const ceiling = Math.min(target + 20, 99);
+          if (cur < ceiling) {
+            currentRef.current = cur + 0.1;
+            setDisplay(Math.round(currentRef.current));
+          }
+        }
       }
+
       rafRef.current = requestAnimationFrame(animate);
     };
     rafRef.current = requestAnimationFrame(animate);
@@ -95,8 +113,8 @@ export function PlayLoadingView({
 
   return (
     <PageLayout activePath='/play'>
-      <div className='fixed inset-0 z-40 flex items-center justify-center bg-white dark:bg-gray-950 overflow-hidden'>
-        <div className='flex flex-col items-center gap-4 w-full max-w-2xl px-4'>
+      <div className='fixed inset-0 z-40 flex items-center justify-center overflow-hidden bg-white dark:bg-gray-950'>
+        <div className='flex w-full max-w-2xl flex-col items-center gap-4 px-4'>
           <LoadingStatePanel
             icon={getLoadingStageIcon(loadingStage)}
             tone='emerald'
@@ -108,9 +126,9 @@ export function PlayLoadingView({
             onClick={onBack}
             aria-label='取消加载'
             title='取消加载'
-            className='inline-flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition-colors'
+            className='inline-flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-700 transition-colors hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
           >
-            <X className='w-5 h-5' />
+            <X className='h-5 w-5' />
           </button>
         </div>
       </div>
@@ -126,9 +144,9 @@ export function PlayErrorView({
 }: PlayErrorViewProps) {
   return (
     <PageLayout activePath='/play'>
-      <div className='flex items-center justify-center min-h-screen bg-transparent'>
+      <div className='flex min-h-screen items-center justify-center bg-transparent'>
         <LoadingStatePanel
-          icon={<AlertTriangle className='w-10 h-10' />}
+          icon={<AlertTriangle className='h-10 w-10' />}
           tone='red'
           title='哎呀，出现了一些问题'
           message={error}
@@ -136,16 +154,16 @@ export function PlayErrorView({
         >
           <button
             onClick={onBack}
-            className='w-full px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-medium hover:from-green-600 hover:to-emerald-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-2'
+            className='flex w-full transform items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:scale-105 hover:from-green-600 hover:to-emerald-700 hover:shadow-xl'
           >
             {videoTitle ? (
               <>
-                <Search className='w-4 h-4' />
+                <Search className='h-4 w-4' />
                 返回搜索
               </>
             ) : (
               <>
-                <ArrowLeft className='w-4 h-4' />
+                <ArrowLeft className='h-4 w-4' />
                 返回上页
               </>
             )}
@@ -153,9 +171,9 @@ export function PlayErrorView({
 
           <button
             onClick={onRetry}
-            className='w-full px-6 py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200 flex items-center justify-center gap-2'
+            className='flex w-full items-center justify-center gap-2 rounded-xl bg-gray-100 px-6 py-3 font-medium text-gray-700 transition-colors duration-200 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
           >
-            <RefreshCw className='w-4 h-4' />
+            <RefreshCw className='h-4 w-4' />
             重新尝试
           </button>
         </LoadingStatePanel>

@@ -550,13 +550,13 @@ function DoubanPageClient() {
   ]);
 
   // 设置滚动监听
+  // 依赖 isFullyRendered：哨兵元素的挂载条件包含 isFullyRendered，
+  // 必须在哨兵挂载后重新运行 effect 才能 observe 到它。
   useEffect(() => {
-    // 如果没有更多数据或正在加载，则不设置监听
-    if (!hasMore || isLoadingMore || loading) {
+    if (!hasMore || isLoadingMore || loading || !isFullyRendered) {
       return;
     }
 
-    // 确保 loadingRef 存在
     if (!loadingRef.current) {
       return;
     }
@@ -578,7 +578,7 @@ function DoubanPageClient() {
         observerRef.current.disconnect();
       }
     };
-  }, [hasMore, isLoadingMore, loading]);
+  }, [hasMore, isLoadingMore, loading, isFullyRendered]);
 
   // 处理选择器变化
   const handlePrimaryChange = useCallback(
@@ -800,16 +800,7 @@ function DoubanPageClient() {
 
             {/* 加载更多指示器 */}
             {hasMore && !loading && isFullyRendered && (
-              <div
-                ref={(el) => {
-                  if (el && el.offsetParent !== null) {
-                    (
-                      loadingRef as React.MutableRefObject<HTMLDivElement | null>
-                    ).current = el;
-                  }
-                }}
-                className='mt-12 flex justify-center py-8'
-              >
+              <div ref={loadingRef} className='mt-12 flex justify-center py-8'>
                 {isLoadingMore && (
                   <div className='flex items-center gap-2'>
                     <div className='h-6 w-6 animate-spin rounded-full border-b-2 border-green-500'></div>

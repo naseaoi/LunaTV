@@ -28,7 +28,11 @@ import AlertModal from '@/features/admin/components/AlertModal';
 import { useAlertModal } from '@/features/admin/hooks/useAlertModal';
 import { useAdminSourceActions } from '@/features/admin/hooks/useAdminSourceActions';
 import { useLoadingState } from '@/features/admin/hooks/useLoadingState';
-import { buttonStyles } from '@/features/admin/lib/buttonStyles';
+import {
+  buttonStyles,
+  inputStyles,
+  statusBadgeStyles,
+} from '@/features/admin/lib/buttonStyles';
 import { showError } from '@/features/admin/lib/notifications';
 import { AdminConfig } from '@/features/admin/types/api';
 import { CustomCategory } from '@/features/admin/types';
@@ -203,8 +207,8 @@ const CategoryConfig = ({
           <span
             className={`rounded-full px-2 py-1 text-xs ${
               !category.disabled
-                ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300'
-                : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300'
+                ? statusBadgeStyles.enabled
+                : statusBadgeStyles.disabled
             }`}
           >
             {!category.disabled ? '启用中' : '已禁用'}
@@ -283,7 +287,7 @@ const CategoryConfig = ({
               onChange={(e) =>
                 setNewCategory((prev) => ({ ...prev, name: e.target.value }))
               }
-              className='rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
+              className={inputStyles.base}
             />
             <AdminSelect
               value={newCategory.type}
@@ -302,7 +306,7 @@ const CategoryConfig = ({
               onChange={(e) =>
                 setNewCategory((prev) => ({ ...prev, query: e.target.value }))
               }
-              className='rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
+              className={inputStyles.base}
             />
           </div>
           <div className='flex justify-end'>

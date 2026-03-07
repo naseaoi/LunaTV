@@ -7,6 +7,7 @@ import { configSelfCheck, setCachedConfig } from '@/lib/config';
 import { SimpleCrypto } from '@/lib/crypto';
 import { db } from '@/lib/db';
 import { Favorite, PlayRecord, SkipConfig } from '@/lib/types';
+import { parseStorageKey } from '@/lib/utils';
 
 export const runtime = 'nodejs';
 
@@ -115,12 +116,12 @@ export async function POST(req: NextRequest) {
       // 导入跳过片头片尾配置
       if (user.skipConfigs) {
         for (const [key, skipConfig] of Object.entries(user.skipConfigs)) {
-          const [source, id] = key.split('+');
-          if (source && id) {
+          const parsed = parseStorageKey(key);
+          if (parsed) {
             await db.setSkipConfig(
               username,
-              source,
-              id,
+              parsed.source,
+              parsed.id,
               skipConfig as SkipConfig,
             );
           }

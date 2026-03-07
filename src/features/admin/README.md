@@ -2,14 +2,17 @@
 
 `src/features/admin` 是管理后台的功能边界目录，按职责拆分为：
 
-- `components/`: 纯视图组件与 tab 组件
+- `components/`: 纯视图组件（AdminDialog、AdminSelect、AlertModal、CollapsibleTab、ConfirmModal）与 tab 组件（`tabs/`）
+  - `ConfirmModal.tsx` 从全局 `@/components/modals/ConfirmModal` 重导出，保持 admin 内引用路径统一
 - `hooks/`: 管理后台专用状态 hooks
   - `useAdminPageActions`: 管理页配置加载与重置流程
   - `useAdminUserActions`: 用户相关写操作封装
   - `useAdminSourceActions`: 视频源/分类/直播源写操作封装
-- `lib/`: 请求、权限、通知、样式等可复用逻辑
-- `types.ts`: 管理后台内部共享类型
-- `index.ts`: 对外统一导出入口
+  - `useAlertModal`: 警告弹窗状态管理
+  - `useLoadingState`: 按钮/操作加载态管理
+- `lib/`: 请求（api）、权限（permissions）、通知（notifications）、样式（buttonStyles）
+- `types.ts`: admin 内部共享类型
+- `types/api.ts`: admin API 类型（新代码优先从此导入）
 
 维护约定：
 

@@ -29,7 +29,11 @@ import ConfirmModal from '@/features/admin/components/ConfirmModal';
 import { useAlertModal } from '@/features/admin/hooks/useAlertModal';
 import { useAdminSourceActions } from '@/features/admin/hooks/useAdminSourceActions';
 import { useLoadingState } from '@/features/admin/hooks/useLoadingState';
-import { buttonStyles } from '@/features/admin/lib/buttonStyles';
+import {
+  buttonStyles,
+  inputStyles,
+  statusBadgeStyles,
+} from '@/features/admin/lib/buttonStyles';
 import { showError } from '@/features/admin/lib/notifications';
 import { DataSource } from '@/features/admin/types';
 import { AdminConfig } from '@/features/admin/types/api';
@@ -119,8 +123,8 @@ function SortableSourceRow({
         <span
           className={`rounded-full px-2 py-1 text-xs ${
             !source.disabled
-              ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300'
-              : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300'
+              ? statusBadgeStyles.enabled
+              : statusBadgeStyles.disabled
           }`}
         >
           {!source.disabled ? '启用中' : '已禁用'}
@@ -762,7 +766,7 @@ const VideoSourceConfig = ({
               onChange={(e) =>
                 setNewSource((prev) => ({ ...prev, name: e.target.value }))
               }
-              className='rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
+              className={inputStyles.base}
             />
             <input
               type='text'
@@ -771,7 +775,7 @@ const VideoSourceConfig = ({
               onChange={(e) =>
                 setNewSource((prev) => ({ ...prev, key: e.target.value }))
               }
-              className='rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
+              className={inputStyles.base}
             />
             <input
               type='text'
@@ -780,7 +784,7 @@ const VideoSourceConfig = ({
               onChange={(e) =>
                 setNewSource((prev) => ({ ...prev, api: e.target.value }))
               }
-              className='rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
+              className={inputStyles.base}
             />
             <input
               type='text'
@@ -789,7 +793,7 @@ const VideoSourceConfig = ({
               onChange={(e) =>
                 setNewSource((prev) => ({ ...prev, detail: e.target.value }))
               }
-              className='rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
+              className={inputStyles.base}
             />
           </div>
           <div className='flex justify-end'>
@@ -925,7 +929,7 @@ const VideoSourceConfig = ({
             placeholder='请输入搜索关键词'
             value={searchKeyword}
             onChange={(e) => setSearchKeyword(e.target.value)}
-            className='w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
+            className={`w-full ${inputStyles.base}`}
             onKeyPress={(e) => e.key === 'Enter' && handleValidateSources()}
           />
           <div className='flex justify-end space-x-3'>

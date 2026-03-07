@@ -8,9 +8,10 @@
 src/app/admin/page.tsx          # 页面装配、折叠状态、路由级可见性、重置配置入口
 src/features/admin/
   ├── components/tabs/*         # 各配置 tab 视图与交互
-  ├── hooks/*                   # admin 行为 hooks（页面/用户/源）
+  ├── hooks/*                   # admin 行为 hooks（页面/用户/源/弹窗/加载态）
   ├── lib/*                     # 请求、权限、通知、样式
-  └── types/*                   # admin 专属类型
+  ├── types.ts                  # admin 内部共享类型
+  └── types/api.ts              # admin API 类型（新代码优先从此导入）
 ```
 
 - `page.tsx` 只做装配，不写业务逻辑。
@@ -20,6 +21,7 @@ src/features/admin/
 
 - `src/lib/admin.types.ts` 保留兼容导出。
 - 新代码优先从 `src/features/admin/types/api.ts` 导入类型。
+- `src/features/admin/types.ts` 为 admin 内部共享类型。
 
 ## Hook 复用
 
@@ -28,6 +30,8 @@ src/features/admin/
 - `useAdminPageActions` — 页面级操作（配置读写等）
 - `useAdminUserActions` — 用户管理操作
 - `useAdminSourceActions` — 播放源管理操作
+- `useAlertModal` — 警告弹窗状态管理
+- `useLoadingState` — 按钮/操作加载态管理
 
 ## 测试
 

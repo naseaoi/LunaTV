@@ -349,76 +349,61 @@ export class HybridCacheManager {
     };
   }
 
-  // ---- 播放记录 ----
-  getCachedPlayRecords(): Record<string, PlayRecord> | null {
+  // ---- 泛型缓存读写 ----
+
+  /** 读取指定类型的缓存数据，过期或不存在返回 null */
+  getCached<K extends keyof UserCacheStore>(
+    key: K,
+  ): NonNullable<UserCacheStore[K]>['data'] | null {
     const username = this.getCurrentUsername();
     if (!username) return null;
     const userCache = this.getUserCache(username);
-    const cached = userCache.playRecords;
-    if (cached && this.isCacheValid(cached)) return cached.data;
+    const cached = userCache[key];
+    if (cached && this.isCacheValid(cached as CacheData<unknown>))
+      return cached.data as NonNullable<UserCacheStore[K]>['data'];
     return null;
   }
 
-  cachePlayRecords(data: Record<string, PlayRecord>): void {
+  /** 写入指定类型的缓存数据 */
+  cache<K extends keyof UserCacheStore>(
+    key: K,
+    data: NonNullable<UserCacheStore[K]>['data'],
+  ): void {
     const username = this.getCurrentUsername();
     if (!username) return;
     const userCache = this.getUserCache(username);
-    userCache.playRecords = this.createCacheData(data);
+    (userCache[key] as CacheData<unknown>) = this.createCacheData(data);
     this.saveUserCache(username, userCache);
   }
 
-  // ---- 收藏 ----
-  getCachedFavorites(): Record<string, Favorite> | null {
-    const username = this.getCurrentUsername();
-    if (!username) return null;
-    const userCache = this.getUserCache(username);
-    const cached = userCache.favorites;
-    if (cached && this.isCacheValid(cached)) return cached.data;
-    return null;
+  // ---- 向后兼容的便捷方法（委托给泛型方法）----
+
+  getCachedPlayRecords() {
+    return this.getCached('playRecords');
+  }
+  cachePlayRecords(data: Record<string, PlayRecord>) {
+    this.cache('playRecords', data);
   }
 
-  cacheFavorites(data: Record<string, Favorite>): void {
-    const username = this.getCurrentUsername();
-    if (!username) return;
-    const userCache = this.getUserCache(username);
-    userCache.favorites = this.createCacheData(data);
-    this.saveUserCache(username, userCache);
+  getCachedFavorites() {
+    return this.getCached('favorites');
+  }
+  cacheFavorites(data: Record<string, Favorite>) {
+    this.cache('favorites', data);
   }
 
-  // ---- 搜索历史 ----
-  getCachedSearchHistory(): string[] | null {
-    const username = this.getCurrentUsername();
-    if (!username) return null;
-    const userCache = this.getUserCache(username);
-    const cached = userCache.searchHistory;
-    if (cached && this.isCacheValid(cached)) return cached.data;
-    return null;
+  getCachedSearchHistory() {
+    return this.getCached('searchHistory');
+  }
+  cacheSearchHistory(data: string[]) {
+    this.cache('searchHistory', data);
   }
 
-  cacheSearchHistory(data: string[]): void {
-    const username = this.getCurrentUsername();
-    if (!username) return;
-    const userCache = this.getUserCache(username);
-    userCache.searchHistory = this.createCacheData(data);
-    this.saveUserCache(username, userCache);
+  getCachedSkipConfigs() {
+    return this.getCached('skipConfigs');
   }
-
-  // ---- 跳过片头片尾 ----
-  getCachedSkipConfigs(): Record<string, SkipConfig> | null {
-    const username = this.getCurrentUsername();
-    if (!username) return null;
-    const userCache = this.getUserCache(username);
-    const cached = userCache.skipConfigs;
-    if (cached && this.isCacheValid(cached)) return cached.data;
-    return null;
-  }
-
-  cacheSkipConfigs(data: Record<string, SkipConfig>): void {
-    const username = this.getCurrentUsername();
-    if (!username) return;
-    const userCache = this.getUserCache(username);
-    userCache.skipConfigs = this.createCacheData(data);
-    this.saveUserCache(username, userCache);
+  cacheSkipConfigs(data: Record<string, SkipConfig>) {
+    this.cache('skipConfigs', data);
   }
 
   // ---- 缓存管理 ----

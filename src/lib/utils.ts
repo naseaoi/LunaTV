@@ -88,3 +88,15 @@ export function cleanHtmlTags(text: string): string {
   // 使用 he 库解码 HTML 实体
   return he.decode(cleanedText);
 }
+
+/**
+ * 解析存储 key（格式：`{source}+{id}`）
+ * 返回 null 表示格式无效
+ */
+export function parseStorageKey(
+  key: string,
+): { source: string; id: string } | null {
+  const idx = key.indexOf('+');
+  if (idx <= 0 || idx === key.length - 1) return null;
+  return { source: key.substring(0, idx), id: key.substring(idx + 1) };
+}

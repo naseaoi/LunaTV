@@ -17,7 +17,7 @@ import PageLayout from '@/components/PageLayout';
 import { LiveChannelInfo } from '@/features/live/components/LiveChannelInfo';
 import { LiveChannelSidebar } from '@/features/live/components/LiveChannelSidebar';
 import { useLiveFavorite } from '@/features/live/hooks/useLiveFavorite';
-import { useLiveKeyboard } from '@/features/live/hooks/useLiveKeyboard';
+import { usePlayerKeyboard } from '@/hooks/usePlayerKeyboard';
 import { useLivePlayer } from '@/features/live/hooks/useLivePlayer';
 import { useLiveSources } from '@/features/live/hooks/useLiveSources';
 
@@ -56,7 +56,7 @@ function LivePageClient() {
   cleanupPlayerRef.current = cleanupPlayer;
 
   // ---- 键盘快捷键 ----
-  useLiveKeyboard({ artPlayerRef });
+  usePlayerKeyboard({ artPlayerRef });
 
   // ---- 收藏 ----
   const { favorited, handleToggleFavorite } = useLiveFavorite({
@@ -70,14 +70,14 @@ function LivePageClient() {
   if (sources.loading) {
     return (
       <PageLayout activePath='/live'>
-        <div className='fixed inset-0 z-40 flex items-center justify-center bg-white dark:bg-gray-950 overflow-hidden'>
+        <div className='fixed inset-0 z-40 flex items-center justify-center overflow-hidden bg-white dark:bg-gray-950'>
           <div className='flex flex-col items-center gap-4'>
             <LoadingStatePanel
               icon={
                 sources.loadingStage === 'ready' ? (
-                  <CheckCircle2 className='w-10 h-10' />
+                  <CheckCircle2 className='h-10 w-10' />
                 ) : (
-                  <Tv className='w-10 h-10' />
+                  <Tv className='h-10 w-10' />
                 )
               }
               tone='blue'
@@ -90,9 +90,9 @@ function LivePageClient() {
               onClick={() => sources.router.back()}
               aria-label='取消加载'
               title='取消加载'
-              className='inline-flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 transition-colors'
+              className='inline-flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-700 transition-colors hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
             >
-              <X className='w-5 h-5' />
+              <X className='h-5 w-5' />
             </button>
           </div>
         </div>
@@ -104,9 +104,9 @@ function LivePageClient() {
   if (sources.error) {
     return (
       <PageLayout activePath='/live'>
-        <div className='flex items-center justify-center min-h-screen bg-transparent'>
+        <div className='flex min-h-screen items-center justify-center bg-transparent'>
           <LoadingStatePanel
-            icon={<AlertTriangle className='w-10 h-10' />}
+            icon={<AlertTriangle className='h-10 w-10' />}
             tone='red'
             title='哎呀，出现了一些问题'
             message={sources.error}
@@ -114,9 +114,9 @@ function LivePageClient() {
           >
             <button
               onClick={() => window.location.reload()}
-              className='w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-xl font-medium hover:from-blue-600 hover:to-cyan-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-2'
+              className='flex w-full transform items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-600 px-6 py-3 font-medium text-white shadow-lg transition-all duration-200 hover:scale-105 hover:from-blue-600 hover:to-cyan-700 hover:shadow-xl'
             >
-              <RefreshCw className='w-4 h-4' />
+              <RefreshCw className='h-4 w-4' />
               重新尝试
             </button>
           </LoadingStatePanel>
@@ -128,11 +128,11 @@ function LivePageClient() {
   // ---- 主 JSX ----
   return (
     <PageLayout activePath='/live'>
-      <div className='flex flex-col gap-3 py-4 px-5 lg:px-[3rem] 2xl:px-20'>
+      <div className='flex flex-col gap-3 px-5 py-4 lg:px-[3rem] 2xl:px-20'>
         {/* 第一行：页面标题 */}
         <div className='py-1'>
-          <h1 className='text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2 max-w-[80%]'>
-            <Radio className='w-5 h-5 text-blue-500 flex-shrink-0' />
+          <h1 className='flex max-w-[80%] items-center gap-2 text-xl font-semibold text-gray-900 dark:text-gray-100'>
+            <Radio className='h-5 w-5 flex-shrink-0 text-blue-500' />
             <div className='min-w-0 flex-1'>
               <div className='truncate'>
                 {sources.currentSource?.name}
@@ -154,20 +154,20 @@ function LivePageClient() {
         {/* 第二行：播放器和频道列表 */}
         <div className='space-y-2'>
           {/* 折叠控制 - 仅在 lg 及以上屏幕显示 */}
-          <div className='hidden lg:flex justify-end'>
+          <div className='hidden justify-end lg:flex'>
             <button
               onClick={() =>
                 sources.setIsChannelListCollapsed(
                   !sources.isChannelListCollapsed,
                 )
               }
-              className='group relative flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-white/80 hover:bg-white dark:bg-gray-800/80 dark:hover:bg-gray-800 backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50 shadow-sm hover:shadow-md transition-all duration-200'
+              className='group relative flex items-center space-x-1.5 rounded-full border border-gray-200/50 bg-white/80 px-3 py-1.5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:bg-white hover:shadow-md dark:border-gray-700/50 dark:bg-gray-800/80 dark:hover:bg-gray-800'
               title={
                 sources.isChannelListCollapsed ? '显示频道列表' : '隐藏频道列表'
               }
             >
               <svg
-                className={`w-3.5 h-3.5 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${
+                className={`h-3.5 w-3.5 text-gray-500 transition-transform duration-200 dark:text-gray-400 ${
                   sources.isChannelListCollapsed ? 'rotate-180' : 'rotate-0'
                 }`}
                 fill='none'
@@ -185,9 +185,9 @@ function LivePageClient() {
                 {sources.isChannelListCollapsed ? '显示' : '隐藏'}
               </span>
               <div
-                className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full transition-all duration-200 ${
+                className={`absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full transition-all duration-200 ${
                   sources.isChannelListCollapsed
-                    ? 'bg-orange-400 animate-pulse'
+                    ? 'animate-pulse bg-orange-400'
                     : 'bg-green-400'
                 }`}
               ></div>
@@ -195,7 +195,7 @@ function LivePageClient() {
           </div>
 
           <div
-            className={`grid gap-4 lg:h-[500px] xl:h-[650px] 2xl:h-[750px] transition-all duration-300 ease-in-out ${
+            className={`grid gap-4 transition-all duration-300 ease-in-out lg:h-[500px] xl:h-[650px] 2xl:h-[750px] ${
               sources.isChannelListCollapsed
                 ? 'grid-cols-1'
                 : 'grid-cols-1 md:grid-cols-4'
@@ -205,18 +205,18 @@ function LivePageClient() {
             <div
               className={`h-full transition-all duration-300 ease-in-out ${sources.isChannelListCollapsed ? 'col-span-1' : 'md:col-span-3'}`}
             >
-              <div className='relative w-full h-[300px] lg:h-full'>
+              <div className='relative h-[300px] w-full lg:h-full'>
                 <div
                   ref={artRef}
-                  className='bg-black w-full h-full rounded-xl overflow-hidden shadow-lg border border-white/0 dark:border-white/30'
+                  className='h-full w-full overflow-hidden rounded-xl border border-white/0 bg-black shadow-lg dark:border-white/30'
                 ></div>
 
                 {/* 不支持的直播类型提示 */}
                 {sources.unsupportedType && (
-                  <div className='absolute inset-0 bg-black/90 backdrop-blur-sm rounded-xl overflow-hidden shadow-lg border border-white/0 dark:border-white/30 flex items-center justify-center z-[600] transition-all duration-300'>
+                  <div className='absolute inset-0 z-[600] flex items-center justify-center overflow-hidden rounded-xl border border-white/0 bg-black/90 shadow-lg backdrop-blur-sm transition-all duration-300 dark:border-white/30'>
                     <LoadingStatePanel
                       compact
-                      icon={<AlertTriangle className='w-9 h-9' />}
+                      icon={<AlertTriangle className='h-9 w-9' />}
                       tone='amber'
                       title='暂不支持的直播流类型'
                       message={sources.unsupportedType.toUpperCase()}
@@ -227,16 +227,16 @@ function LivePageClient() {
 
                 {/* 视频加载蒙层 */}
                 {sources.isVideoLoading && (
-                  <div className='absolute inset-0 bg-black/85 backdrop-blur-sm rounded-xl overflow-hidden shadow-lg border border-white/0 dark:border-white/30 flex items-center justify-center z-[500] transition-all duration-300'>
+                  <div className='absolute inset-0 z-[500] flex items-center justify-center overflow-hidden rounded-xl border border-white/0 bg-black/85 shadow-lg backdrop-blur-sm transition-all duration-300 dark:border-white/30'>
                     <LoadingStatePanel
                       compact
-                      icon={<Tv className='w-9 h-9' />}
+                      icon={<Tv className='h-9 w-9' />}
                       tone='blue'
                       title='IPTV 加载中...'
                       description='正在拉取频道流并初始化播放器缓冲。'
                     >
                       <div className='flex items-center justify-center text-sky-300'>
-                        <Loader2 className='w-5 h-5 animate-spin' />
+                        <Loader2 className='h-5 w-5 animate-spin' />
                       </div>
                     </LoadingStatePanel>
                   </div>

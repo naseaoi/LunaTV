@@ -1,15 +1,13 @@
-// 图片占位符组件 - 实现骨架屏效果（支持暗色模式）
-// @keyframes shine 和 CSS 变量已在 globals.css 中定义
+/**
+ * 图片加载占位符 —— 居中转圈动画（流布局，靠 aspectRatio 撑起高度）
+ * 用于骨架屏和图片加载中的占位
+ */
 const ImagePlaceholder = ({ aspectRatio }: { aspectRatio: string }) => (
   <div
-    className={`w-full ${aspectRatio} rounded-lg`}
-    style={{
-      background:
-        'linear-gradient(90deg, var(--skeleton-color) 25%, var(--skeleton-highlight) 50%, var(--skeleton-color) 75%)',
-      backgroundSize: '200% 100%',
-      animation: 'shine 1.5s infinite',
-    }}
-  />
+    className={`flex w-full items-center justify-center rounded-lg bg-gray-200/60 dark:bg-gray-700/60 ${aspectRatio}`}
+  >
+    <div className='h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-gray-500 dark:border-gray-600 dark:border-t-gray-400' />
+  </div>
 );
 
 export { ImagePlaceholder };

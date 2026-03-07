@@ -19,7 +19,7 @@ import {
   PlayLoadingView,
 } from '@/features/play/components/PlayStateViews';
 import { useArtPlayer } from '@/features/play/hooks/useArtPlayer';
-import { useKeyboardShortcuts } from '@/features/play/hooks/useKeyboardShortcuts';
+import { usePlayerKeyboard } from '@/hooks/usePlayerKeyboard';
 import { usePlayFavorite } from '@/features/play/hooks/usePlayFavorite';
 import { usePlayInit, updateVideoUrl } from '@/features/play/hooks/usePlayInit';
 import { usePlayProgress } from '@/features/play/hooks/usePlayProgress';
@@ -432,12 +432,14 @@ function PlayPageClient() {
   // 键盘快捷键 hook
   // ---------------------------------------------------------------------------
 
-  useKeyboardShortcuts({
+  usePlayerKeyboard({
     artPlayerRef,
-    detailRef,
-    currentEpisodeIndexRef,
-    handlePreviousEpisode,
-    handleNextEpisode,
+    episodeHandlers: {
+      detailRef,
+      currentEpisodeIndexRef,
+      handlePreviousEpisode,
+      handleNextEpisode,
+    },
   });
 
   // ---------------------------------------------------------------------------

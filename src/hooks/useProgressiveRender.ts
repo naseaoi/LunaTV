@@ -27,9 +27,12 @@ export function useProgressiveRender<T>(
 
   useEffect(() => {
     const nextInitialCount = getInitialVisibleCount();
-    setVisibleCount(nextInitialCount);
+    // 追加数据时 visibleCount 不应回退，避免页面跳动
+    setVisibleCount((prev) => Math.max(prev, nextInitialCount));
 
     if (!enabled || items.length <= nextInitialCount) {
+      // 确保 items 减少时（如切换筛选器）visibleCount 不超过实际数量
+      setVisibleCount((prev) => Math.min(prev, items.length));
       return;
     }
 
