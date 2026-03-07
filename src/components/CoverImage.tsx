@@ -80,6 +80,9 @@ const CoverImage: React.FC<CoverImageProps> = memo(function CoverImage({
   const [retryKey, setRetryKey] = useState(0);
   const retryCountRef = useRef(0);
   const releaseSlotRef = useRef<(() => void) | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  // 可见性门控：只有进入/接近可视区域才允许 acquire slot
+  const [isNearViewport, setIsNearViewport] = useState(false);
 
   const processed = useMemo(
     () => (isEmpty ? '' : processImageUrl(src)),
@@ -116,15 +119,37 @@ const CoverImage: React.FC<CoverImageProps> = memo(function CoverImage({
     const isCached = isImageCached(src);
     setLoaded(isCached);
     setSlotGranted(isCached);
+    // 缓存命中时也直接标记可见，跳过 IO 等待
+    if (isCached) setIsNearViewport(true);
 
     // 释放旧 slot
     releaseSlotRef.current?.();
     releaseSlotRef.current = null;
   }, [src]);
 
-  // 请求并发 slot（未缓存 & 未出错 & 尚未获得 slot 时排队）
+  // 可见性检测：进入视口附近 200px 时才允许 acquire slot
+  // 避免首页横向滚动行中大量不可见卡片同时排队
+  useEffect(() => {
+    if (isEmpty || isNearViewport) return;
+    const el = containerRef.current;
+    if (!el) return;
+
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsNearViewport(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [isEmpty, isNearViewport]);
+
+  // 请求并发 slot（可见 & 未缓存 & 未出错 & 尚未获得 slot 时排队）
   // 注意：不把 slotGranted 放在依赖中，避免获得 slot 后 cleanup 提前释放
-  const needsSlot = !isEmpty && !slotGranted && !hasError;
+  const needsSlot = !isEmpty && isNearViewport && !slotGranted && !hasError;
   const needsSlotRef = useRef(needsSlot);
   needsSlotRef.current = needsSlot;
 
@@ -140,7 +165,7 @@ const CoverImage: React.FC<CoverImageProps> = memo(function CoverImage({
       release();
       releaseSlotRef.current = null;
     };
-  }, [src]);
+  }, [src, isNearViewport]);
 
   // 跨实例同步：其他 CoverImage 实例加载了同一 src 时，立即标记已加载。
   // 典型场景：模态框加载成功 → 卡片立即显示，无需等待自身请求完成。
@@ -196,9 +221,9 @@ const CoverImage: React.FC<CoverImageProps> = memo(function CoverImage({
   }
 
   return (
-    <>
+    <div ref={containerRef} className='absolute inset-0'>
       {!loaded && (
-        <div className='absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-gray-200/60 dark:bg-gray-700/60'>
+        <div className='pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-gray-200/60 dark:bg-gray-700/60'>
           <div className='h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-gray-500 dark:border-gray-600 dark:border-t-gray-400' />
         </div>
       )}
@@ -233,7 +258,7 @@ const CoverImage: React.FC<CoverImageProps> = memo(function CoverImage({
           }}
         />
       )}
-    </>
+    </div>
   );
 });
 
