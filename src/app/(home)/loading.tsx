@@ -1,5 +1,22 @@
 import PageLayout from '@/components/PageLayout';
 
+function CapsuleSwitchSkeleton() {
+  return (
+    <div className='relative flex items-end'>
+      <div className='absolute bottom-0 left-0 right-0 h-px bg-gray-200/90 dark:bg-gray-700/80' />
+
+      {Array.from({ length: 2 }).map((_, index) => (
+        <div key={index} className='relative px-6 py-3'>
+          <div className='flex items-center gap-2'>
+            <div className='h-4 w-4 animate-pulse rounded bg-gray-200 dark:bg-gray-800' />
+            <div className='h-5 w-10 animate-pulse rounded bg-gray-200 dark:bg-gray-800' />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SkeletonCard({ withSubtitle = false }: { withSubtitle?: boolean }) {
   return (
     <div className='w-24 min-w-[96px] sm:w-44 sm:min-w-[180px]'>
@@ -48,7 +65,7 @@ export default function HomeLoading() {
       <div className='overflow-visible px-2 pb-2 pt-4 sm:px-10 sm:pt-8'>
         {/* CapsuleSwitch 骨架 */}
         <div className='mb-8 flex justify-center'>
-          <div className='h-10 w-48 animate-pulse rounded-full bg-gray-200 dark:bg-gray-800' />
+          <CapsuleSwitchSkeleton />
         </div>
 
         <div className='mx-auto max-w-[95%]'>
