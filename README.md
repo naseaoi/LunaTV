@@ -166,11 +166,12 @@ IceTV 支持标准的苹果 CMS V10 API 格式。
 | ICETV_PASSWORD            | 站长密码                               | 任意字符串            | 无默认，必填字段                    |
 | NEXT_PUBLIC_STORAGE_TYPE  | 播放记录/收藏的存储方式                | localdb               | 无默认，必填字段                    |
 | LOCAL_DB_PATH             | 本地 SQLite 文件路径（`localdb` 模式） | 绝对路径              | `/data/icetv-data.sqlite`（Docker） |
-| AUTH_SESSION_TTL_HOURS    | 登录态有效期（小时）                   | 正整数                | 168                                 |
+| AUTH_SESSION_TTL_HOURS    | 登录态有效期（小时）                   | 正整数                | 默认长期有效，仅主动登出才失效      |
 | NEXT_PUBLIC_UPDATE_REPOS  | 版本检查仓库列表（逗号分隔）           | owner/repo,owner/repo | naseaoi/IceTV                       |
 | NEXT_PUBLIC_UPDATE_BRANCH | 版本检查分支                           | 分支名                | main                                |
 
 - 版本检查由后端接口 `/api/version/latest` 统一获取，前端不再直接请求 GitHub Raw。若仓库改名，更新 `NEXT_PUBLIC_UPDATE_REPOS` 并重启服务即可生效。
+- `AUTH_SESSION_TTL_HOURS` 仅在你想启用“定时过期”时才需要设置；未设置、为空或小于等于 `0` 时，登录态会保持长期有效。
 
 ## 客户端
 

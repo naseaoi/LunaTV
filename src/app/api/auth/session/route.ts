@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getAuthInfoFromCookie, verifySignature } from '@/lib/auth';
+import {
+  getAuthInfoFromCookie,
+  getSignatureData,
+  verifySignature,
+} from '@/lib/auth';
 import { getConfig } from '@/lib/config';
 import { getOwnerPassword, getOwnerUsername } from '@/lib/env.server';
 
@@ -62,7 +66,7 @@ export async function GET(request: NextRequest) {
       }
 
       const isValidLocalSignature = await verifySignature(
-        `localstorage:${authInfo.expiresAt}`,
+        getSignatureData('localstorage', authInfo.expiresAt),
         authInfo.signature,
         ownerPassword,
       );
@@ -86,7 +90,7 @@ export async function GET(request: NextRequest) {
     }
 
     const isValidSignature = await verifySignature(
-      `${authInfo.username}:${authInfo.expiresAt}`,
+      getSignatureData('account', authInfo.expiresAt, authInfo.username),
       authInfo.signature,
       ownerPassword,
     );

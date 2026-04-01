@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getAuthInfoFromCookie, verifySignature } from './auth';
+import {
+  getAuthInfoFromCookie,
+  getSignatureData,
+  verifySignature,
+} from './auth';
 import { getConfig } from './config';
 import { getOwnerPassword, getOwnerUsername } from './env.server';
 
@@ -83,10 +87,11 @@ export async function requireActiveUser(
   }
 
   const secret = getOwnerPassword();
-  const signData =
-    authInfo.sessionType === 'localstorage'
-      ? `localstorage:${authInfo.expiresAt}`
-      : `${authInfo.username}:${authInfo.expiresAt}`;
+  const signData = getSignatureData(
+    authInfo.sessionType,
+    authInfo.expiresAt,
+    authInfo.username,
+  );
 
   const isValid = await verifySignature(signData, authInfo.signature, secret);
   if (!isValid) {

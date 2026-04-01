@@ -1,6 +1,12 @@
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
+import {
+  type AuthCookiePayload,
+  generateSignature,
+  getSessionExpiresAt,
+  getSignatureData,
+} from '@/lib/auth';
 import { getConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 import { getOwnerPassword, getOwnerUsername } from '@/lib/env.server';
@@ -23,16 +29,12 @@ function safeEqual(a: string, b: string): boolean {
 
 type AuthRole = 'owner' | 'admin' | 'user';
 
-type AuthCookiePayload = {
+type LoginAuthCookiePayload = AuthCookiePayload & {
   role: AuthRole;
-  username?: string;
   signature: string;
   expiresAt: number;
   sessionType: 'localstorage' | 'account';
 };
-
-const SESSION_TTL_HOURS = Number(process.env.AUTH_SESSION_TTL_HOURS || '168');
-const SESSION_TTL_MS = Math.max(1, SESSION_TTL_HOURS) * 60 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 10;
 const LOGIN_WINDOW_MS = 10 * 60 * 1000;
 const LOGIN_LOCK_MS = 15 * 60 * 1000;
@@ -160,7 +162,7 @@ function isSecureRequest(req: NextRequest): boolean {
 function setAuthCookies(
   response: NextResponse,
   req: NextRequest,
-  authData: AuthCookiePayload,
+  authData: LoginAuthCookiePayload,
 ): void {
   const expires = new Date(authData.expiresAt);
   const secure = isSecureRequest(req);
@@ -217,52 +219,19 @@ const STORAGE_TYPE =
     | 'localdb'
     | undefined) || 'localstorage';
 
-// 生成签名
-async function generateSignature(
-  data: string,
-  secret: string,
-): Promise<string> {
-  const encoder = new TextEncoder();
-  const keyData = encoder.encode(secret);
-  const messageData = encoder.encode(data);
-
-  // 导入密钥
-  const key = await crypto.subtle.importKey(
-    'raw',
-    keyData,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-
-  // 生成签名
-  const signature = await crypto.subtle.sign('HMAC', key, messageData);
-
-  // 转换为十六进制字符串
-  return Array.from(new Uint8Array(signature))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
 // 生成认证Cookie（带签名）
 async function generateAuthCookie(
   role: AuthRole,
   sessionType: 'localstorage' | 'account',
   username?: string,
-): Promise<AuthCookiePayload> {
+): Promise<LoginAuthCookiePayload> {
   const ownerPassword = getOwnerPassword();
   if (!ownerPassword) {
     throw new Error('站长密码未配置，无法生成会话签名');
   }
 
-  const expiresAt = Date.now() + SESSION_TTL_MS;
-  if (sessionType === 'account' && !username) {
-    throw new Error('账号会话缺少用户名');
-  }
-  const signatureData =
-    sessionType === 'localstorage'
-      ? `localstorage:${expiresAt}`
-      : `${username}:${expiresAt}`;
+  const expiresAt = getSessionExpiresAt();
+  const signatureData = getSignatureData(sessionType, expiresAt, username);
   const signature = await generateSignature(signatureData, ownerPassword);
 
   return {

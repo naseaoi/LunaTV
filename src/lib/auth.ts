@@ -15,6 +15,9 @@ export type AuthMetaPayload = {
   role?: AuthRole;
 };
 
+const SESSION_HOUR_MS = 60 * 60 * 1000;
+const PERMANENT_SESSION_EXPIRES_AT = Date.parse('2099-12-31T23:59:59.999Z');
+
 // 从cookie获取认证信息 (服务端使用)
 export function getAuthInfoFromCookie(
   request: NextRequest,
@@ -107,9 +110,73 @@ export function getAuthInfoFromBrowserCookie(): AuthMetaPayload | null {
   }
 }
 
+/**
+ * 读取会话过期时间配置。
+ * 未配置时默认采用长期登录，只有主动登出才会失效。
+ */
+export function getSessionExpiresAt(now: number = Date.now()): number {
+  const ttlHoursRaw = process.env.AUTH_SESSION_TTL_HOURS;
+
+  if (!ttlHoursRaw || ttlHoursRaw.trim() === '') {
+    return PERMANENT_SESSION_EXPIRES_AT;
+  }
+
+  const ttlHours = Number(ttlHoursRaw);
+  if (!Number.isFinite(ttlHours) || ttlHours <= 0) {
+    return PERMANENT_SESSION_EXPIRES_AT;
+  }
+
+  return now + Math.max(1, ttlHours) * SESSION_HOUR_MS;
+}
+
+/**
+ * 统一生成签名原文，避免登录、校验、续期各处规则不一致。
+ */
+export function getSignatureData(
+  sessionType: AuthCookiePayload['sessionType'],
+  expiresAt: number,
+  username?: string,
+): string {
+  if (sessionType === 'localstorage') {
+    return `localstorage:${expiresAt}`;
+  }
+
+  if (!username) {
+    throw new Error('账号会话缺少用户名');
+  }
+
+  return `${username}:${expiresAt}`;
+}
+
+/**
+ * 判断当前会话是否需要刷新过期时间。
+ * 永久会话只在首次迁移时刷新一次；有限时长会话在临近过期时续期。
+ */
+export function shouldRefreshSession(
+  currentExpiresAt: number,
+  nextExpiresAt: number,
+  now: number = Date.now(),
+): boolean {
+  if (nextExpiresAt <= currentExpiresAt) {
+    return false;
+  }
+
+  if (nextExpiresAt >= PERMANENT_SESSION_EXPIRES_AT) {
+    return currentExpiresAt < PERMANENT_SESSION_EXPIRES_AT;
+  }
+
+  const remainingMs = currentExpiresAt - now;
+  const nextTtlMs = nextExpiresAt - now;
+  const refreshThresholdMs = Math.min(24 * SESSION_HOUR_MS, nextTtlMs / 3);
+
+  return remainingMs <= refreshThresholdMs;
+}
+
 // CryptoKey 缓存：secret 在应用生命周期内不变，避免每次请求都 importKey
 let _cachedSecret: string | null = null;
 let _cachedKey: CryptoKey | null = null;
+let _cachedSigningSecret: string | null = null;
+let _cachedSigningKey: CryptoKey | null = null;
 
 async function getCachedKey(secret: string): Promise<CryptoKey> {
   if (_cachedKey && _cachedSecret === secret) {
@@ -125,6 +192,41 @@ async function getCachedKey(secret: string): Promise<CryptoKey> {
   );
   _cachedSecret = secret;
   return _cachedKey;
+}
+
+async function getCachedSigningKey(secret: string): Promise<CryptoKey> {
+  if (_cachedSigningKey && _cachedSigningSecret === secret) {
+    return _cachedSigningKey;
+  }
+
+  const keyData = new TextEncoder().encode(secret);
+  _cachedSigningKey = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  _cachedSigningSecret = secret;
+
+  return _cachedSigningKey;
+}
+
+/**
+ * 使用 HMAC-SHA256 生成签名。
+ * 用于登录写入和 middleware 续期写回。
+ */
+export async function generateSignature(
+  data: string,
+  secret: string,
+): Promise<string> {
+  const messageData = new TextEncoder().encode(data);
+  const key = await getCachedSigningKey(secret);
+  const signature = await crypto.subtle.sign('HMAC', key, messageData);
+
+  return Array.from(new Uint8Array(signature))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 /**
