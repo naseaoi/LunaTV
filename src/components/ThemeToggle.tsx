@@ -43,11 +43,28 @@ export function ThemeToggle({
   }, [mounted, resolvedTheme, pathname]);
 
   if (!mounted) {
-    // 渲染一个占位符以避免布局偏移
+    // SSR/hydration 阶段：渲染带默认图标的占位符避免图标闪烁
     if (variant === 'sidebar') {
-      return <div className='h-10 w-full' />;
+      return (
+        <div className='group flex min-h-[40px] w-full items-center justify-start gap-3 rounded-lg px-2 py-2 pl-4 text-sm text-gray-500 dark:text-gray-400'>
+          <div className='flex h-4 w-4 flex-shrink-0 items-center justify-center'>
+            <Moon className='h-4 w-4' />
+          </div>
+          <span
+            className={`overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
+              isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[120px] opacity-100'
+            }`}
+          >
+            主题
+          </span>
+        </div>
+      );
     }
-    return <div className='w-10 h-10' />;
+    return (
+      <div className='flex h-10 w-10 items-center justify-center rounded-full p-2 text-gray-600 dark:text-gray-300'>
+        <Moon className='h-full w-full' />
+      </div>
+    );
   }
 
   const toggleTheme = () => {
@@ -107,11 +124,11 @@ export function ThemeToggle({
       <button
         ref={buttonRef}
         onClick={toggleTheme}
-        className='group flex items-center rounded-lg px-2 py-2 pl-4 w-full text-sm text-gray-500 hover:bg-gray-100/30 hover:text-green-600 transition-colors duration-200 min-h-[40px] dark:text-gray-400 dark:hover:text-green-400 gap-3 justify-start'
+        className='group flex min-h-[40px] w-full items-center justify-start gap-3 rounded-lg px-2 py-2 pl-4 text-sm text-gray-500 transition-colors duration-200 hover:bg-gray-100/30 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400'
         aria-label='Toggle theme'
         title='主题'
       >
-        <div className='w-4 h-4 flex-shrink-0 flex items-center justify-center'>
+        <div className='flex h-4 w-4 flex-shrink-0 items-center justify-center'>
           {resolvedTheme === 'dark' ? (
             <Sun className='h-4 w-4' />
           ) : (
@@ -119,7 +136,7 @@ export function ThemeToggle({
           )}
         </div>
         <span
-          className={`whitespace-nowrap overflow-hidden transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
+          className={`overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
             isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[120px] opacity-100'
           }`}
         >
@@ -133,13 +150,13 @@ export function ThemeToggle({
     <button
       ref={buttonRef}
       onClick={toggleTheme}
-      className='w-10 h-10 p-2 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200/50 dark:text-gray-300 dark:hover:bg-gray-700/50 transition-colors'
+      className='flex h-10 w-10 items-center justify-center rounded-full p-2 text-gray-600 transition-colors hover:bg-gray-200/50 dark:text-gray-300 dark:hover:bg-gray-700/50'
       aria-label='Toggle theme'
     >
       {resolvedTheme === 'dark' ? (
-        <Sun className='w-full h-full' />
+        <Sun className='h-full w-full' />
       ) : (
-        <Moon className='w-full h-full' />
+        <Moon className='h-full w-full' />
       )}
     </button>
   );

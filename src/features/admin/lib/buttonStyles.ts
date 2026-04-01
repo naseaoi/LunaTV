@@ -57,3 +57,19 @@ export const buttonStyles = {
   quickAction:
     'px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition-colors',
 };
+
+/** Admin 表单通用输入框样式 */
+export const inputStyles = {
+  base: 'rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100',
+  /** 带 focus 效果 */
+  withFocus:
+    'rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500',
+};
+
+/** 状态徽章样式（启用/禁用标识） */
+export const statusBadgeStyles = {
+  enabled:
+    'rounded-full px-2 py-1 text-xs bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300',
+  disabled:
+    'rounded-full px-2 py-1 text-xs bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300',
+};

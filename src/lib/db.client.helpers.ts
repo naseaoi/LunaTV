@@ -20,14 +20,12 @@ type SessionProbeResult = {
   reason:
     | 'ok'
     | 'missing_cookie'
-    | 'invalid_local_password'
     | 'session_expired'
     | 'invalid_signature'
     | 'missing_signature'
     | 'missing_username'
     | 'user_not_found'
     | 'user_banned'
-    | 'no_password_config'
     | 'server_error';
   username?: string | null;
 };
@@ -101,6 +99,7 @@ function notifySessionLost(
   authLossHandling = true;
   const loginUrl = buildLoginUrl();
   const inPlayerPage = window.location.pathname.startsWith('/play');
+  const inHomePage = window.location.pathname === '/';
 
   window.dispatchEvent(
     new CustomEvent<SessionLostDetail>(AUTH_SOFT_RECOVERY_EVENT, {
@@ -113,7 +112,8 @@ function notifySessionLost(
     }),
   );
 
-  if (!inPlayerPage) {
+  // 首页和播放页不自动跳转登录，避免中断浏览体验
+  if (!inPlayerPage && !inHomePage) {
     window.location.href = loginUrl;
   }
 }
@@ -170,18 +170,6 @@ export function setStorageValueWithLegacyCleanup(
     localStorage.removeItem(legacyKey);
   }
 }
-
-// ================================================================
-// 环境变量
-// ================================================================
-
-export const STORAGE_TYPE = (() => {
-  const raw =
-    (typeof window !== 'undefined' && window.RUNTIME_CONFIG?.STORAGE_TYPE) ||
-    (process.env.STORAGE_TYPE as 'localstorage' | 'localdb' | undefined) ||
-    'localstorage';
-  return raw;
-})();
 
 // ================================================================
 // fetch 工具
@@ -361,76 +349,61 @@ export class HybridCacheManager {
     };
   }
 
-  // ---- 播放记录 ----
-  getCachedPlayRecords(): Record<string, PlayRecord> | null {
+  // ---- 泛型缓存读写 ----
+
+  /** 读取指定类型的缓存数据，过期或不存在返回 null */
+  getCached<K extends keyof UserCacheStore>(
+    key: K,
+  ): NonNullable<UserCacheStore[K]>['data'] | null {
     const username = this.getCurrentUsername();
     if (!username) return null;
     const userCache = this.getUserCache(username);
-    const cached = userCache.playRecords;
-    if (cached && this.isCacheValid(cached)) return cached.data;
+    const cached = userCache[key];
+    if (cached && this.isCacheValid(cached as CacheData<unknown>))
+      return cached.data as NonNullable<UserCacheStore[K]>['data'];
     return null;
   }
 
-  cachePlayRecords(data: Record<string, PlayRecord>): void {
+  /** 写入指定类型的缓存数据 */
+  cache<K extends keyof UserCacheStore>(
+    key: K,
+    data: NonNullable<UserCacheStore[K]>['data'],
+  ): void {
     const username = this.getCurrentUsername();
     if (!username) return;
     const userCache = this.getUserCache(username);
-    userCache.playRecords = this.createCacheData(data);
+    (userCache[key] as CacheData<unknown>) = this.createCacheData(data);
     this.saveUserCache(username, userCache);
   }
 
-  // ---- 收藏 ----
-  getCachedFavorites(): Record<string, Favorite> | null {
-    const username = this.getCurrentUsername();
-    if (!username) return null;
-    const userCache = this.getUserCache(username);
-    const cached = userCache.favorites;
-    if (cached && this.isCacheValid(cached)) return cached.data;
-    return null;
+  // ---- 向后兼容的便捷方法（委托给泛型方法）----
+
+  getCachedPlayRecords() {
+    return this.getCached('playRecords');
+  }
+  cachePlayRecords(data: Record<string, PlayRecord>) {
+    this.cache('playRecords', data);
   }
 
-  cacheFavorites(data: Record<string, Favorite>): void {
-    const username = this.getCurrentUsername();
-    if (!username) return;
-    const userCache = this.getUserCache(username);
-    userCache.favorites = this.createCacheData(data);
-    this.saveUserCache(username, userCache);
+  getCachedFavorites() {
+    return this.getCached('favorites');
+  }
+  cacheFavorites(data: Record<string, Favorite>) {
+    this.cache('favorites', data);
   }
 
-  // ---- 搜索历史 ----
-  getCachedSearchHistory(): string[] | null {
-    const username = this.getCurrentUsername();
-    if (!username) return null;
-    const userCache = this.getUserCache(username);
-    const cached = userCache.searchHistory;
-    if (cached && this.isCacheValid(cached)) return cached.data;
-    return null;
+  getCachedSearchHistory() {
+    return this.getCached('searchHistory');
+  }
+  cacheSearchHistory(data: string[]) {
+    this.cache('searchHistory', data);
   }
 
-  cacheSearchHistory(data: string[]): void {
-    const username = this.getCurrentUsername();
-    if (!username) return;
-    const userCache = this.getUserCache(username);
-    userCache.searchHistory = this.createCacheData(data);
-    this.saveUserCache(username, userCache);
+  getCachedSkipConfigs() {
+    return this.getCached('skipConfigs');
   }
-
-  // ---- 跳过片头片尾 ----
-  getCachedSkipConfigs(): Record<string, SkipConfig> | null {
-    const username = this.getCurrentUsername();
-    if (!username) return null;
-    const userCache = this.getUserCache(username);
-    const cached = userCache.skipConfigs;
-    if (cached && this.isCacheValid(cached)) return cached.data;
-    return null;
-  }
-
-  cacheSkipConfigs(data: Record<string, SkipConfig>): void {
-    const username = this.getCurrentUsername();
-    if (!username) return;
-    const userCache = this.getUserCache(username);
-    userCache.skipConfigs = this.createCacheData(data);
-    this.saveUserCache(username, userCache);
+  cacheSkipConfigs(data: Record<string, SkipConfig>) {
+    this.cache('skipConfigs', data);
   }
 
   // ---- 缓存管理 ----
@@ -541,18 +514,16 @@ export async function handleDatabaseOperationFailure(
  *
  * 流程：
  * 1. SSR 环境 → 返回 fallback
- * 2. 非 localstorage 模式：
+ * 2. 未认证 → 返回缓存（如有）或 fallback，不触发 API 请求
+ * 3. 已认证 localdb 模式：
  *    a. 有缓存 → 返回缓存，后台 fetchApi，有差异则更新缓存+dispatch
  *    b. 无缓存 → await fetchApi → 缓存 → 返回
- * 3. localstorage 模式 → 从 localStorage 读取
  */
 export function createCacheFirstReader<T>(options: {
   getCached: () => T | null;
   setCached: (data: T) => void;
   fetchApi: () => Promise<T>;
   eventName: CacheUpdateEvent;
-  localStorageKey: string;
-  legacyKey?: string;
   fallback: T;
   /** 可选：自定义后台同步失败时是否调用 triggerGlobalError，默认 true */
   bgSyncErrorNotify?: boolean;
@@ -562,8 +533,6 @@ export function createCacheFirstReader<T>(options: {
     setCached,
     fetchApi,
     eventName,
-    localStorageKey,
-    legacyKey,
     fallback,
     bgSyncErrorNotify = true,
   } = options;
@@ -573,49 +542,42 @@ export function createCacheFirstReader<T>(options: {
       return fallback;
     }
 
-    if (STORAGE_TYPE !== 'localstorage') {
-      const cachedData = getCached();
-
-      if (cachedData) {
-        // 后台异步同步
-        fetchApi()
-          .then((freshData) => {
-            if (JSON.stringify(cachedData) !== JSON.stringify(freshData)) {
-              setCached(freshData);
-              window.dispatchEvent(
-                new CustomEvent(eventName, { detail: freshData }),
-              );
-            }
-          })
-          .catch((err) => {
-            console.warn(`后台同步${eventName}失败:`, err);
-            if (bgSyncErrorNotify) {
-              triggerGlobalError(`后台同步${eventName}失败`);
-            }
-          });
-
-        return cachedData;
-      } else {
-        try {
-          const freshData = await fetchApi();
-          setCached(freshData);
-          return freshData;
-        } catch (err) {
-          console.error(`获取${eventName}失败:`, err);
-          triggerGlobalError(`获取${eventName}失败`);
-          return fallback;
-        }
-      }
+    // 未认证用户：仅返回缓存或空数据，不发起 API 请求（避免 401 → 重定向循环）
+    const authInfo = getAuthInfoFromBrowserCookie();
+    if (!authInfo?.username) {
+      return getCached() ?? fallback;
     }
 
-    // localStorage 模式
+    const cachedData = getCached();
+
+    if (cachedData) {
+      // 后台异步同步
+      fetchApi()
+        .then((freshData) => {
+          if (JSON.stringify(cachedData) !== JSON.stringify(freshData)) {
+            setCached(freshData);
+            window.dispatchEvent(
+              new CustomEvent(eventName, { detail: freshData }),
+            );
+          }
+        })
+        .catch((err) => {
+          console.warn(`后台同步${eventName}失败:`, err);
+          if (bgSyncErrorNotify) {
+            triggerGlobalError(`后台同步${eventName}失败`);
+          }
+        });
+
+      return cachedData;
+    }
+
     try {
-      const raw = getStorageValueWithLegacy(localStorageKey, legacyKey);
-      if (!raw) return fallback;
-      return JSON.parse(raw) as T;
+      const freshData = await fetchApi();
+      setCached(freshData);
+      return freshData;
     } catch (err) {
-      console.error(`读取${eventName}失败:`, err);
-      triggerGlobalError(`读取${eventName}失败`);
+      console.error(`获取${eventName}失败:`, err);
+      triggerGlobalError(`获取${eventName}失败`);
       return fallback;
     }
   };
@@ -625,18 +587,15 @@ export function createCacheFirstReader<T>(options: {
  * 模式B：乐观更新（写/删操作）
  *
  * 流程：
- * 1. 非 localstorage 模式：
+ * 1. 未认证 → 抛出错误，阻止写操作
+ * 2. 已认证 localdb 模式：
  *    a. 读缓存 → mutateCached → 写回缓存 → dispatch → syncToServer
  *    b. 失败时由调用方决定是否 handleDatabaseOperationFailure
- * 2. localstorage 模式：
- *    a. 读 localStorage → mutateLocal → 写回 → dispatch
  */
 export function createOptimisticWriter<TCache>(options: {
   getCached: () => TCache | null;
   setCached: (data: TCache) => void;
   eventName: CacheUpdateEvent;
-  localStorageKey: string;
-  legacyKey?: string;
   emptyCacheFactory: () => TCache;
 }): (mutation: {
   mutateCached: (cached: TCache) => TCache;
@@ -645,68 +604,27 @@ export function createOptimisticWriter<TCache>(options: {
   eventDetail?: unknown;
   onServerError?: (err: unknown) => Promise<void>;
 }) => Promise<void> {
-  const {
-    getCached,
-    setCached,
-    eventName,
-    localStorageKey,
-    legacyKey,
-    emptyCacheFactory,
-  } = options;
+  const { getCached, setCached, eventName, emptyCacheFactory } = options;
 
   return async (mutation): Promise<void> => {
-    const {
-      mutateCached,
-      mutateLocal,
-      syncToServer,
-      eventDetail,
-      onServerError,
-    } = mutation;
+    const { mutateCached, syncToServer, eventDetail, onServerError } = mutation;
 
-    if (STORAGE_TYPE !== 'localstorage') {
-      const cached = getCached() || emptyCacheFactory();
-      const updated = mutateCached(cached);
-      setCached(updated);
+    const cached = getCached() || emptyCacheFactory();
+    const updated = mutateCached(cached);
+    setCached(updated);
 
-      window.dispatchEvent(
-        new CustomEvent(eventName, {
-          detail: eventDetail !== undefined ? eventDetail : updated,
-        }),
-      );
-
-      try {
-        await syncToServer();
-      } catch (err) {
-        if (onServerError) {
-          await onServerError(err);
-        }
-        throw err;
-      }
-      return;
-    }
-
-    // localStorage 模式
-    if (typeof window === 'undefined') return;
+    window.dispatchEvent(
+      new CustomEvent(eventName, {
+        detail: eventDetail !== undefined ? eventDetail : updated,
+      }),
+    );
 
     try {
-      const raw = getStorageValueWithLegacy(localStorageKey, legacyKey);
-      const stored: TCache = raw
-        ? (JSON.parse(raw) as TCache)
-        : emptyCacheFactory();
-      const updated = mutateLocal(stored);
-      setStorageValueWithLegacyCleanup(
-        localStorageKey,
-        JSON.stringify(updated),
-        legacyKey,
-      );
-      window.dispatchEvent(
-        new CustomEvent(eventName, {
-          detail: eventDetail !== undefined ? eventDetail : updated,
-        }),
-      );
+      await syncToServer();
     } catch (err) {
-      console.error(`${eventName}操作失败:`, err);
-      triggerGlobalError(`${eventName}操作失败`);
+      if (onServerError) {
+        await onServerError(err);
+      }
       throw err;
     }
   };

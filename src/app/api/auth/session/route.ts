@@ -13,14 +13,12 @@ export const runtime = 'nodejs';
 type SessionReason =
   | 'ok'
   | 'missing_cookie'
-  | 'invalid_local_password'
   | 'session_expired'
   | 'invalid_signature'
   | 'missing_signature'
   | 'missing_username'
   | 'user_not_found'
   | 'user_banned'
-  | 'no_password_config'
   | 'server_error';
 
 function sessionResponse(
@@ -40,7 +38,6 @@ function sessionResponse(
 
 export async function GET(request: NextRequest) {
   try {
-    const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
     const ownerUsername = getOwnerUsername();
     const ownerPassword = getOwnerPassword();
     const authInfo = getAuthInfoFromCookie(request);
@@ -48,35 +45,6 @@ export async function GET(request: NextRequest) {
     if (!authInfo) {
       return sessionResponse(false, 'missing_cookie');
     }
-
-    if (storageType === 'localstorage') {
-      if (!ownerPassword) {
-        return sessionResponse(false, 'no_password_config');
-      }
-      if (
-        authInfo.sessionType !== 'localstorage' ||
-        !authInfo.signature ||
-        !authInfo.expiresAt
-      ) {
-        return sessionResponse(false, 'invalid_local_password');
-      }
-
-      if (Date.now() > authInfo.expiresAt) {
-        return sessionResponse(false, 'session_expired');
-      }
-
-      const isValidLocalSignature = await verifySignature(
-        getSignatureData('localstorage', authInfo.expiresAt),
-        authInfo.signature,
-        ownerPassword,
-      );
-      if (!isValidLocalSignature) {
-        return sessionResponse(false, 'invalid_local_password');
-      }
-
-      return sessionResponse(true, 'ok', authInfo.username);
-    }
-
     if (!authInfo.username) {
       return sessionResponse(false, 'missing_username');
     }

@@ -7,7 +7,7 @@ export type AuthCookiePayload = {
   signature?: string;
   expiresAt?: number;
   role?: AuthRole;
-  sessionType?: 'localstorage' | 'account';
+  sessionType?: 'account';
 };
 
 export type AuthMetaPayload = {
@@ -137,8 +137,8 @@ export function getSignatureData(
   expiresAt: number,
   username?: string,
 ): string {
-  if (sessionType === 'localstorage') {
-    return `localstorage:${expiresAt}`;
+  if (sessionType !== 'account') {
+    throw new Error('账号会话类型无效');
   }
 
   if (!username) {
@@ -214,7 +214,7 @@ async function getCachedSigningKey(secret: string): Promise<CryptoKey> {
 
 /**
  * 使用 HMAC-SHA256 生成签名。
- * 用于登录写入和 middleware 续期写回。
+ * 用于登录写入和 proxy 续期写回。
  */
 export async function generateSignature(
   data: string,
@@ -231,7 +231,7 @@ export async function generateSignature(
 
 /**
  * 使用 HMAC-SHA256 验证签名。
- * 用于 session 校验和 middleware 认证。
+ * 用于 session 校验和 proxy 认证。
  */
 export async function verifySignature(
   data: string,

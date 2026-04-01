@@ -7,6 +7,7 @@ import { configSelfCheck, setCachedConfig } from '@/lib/config';
 import { SimpleCrypto } from '@/lib/crypto';
 import { db } from '@/lib/db';
 import { Favorite, PlayRecord, SkipConfig } from '@/lib/types';
+import { parseStorageKey } from '@/lib/utils';
 
 export const runtime = 'nodejs';
 
@@ -14,15 +15,6 @@ const gunzipAsync = promisify(gunzip);
 
 export async function POST(req: NextRequest) {
   try {
-    // 检查存储类型
-    const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
-    if (storageType === 'localstorage') {
-      return NextResponse.json(
-        { error: '不支持本地存储进行数据迁移' },
-        { status: 400 },
-      );
-    }
-
     const guardResult = await requireOwner(req, {
       unauthorizedMessage: '未登录',
       forbiddenMessage: '权限不足，只有站长可以导入数据',
@@ -124,12 +116,12 @@ export async function POST(req: NextRequest) {
       // 导入跳过片头片尾配置
       if (user.skipConfigs) {
         for (const [key, skipConfig] of Object.entries(user.skipConfigs)) {
-          const [source, id] = key.split('+');
-          if (source && id) {
+          const parsed = parseStorageKey(key);
+          if (parsed) {
             await db.setSkipConfig(
               username,
-              source,
-              id,
+              parsed.source,
+              parsed.id,
               skipConfig as SkipConfig,
             );
           }

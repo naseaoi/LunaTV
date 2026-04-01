@@ -15,14 +15,6 @@ const gzipAsync = promisify(gzip);
 export async function POST(req: NextRequest) {
   try {
     const ownerUsername = getOwnerUsername();
-    // 检查存储类型
-    const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
-    if (storageType === 'localstorage') {
-      return NextResponse.json(
-        { error: '不支持本地存储进行数据迁移' },
-        { status: 400 },
-      );
-    }
 
     const guardResult = await requireOwner(req, {
       unauthorizedMessage: '未登录',

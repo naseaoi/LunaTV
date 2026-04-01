@@ -1,15 +1,10 @@
-import { Dispatch, MutableRefObject, SetStateAction, useEffect } from 'react';
+import { MutableRefObject } from 'react';
 
 import type Artplayer from 'artplayer';
 
-import {
-  deleteFavorite,
-  isFavorited,
-  saveFavorite,
-  subscribeToDataUpdates,
-  generateStorageKey,
-} from '@/lib/db.client';
+import { deleteFavorite, saveFavorite } from '@/lib/db.client';
 import { SearchResult } from '@/lib/types';
+import { useFavoriteSync } from '@/hooks/useFavoriteSync';
 
 interface UsePlayFavoriteParams {
   currentSource: string;
@@ -20,7 +15,7 @@ interface UsePlayFavoriteParams {
   currentSourceRef: MutableRefObject<string>;
   currentIdRef: MutableRefObject<string>;
   favorited: boolean;
-  setFavorited: Dispatch<SetStateAction<boolean>>;
+  setFavorited: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 export function usePlayFavorite({
@@ -34,34 +29,8 @@ export function usePlayFavorite({
   favorited,
   setFavorited,
 }: UsePlayFavoriteParams) {
-  // source/id 变化时检查收藏状态
-  useEffect(() => {
-    if (!currentSource || !currentId) return;
-    (async () => {
-      try {
-        const fav = await isFavorited(currentSource, currentId);
-        setFavorited(fav);
-      } catch (err) {
-        console.error('检查收藏状态失败:', err);
-      }
-    })();
-  }, [currentSource, currentId]);
-
-  // 监听收藏数据更新事件
-  useEffect(() => {
-    if (!currentSource || !currentId) return;
-
-    const unsubscribe = subscribeToDataUpdates(
-      'favoritesUpdated',
-      (favorites: Record<string, unknown>) => {
-        const key = generateStorageKey(currentSource, currentId);
-        const isFav = !!favorites[key];
-        setFavorited(isFav);
-      },
-    );
-
-    return unsubscribe;
-  }, [currentSource, currentId]);
+  // 复用通用的"检查+订阅"逻辑
+  useFavoriteSync(currentSource, currentId, setFavorited);
 
   // 切换收藏
   const handleToggleFavorite = async () => {

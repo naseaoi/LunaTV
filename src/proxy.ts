@@ -44,7 +44,7 @@ function setAuthCookies(
     username?: string;
     signature: string;
     expiresAt: number;
-    sessionType: 'localstorage' | 'account';
+    sessionType: 'account';
   },
 ): void {
   const expires = new Date(authData.expiresAt);
@@ -96,8 +96,8 @@ export async function proxy(request: NextRequest) {
     !ownerPassword ||
     !authInfo.signature ||
     !authInfo.expiresAt ||
-    !authInfo.sessionType ||
-    (authInfo.sessionType === 'account' && !authInfo.username) ||
+    authInfo.sessionType !== 'account' ||
+    !authInfo.username ||
     Date.now() > authInfo.expiresAt
   ) {
     clearAuthCookies(response, request);

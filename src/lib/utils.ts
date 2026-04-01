@@ -1,6 +1,6 @@
 import he from 'he';
 
-type DoubanImageProxyType =
+export type DoubanImageProxyType =
   | 'direct'
   | 'server'
   | 'img3'
@@ -8,14 +8,22 @@ type DoubanImageProxyType =
   | 'cmliussss-cdn-ali'
   | 'custom';
 
-function getDoubanImageProxyConfig(): {
+/**
+ * 获取豆瓣图片代理配置。
+ * 优先级：用户手动设置(localStorage) > 管理后台(RUNTIME_CONFIG) > 默认(direct)
+ */
+export function getDoubanImageProxyConfig(): {
   proxyType: DoubanImageProxyType;
   proxyUrl: string;
 } {
+  if (typeof window === 'undefined') {
+    // SSR 端无法读取客户端配置，返回 direct（配合 CoverImage unoptimized 使用）
+    return { proxyType: 'direct', proxyUrl: '' };
+  }
   const doubanImageProxyType =
     localStorage.getItem('doubanImageProxyType') ||
     window.RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE ||
-    'cmliussss-cdn-tencent';
+    'direct';
   const doubanImageProxy =
     localStorage.getItem('doubanImageProxyUrl') ||
     window.RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY ||
@@ -27,18 +35,25 @@ function getDoubanImageProxyConfig(): {
 }
 
 /**
- * 处理图片 URL，如果设置了图片代理则使用代理
+ * 处理豆瓣图片 URL，根据代理配置替换域名或走代理。
+ * - direct: 原样返回，由 CoverImage 设置 unoptimized + referrerPolicy='no-referrer' 绕过防盗链
+ * - server: 走本地 /api/image-proxy 服务端代理
+ * - img3: 替换域名为 img3.doubanio.com
+ * - cmliussss-cdn-*: 替换为对应 CDN 域名
+ * - custom: 拼接自定义代理前缀
  */
 export function processImageUrl(originalUrl: string): string {
   if (!originalUrl) return originalUrl;
 
-  // 仅处理豆瓣图片代理
+  // 仅处理豆瓣图片
   if (!originalUrl.includes('doubanio.com')) {
     return originalUrl;
   }
 
   const { proxyType, proxyUrl } = getDoubanImageProxyConfig();
   switch (proxyType) {
+    case 'direct':
+      return originalUrl;
     case 'server':
       return `/api/image-proxy?url=${encodeURIComponent(originalUrl)}`;
     case 'img3':
@@ -55,7 +70,6 @@ export function processImageUrl(originalUrl: string): string {
       );
     case 'custom':
       return `${proxyUrl}${encodeURIComponent(originalUrl)}`;
-    case 'direct':
     default:
       return originalUrl;
   }
@@ -73,4 +87,16 @@ export function cleanHtmlTags(text: string): string {
 
   // 使用 he 库解码 HTML 实体
   return he.decode(cleanedText);
+}
+
+/**
+ * 解析存储 key（格式：`{source}+{id}`）
+ * 返回 null 表示格式无效
+ */
+export function parseStorageKey(
+  key: string,
+): { source: string; id: string } | null {
+  const idx = key.indexOf('+');
+  if (idx <= 0 || idx === key.length - 1) return null;
+  return { source: key.substring(0, idx), id: key.substring(idx + 1) };
 }

@@ -17,7 +17,7 @@ const NoImageCover: React.FC<NoImageCoverProps> = ({
   iconStrokeWidth = 1.6,
 }) => {
   const wrapperClassName =
-    `absolute inset-0 flex flex-col items-center justify-center gap-1 text-gray-500 dark:text-gray-400 ${className}`.trim();
+    `absolute inset-0 flex flex-col items-center justify-center gap-1 rounded-lg bg-gray-200/80 text-gray-400 dark:bg-gray-700/80 dark:text-gray-500 ${className}`.trim();
   const textClassName =
     `text-[9px] leading-none font-medium ${labelClassName}`.trim();
 

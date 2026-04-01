@@ -4,12 +4,12 @@ API 路由的权限校验模块总览、使用约定和路由清单。
 
 ## 核心模块
 
-| 模块                    | 职责                                                                               |
-| ----------------------- | ---------------------------------------------------------------------------------- |
-| `src/lib/api-auth.ts`   | `requireActiveUser` / `requireAdmin` / `requireOwner` / `isGuardFailure`           |
-| `src/lib/env.server.ts` | `getOwnerUsername()` / `getOwnerPassword()`，优先级：`ICETV_*` > `MOONTV_*` > 裸名 |
-| `src/lib/config.ts`     | `getConfig` / `resetConfig` 等配置读写                                             |
-| `src/lib/db.ts`         | 服务端统一数据访问入口                                                             |
+| 模块                    | 职责                                                                        |
+| ----------------------- | --------------------------------------------------------------------------- |
+| `src/lib/api-auth.ts`   | `requireActiveUser` / `requireAdmin` / `requireOwner` / `isGuardFailure`    |
+| `src/lib/env.server.ts` | `getOwnerUsername()` / `getOwnerPassword()`，优先级：`ICETV_*` > `MOONTV_*` |
+| `src/lib/config.ts`     | `getConfig` / `resetConfig` 等配置读写                                      |
+| `src/lib/db.ts`         | 服务端统一数据访问入口                                                      |
 
 ## HTTP 状态码约定
 
@@ -82,6 +82,7 @@ if (isGuardFailure(guardResult)) return guardResult.response;
 - `src/app/api/admin/reset/route.ts`（owner）
 - `src/app/api/admin/data_migration/export/route.ts`（owner）
 - `src/app/api/admin/data_migration/import/route.ts`（owner）
+- `src/app/api/admin/site-icon/route.ts`（admin，POST/DELETE）
 
 ## 测试
 
@@ -96,5 +97,5 @@ if (isGuardFailure(guardResult)) return guardResult.response;
 ## 环境变量注意事项
 
 - 推荐使用 `ICETV_USERNAME` / `ICETV_PASSWORD`
-- 兼容 `MOONTV_USERNAME` / `MOONTV_PASSWORD` / `USERNAME` / `PASSWORD`
-- Windows 本地开发时系统级 `USERNAME` 可能覆盖业务值，导致站长识别异常，务必显式设置 `ICETV_USERNAME`。
+- 兼容 `MOONTV_USERNAME` / `MOONTV_PASSWORD`
+- 不支持裸名 `USERNAME` / `PASSWORD`（避免与系统环境变量冲突）

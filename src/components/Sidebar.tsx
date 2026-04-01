@@ -12,7 +12,7 @@ import {
   Tv,
 } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   createContext,
   useCallback,
@@ -26,6 +26,8 @@ import {
 import { useSite } from './SiteProvider';
 import { ThemeToggle } from './ThemeToggle';
 import { UserMenu } from './UserMenu';
+
+import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 
 interface SidebarContextType {
   isCollapsed: boolean;
@@ -95,7 +97,6 @@ const getInitialSidebarCollapsed = (): boolean => {
 const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const { siteName } = useSite();
   // 若同一次 SPA 会话中已经读取过折叠状态，则直接复用，避免闪烁
   const [isCollapsed, setIsCollapsed] = useState<boolean>(
@@ -121,15 +122,11 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
     if (activePath) {
       setActive(activePath);
     } else {
-      // 否则使用当前路径
-      const getCurrentFullPath = () => {
-        const queryString = searchParams.toString();
-        return queryString ? `${pathname}?${queryString}` : pathname;
-      };
-      const fullPath = getCurrentFullPath();
+      const queryString = window.location.search;
+      const fullPath = queryString ? `${pathname}${queryString}` : pathname;
       setActive(fullPath);
     }
-  }, [activePath, pathname, searchParams]);
+  }, [activePath, pathname]);
 
   const handleToggle = useCallback(() => {
     const newState = !isCollapsed;
@@ -330,7 +327,15 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
               </Link>
               <Link
                 href='/search'
-                onClick={() => setActive('/search')}
+                onClick={(e) => {
+                  const authInfo = getAuthInfoFromBrowserCookie();
+                  if (!authInfo?.username) {
+                    e.preventDefault();
+                    router.push('/login?redirect=%2Fsearch');
+                    return;
+                  }
+                  setActive('/search');
+                }}
                 onMouseEnter={() => prefetchRoute('/search')}
                 data-active={active === '/search'}
                 className={`group flex min-h-[40px] items-center rounded-lg px-2 py-2 pl-4 font-medium text-gray-700 transition-colors duration-200 hover:bg-gray-100/30 hover:text-green-600 data-[active=true]:bg-green-500/20 data-[active=true]:text-green-700 dark:text-gray-300 dark:hover:text-green-400 dark:data-[active=true]:bg-green-500/10 dark:data-[active=true]:text-green-400 ${

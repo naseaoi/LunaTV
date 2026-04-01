@@ -11,6 +11,13 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '100.2.3',
+    date: '2026-03-06',
+    added: ['后台新增直播开关入口'],
+    changed: ['优化首屏和列表页的加载速度'],
+    fixed: ['修复源站加载和检测逻辑'],
+  },
+  {
     version: '100.2.2',
     date: '2026-02-27',
     added: [

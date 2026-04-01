@@ -18,6 +18,21 @@ export interface RuntimeConfig {
   FLUID_SEARCH: boolean;
 }
 
+export const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = {
+  STORAGE_TYPE: 'localdb',
+  OPEN_REGISTER: false,
+  UPDATE_REPOS: 'naseaoi/IceTV',
+  UPDATE_BRANCH: 'main',
+  DOUBAN_PROXY_TYPE: 'direct',
+  DOUBAN_PROXY: '',
+  DOUBAN_IMAGE_PROXY_TYPE: 'direct',
+  DOUBAN_IMAGE_PROXY: '',
+  DISABLE_YELLOW_FILTER: false,
+  ENABLE_LIVE_ENTRY: false,
+  CUSTOM_CATEGORIES: [],
+  FLUID_SEARCH: true,
+};
+
 declare global {
   interface Window {
     RUNTIME_CONFIG?: RuntimeConfig;
@@ -31,4 +46,91 @@ export function getRuntimeConfig(): RuntimeConfig | undefined {
     return undefined;
   }
   return window.RUNTIME_CONFIG;
+}
+
+type ServerConfigFallback = {
+  StorageType?: string;
+  OpenRegister?: boolean;
+  UpdateRepos?: string;
+  UpdateBranch?: string;
+  DoubanProxyType?: string;
+  DoubanProxy?: string;
+  DoubanImageProxyType?: string;
+  DoubanImageProxy?: string;
+  DisableYellowFilter?: boolean;
+  EnableLiveEntry?: boolean;
+  CustomCategories?: RuntimeConfig['CUSTOM_CATEGORIES'];
+  FluidSearch?: boolean;
+};
+
+export async function ensureClientRuntimeConfig(): Promise<RuntimeConfig> {
+  const runtimeConfig = getRuntimeConfig();
+  if (runtimeConfig) {
+    return runtimeConfig;
+  }
+
+  try {
+    const response = await fetch('/api/server-config', {
+      method: 'GET',
+      cache: 'no-store',
+    });
+    if (!response.ok) {
+      throw new Error(`server-config: ${response.status}`);
+    }
+
+    const data = (await response.json()) as ServerConfigFallback;
+    const nextConfig: RuntimeConfig = {
+      STORAGE_TYPE: data.StorageType || DEFAULT_RUNTIME_CONFIG.STORAGE_TYPE,
+      OPEN_REGISTER:
+        data.OpenRegister === undefined
+          ? DEFAULT_RUNTIME_CONFIG.OPEN_REGISTER
+          : data.OpenRegister,
+      UPDATE_REPOS: data.UpdateRepos || DEFAULT_RUNTIME_CONFIG.UPDATE_REPOS,
+      UPDATE_BRANCH: data.UpdateBranch || DEFAULT_RUNTIME_CONFIG.UPDATE_BRANCH,
+      DOUBAN_PROXY_TYPE:
+        data.DoubanProxyType || DEFAULT_RUNTIME_CONFIG.DOUBAN_PROXY_TYPE,
+      DOUBAN_PROXY: data.DoubanProxy || DEFAULT_RUNTIME_CONFIG.DOUBAN_PROXY,
+      DOUBAN_IMAGE_PROXY_TYPE:
+        data.DoubanImageProxyType ||
+        DEFAULT_RUNTIME_CONFIG.DOUBAN_IMAGE_PROXY_TYPE,
+      DOUBAN_IMAGE_PROXY:
+        data.DoubanImageProxy || DEFAULT_RUNTIME_CONFIG.DOUBAN_IMAGE_PROXY,
+      DISABLE_YELLOW_FILTER:
+        data.DisableYellowFilter === undefined
+          ? DEFAULT_RUNTIME_CONFIG.DISABLE_YELLOW_FILTER
+          : data.DisableYellowFilter,
+      ENABLE_LIVE_ENTRY:
+        data.EnableLiveEntry === undefined
+          ? DEFAULT_RUNTIME_CONFIG.ENABLE_LIVE_ENTRY
+          : data.EnableLiveEntry,
+      CUSTOM_CATEGORIES:
+        data.CustomCategories || DEFAULT_RUNTIME_CONFIG.CUSTOM_CATEGORIES,
+      FLUID_SEARCH:
+        data.FluidSearch === undefined
+          ? DEFAULT_RUNTIME_CONFIG.FLUID_SEARCH
+          : data.FluidSearch,
+    };
+
+    if (typeof window !== 'undefined') {
+      window.RUNTIME_CONFIG = nextConfig;
+    }
+
+    return nextConfig;
+  } catch {
+    if (typeof window !== 'undefined') {
+      window.RUNTIME_CONFIG = DEFAULT_RUNTIME_CONFIG;
+    }
+    return DEFAULT_RUNTIME_CONFIG;
+  }
+}
+
+export async function getClientAuthRuntimeConfig(): Promise<{
+  storageType: string;
+  openRegister: boolean;
+}> {
+  const runtimeConfig = await ensureClientRuntimeConfig();
+  return {
+    storageType: runtimeConfig.STORAGE_TYPE,
+    openRegister: runtimeConfig.OPEN_REGISTER,
+  };
 }

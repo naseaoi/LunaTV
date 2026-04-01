@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isGuardFailure, requireActiveUser } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { SkipConfig } from '@/lib/types';
+import { parseStorageKey } from '@/lib/utils';
 
 export const runtime = 'nodejs';
 
@@ -50,8 +51,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 解析key为source和id
-    const [source, id] = key.split('+');
-    if (!source || !id) {
+    const parsed = parseStorageKey(key);
+    if (!parsed) {
       return NextResponse.json({ error: '无效的key格式' }, { status: 400 });
     }
 
@@ -62,7 +63,12 @@ export async function POST(request: NextRequest) {
       outro_time: Number(config.outro_time) || 0,
     };
 
-    await db.setSkipConfig(guardResult.username, source, id, skipConfig);
+    await db.setSkipConfig(
+      guardResult.username,
+      parsed.source,
+      parsed.id,
+      skipConfig,
+    );
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -89,12 +95,12 @@ export async function DELETE(request: NextRequest) {
     }
 
     // 解析key为source和id
-    const [source, id] = key.split('+');
-    if (!source || !id) {
+    const parsed = parseStorageKey(key);
+    if (!parsed) {
       return NextResponse.json({ error: '无效的key格式' }, { status: 400 });
     }
 
-    await db.deleteSkipConfig(guardResult.username, source, id);
+    await db.deleteSkipConfig(guardResult.username, parsed.source, parsed.id);
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -122,9 +122,9 @@ const LoadingStatePanel: React.FC<LoadingStatePanelProps> = ({
       } ${className}`}
     >
       <div
-        className={`pointer-events-none absolute -top-24 -left-20 h-56 w-56 rounded-full bg-gradient-to-br ${colors.halo} blur-2xl`}
+        className={`pointer-events-none absolute -left-20 -top-24 h-56 w-56 rounded-full bg-gradient-to-br ${colors.halo} blur-2xl`}
       />
-      <div className='pointer-events-none absolute -bottom-24 -right-16 h-52 w-52 rounded-full bg-white/20 dark:bg-white/5 blur-2xl' />
+      <div className='pointer-events-none absolute -bottom-24 -right-16 h-52 w-52 rounded-full bg-white/20 blur-2xl dark:bg-white/5' />
 
       <div className='relative flex flex-col items-center text-center'>
         <div className='relative mb-7'>
@@ -147,7 +147,7 @@ const LoadingStatePanel: React.FC<LoadingStatePanelProps> = ({
             </div>
           </div>
           <div
-            className={`ls-ping-soft absolute top-3 right-2 h-3.5 w-3.5 rounded-full ${colors.orb}`}
+            className={`ls-ping-soft absolute right-2 top-3 h-3.5 w-3.5 rounded-full ${colors.orb}`}
           />
         </div>
 
@@ -173,7 +173,7 @@ const LoadingStatePanel: React.FC<LoadingStatePanelProps> = ({
 
         {typeof progress === 'number' && (
           <div
-            className='mt-6 w-full max-w-[22rem] self-stretch mx-auto'
+            className='mx-auto mt-6 w-full max-w-[22rem] self-stretch'
             dir='ltr'
           >
             <div
@@ -206,129 +206,6 @@ const LoadingStatePanel: React.FC<LoadingStatePanelProps> = ({
 
         {children && <div className='mt-6 w-full space-y-3'>{children}</div>}
       </div>
-
-      <style jsx>{`
-        .ls-ripple {
-          animation: ls-ripple 2.4s ease-out infinite;
-          transform-origin: center;
-        }
-
-        .ls-ripple-delay {
-          animation-delay: 1.2s;
-        }
-
-        .ls-spinner-shell {
-          filter: drop-shadow(0 8px 26px rgba(0, 0, 0, 0.12));
-        }
-
-        .ls-spinner-ring-outer {
-          mask: radial-gradient(circle, transparent 58%, black 59%);
-          -webkit-mask: radial-gradient(circle, transparent 58%, black 59%);
-          animation: ls-rotate 2.6s linear infinite;
-        }
-
-        .ls-spinner-ring-inner {
-          animation: ls-rotate-reverse 3.3s linear infinite;
-        }
-
-        .ls-float {
-          animation: ls-float 2.8s ease-in-out infinite;
-        }
-
-        .ls-ping-soft {
-          animation: ls-ping-soft 1.8s ease-out infinite;
-        }
-
-        .ls-shimmer {
-          position: relative;
-          overflow: hidden;
-          background-size: 100% 100%;
-          background-position: 0 0;
-        }
-
-        .ls-shimmer::after {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(
-            90deg,
-            rgba(255, 255, 255, 0) 0%,
-            rgba(255, 255, 255, 0.16) 40%,
-            rgba(255, 255, 255, 0.34) 50%,
-            rgba(255, 255, 255, 0.16) 60%,
-            rgba(255, 255, 255, 0) 100%
-          );
-          transform: translateX(-100%);
-          animation: ls-shimmer-sweep 1.8s linear infinite;
-        }
-
-        @keyframes ls-rotate {
-          0% {
-            transform: rotate(0deg);
-          }
-          100% {
-            transform: rotate(360deg);
-          }
-        }
-
-        @keyframes ls-rotate-reverse {
-          0% {
-            transform: rotate(0deg);
-          }
-          100% {
-            transform: rotate(-360deg);
-          }
-        }
-
-        @keyframes ls-float {
-          0%,
-          100% {
-            transform: translateY(0px);
-          }
-          50% {
-            transform: translateY(-5px);
-          }
-        }
-
-        @keyframes ls-ripple {
-          0% {
-            transform: scale(0.92);
-            opacity: 0.45;
-          }
-          70% {
-            transform: scale(1.2);
-            opacity: 0;
-          }
-          100% {
-            transform: scale(1.2);
-            opacity: 0;
-          }
-        }
-
-        @keyframes ls-ping-soft {
-          0% {
-            transform: scale(0.9);
-            opacity: 0.65;
-          }
-          70% {
-            transform: scale(1.9);
-            opacity: 0;
-          }
-          100% {
-            transform: scale(1.9);
-            opacity: 0;
-          }
-        }
-
-        @keyframes ls-shimmer-sweep {
-          0% {
-            transform: translateX(-100%);
-          }
-          100% {
-            transform: translateX(100%);
-          }
-        }
-      `}</style>
     </div>
   );
 };

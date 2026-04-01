@@ -24,8 +24,8 @@ const inter = Inter({
   ],
 });
 
-const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
-const shouldUseDynamicConfig = storageType !== 'localstorage';
+const storageType = 'localdb';
+const shouldUseDynamicConfig = true;
 
 // 动态生成 metadata，支持配置更新后的标题变化
 export async function generateMetadata(): Promise<Metadata> {

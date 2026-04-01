@@ -33,7 +33,7 @@ type LoginAuthCookiePayload = AuthCookiePayload & {
   role: AuthRole;
   signature: string;
   expiresAt: number;
-  sessionType: 'localstorage' | 'account';
+  sessionType: 'account';
 };
 const LOGIN_MAX_ATTEMPTS = 10;
 const LOGIN_WINDOW_MS = 10 * 60 * 1000;
@@ -212,18 +212,10 @@ function clearAuthCookies(response: NextResponse, req: NextRequest): void {
   });
 }
 
-// 读取存储类型环境变量，默认 localstorage
-const STORAGE_TYPE =
-  (process.env.NEXT_PUBLIC_STORAGE_TYPE as
-    | 'localstorage'
-    | 'localdb'
-    | undefined) || 'localstorage';
-
 // 生成认证Cookie（带签名）
 async function generateAuthCookie(
   role: AuthRole,
-  sessionType: 'localstorage' | 'account',
-  username?: string,
+  username: string,
 ): Promise<LoginAuthCookiePayload> {
   const ownerPassword = getOwnerPassword();
   if (!ownerPassword) {
@@ -231,7 +223,7 @@ async function generateAuthCookie(
   }
 
   const expiresAt = getSessionExpiresAt();
-  const signatureData = getSignatureData(sessionType, expiresAt, username);
+  const signatureData = getSignatureData('account', expiresAt, username);
   const signature = await generateSignature(signatureData, ownerPassword);
 
   return {
@@ -239,7 +231,7 @@ async function generateAuthCookie(
     username,
     signature,
     expiresAt,
-    sessionType,
+    sessionType: 'account',
   };
 }
 
@@ -268,41 +260,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 本地 / localStorage 模式——仅校验固定密码
-    if (STORAGE_TYPE === 'localstorage') {
-      const envPassword = ownerPassword;
-
-      // 未配置 PASSWORD 时直接放行
-      if (!envPassword) {
-        const response = NextResponse.json({ ok: true });
-        clearAuthCookies(response, req);
-
-        return response;
-      }
-
-      const { password } = body;
-      if (typeof password !== 'string') {
-        return NextResponse.json({ error: '密码不能为空' }, { status: 400 });
-      }
-
-      if (!safeEqual(password, envPassword)) {
-        markLoginFailure(rateLimitState.key);
-        return NextResponse.json(
-          { ok: false, error: '密码错误' },
-          { status: 401 },
-        );
-      }
-
-      // 验证成功，设置认证cookie
-      const response = NextResponse.json({ ok: true });
-      const authPayload = await generateAuthCookie('user', 'localstorage');
-      setAuthCookies(response, req, authPayload);
-      clearLoginFailures(rateLimitState.key);
-
-      return response;
-    }
-
-    // 数据库 / redis 模式——校验用户名并尝试连接数据库
     const { username, password } = body;
 
     if (!username || typeof username !== 'string') {
@@ -319,11 +276,7 @@ export async function POST(req: NextRequest) {
     ) {
       // 验证成功，设置认证cookie
       const response = NextResponse.json({ ok: true });
-      const authPayload = await generateAuthCookie(
-        'owner',
-        'account',
-        username,
-      );
+      const authPayload = await generateAuthCookie('owner', username);
       setAuthCookies(response, req, authPayload);
       clearLoginFailures(rateLimitState.key);
 
@@ -354,7 +307,6 @@ export async function POST(req: NextRequest) {
       const response = NextResponse.json({ ok: true });
       const authPayload = await generateAuthCookie(
         user?.role || 'user',
-        'account',
         username,
       );
       setAuthCookies(response, req, authPayload);
