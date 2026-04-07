@@ -302,6 +302,7 @@ export async function getConfig(): Promise<AdminConfig> {
 
   // 读 db
   let adminConfig: AdminConfig | null = null;
+  let shouldPersist = false;
   try {
     adminConfig = await db.getAdminConfig();
   } catch (e) {
@@ -311,10 +312,20 @@ export async function getConfig(): Promise<AdminConfig> {
   // db 中无配置，执行一次初始化
   if (!adminConfig) {
     adminConfig = await getInitConfig('');
+    shouldPersist = true;
   }
+  const originalConfigJson = JSON.stringify(adminConfig);
   adminConfig = configSelfCheck(adminConfig);
   cachedConfig = adminConfig;
-  db.saveAdminConfig(cachedConfig);
+
+  if (!shouldPersist) {
+    shouldPersist = JSON.stringify(cachedConfig) !== originalConfigJson;
+  }
+
+  if (shouldPersist) {
+    await db.saveAdminConfig(cachedConfig);
+  }
+
   return cachedConfig;
 }
 

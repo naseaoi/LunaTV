@@ -16,6 +16,44 @@ function parseBusyTimeoutMs(raw: string | undefined, fallback: number): number {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
+function sleepSync(ms: number): void {
+  const sab = new SharedArrayBuffer(4);
+  const view = new Int32Array(sab);
+  Atomics.wait(view, 0, 0, ms);
+}
+
+function isSqliteBusyError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const code = (error as Error & { code?: string }).code;
+  return code === 'SQLITE_BUSY' || /database is locked/i.test(error.message);
+}
+
+function runWithBusyRetry<T>(label: string, task: () => T): T {
+  const maxRetries = parseBusyTimeoutMs(process.env.SQLITE_INIT_RETRY_COUNT, 8);
+  const retryDelayMs = parseBusyTimeoutMs(
+    process.env.SQLITE_INIT_RETRY_DELAY_MS,
+    250,
+  );
+
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return task();
+    } catch (error) {
+      if (!isSqliteBusyError(error) || attempt >= maxRetries) {
+        throw error;
+      }
+
+      console.warn(
+        `${label} 遇到数据库忙锁，正在重试（${attempt + 1}/${maxRetries}）...`,
+      );
+      sleepSync(retryDelayMs * (attempt + 1));
+    }
+  }
+}
+
 type LocalDbSchema = {
   users: Record<string, string>;
   playRecords: Record<string, Record<string, PlayRecord>>;
@@ -145,14 +183,19 @@ export class LocalSqliteStorage implements IStorage {
       process.env.SQLITE_BUSY_TIMEOUT_MS,
       5000,
     );
-    this.db = new Database(this.dbPath, { timeout: busyTimeoutMs });
-    this.db.pragma('journal_mode = WAL');
-    this.db.pragma('synchronous = NORMAL');
-    this.db.pragma(`busy_timeout = ${busyTimeoutMs}`);
-
-    this.initializeSchema();
+    this.db = runWithBusyRetry('打开 SQLite 数据库', () => {
+      return new Database(this.dbPath, { timeout: busyTimeoutMs });
+    });
+    runWithBusyRetry('初始化 SQLite 数据库', () => {
+      this.db.pragma('journal_mode = WAL');
+      this.db.pragma('synchronous = NORMAL');
+      this.db.pragma(`busy_timeout = ${busyTimeoutMs}`);
+      this.initializeSchema();
+    });
     this.stmts = this.prepareStatements();
-    this.migrateFromLegacyJsonIfNeeded();
+    runWithBusyRetry('迁移 SQLite 历史数据', () => {
+      this.migrateFromLegacyJsonIfNeeded();
+    });
   }
 
   private initializeSchema(): void {
