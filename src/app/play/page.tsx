@@ -22,7 +22,10 @@ import { useArtPlayer } from '@/features/play/hooks/useArtPlayer';
 import { usePlayerKeyboard } from '@/hooks/usePlayerKeyboard';
 import { usePlayFavorite } from '@/features/play/hooks/usePlayFavorite';
 import { usePlayInit, updateVideoUrl } from '@/features/play/hooks/usePlayInit';
-import { usePlayProgress } from '@/features/play/hooks/usePlayProgress';
+import {
+  PlayProgressSaveState,
+  usePlayProgress,
+} from '@/features/play/hooks/usePlayProgress';
 import {
   AUTH_LOST_EVENT,
   SessionLostDetail,
@@ -147,6 +150,7 @@ function PlayPageClient() {
   const [sourceSearchError, setSourceSearchError] = useState<string | null>(
     null,
   );
+  const sourceChangeRequestIdRef = useRef(0);
 
   const [optimizationEnabled] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -185,6 +189,11 @@ function PlayPageClient() {
   // 播放进度保存相关
   const saveIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastSaveTimeRef = useRef<number>(0);
+  const playProgressSaveStateRef = useRef<PlayProgressSaveState>({
+    inFlight: false,
+    pending: null,
+    lastSavedFingerprint: null,
+  });
 
   const artPlayerRef = useRef<Artplayer | null>(null);
   const artRef = useRef<HTMLDivElement | null>(null);
@@ -201,16 +210,20 @@ function PlayPageClient() {
     const player = artPlayerRef.current;
     artPlayerRef.current = null;
     if (player) {
-      requestAnimationFrame(() => {
-        try {
-          if (player.video && player.video.hls) {
+      try {
+        if (player.video) {
+          player.video.pause();
+          player.video.removeAttribute('src');
+          player.video.load();
+          if (player.video.hls) {
             player.video.hls.destroy();
+            player.video.hls = null;
           }
-          player.destroy();
-        } catch (err) {
-          console.warn('清理播放器资源时出错:', err);
         }
-      });
+        player.destroy();
+      } catch (err) {
+        console.warn('清理播放器资源时出错:', err);
+      }
     }
   }, []);
 
@@ -379,6 +392,7 @@ function PlayPageClient() {
     detailRef,
     currentEpisodeIndexRef,
     resumeTimeRef,
+    saveStateRef: playProgressSaveStateRef,
     lastSaveTimeRef,
     saveIntervalRef,
     wakeLockRef,
@@ -510,43 +524,45 @@ function PlayPageClient() {
     newId: string,
     newTitle: string,
   ) => {
+    if (
+      newSource === currentSourceRef.current &&
+      newId === currentIdRef.current
+    ) {
+      return;
+    }
+
+    const targetSource = availableSources.find(
+      (source) => source.source === newSource && source.id === newId,
+    );
+    if (!targetSource) {
+      setError('未找到匹配结果');
+      return;
+    }
+
+    const currentRequestId = ++sourceChangeRequestIdRef.current;
+    const previousSource = currentSourceRef.current;
+    const previousId = currentIdRef.current;
+    const previousSkipConfig = { ...skipConfigRef.current };
+    const currentPlayTime =
+      artPlayerRef.current?.currentTime || resumeTimeRef.current || 0;
+
     try {
       setVideoLoadingStage('sourceChanging');
       setIsVideoLoading(true);
       setRealtimeLoadSpeed('测速中...');
+      setError(null);
+      setVideoUrl('');
 
-      const currentPlayTime = artPlayerRef.current?.currentTime || 0;
-
-      if (currentSourceRef.current && currentIdRef.current) {
+      if (artPlayerRef.current) {
         try {
-          await deletePlayRecord(
-            currentSourceRef.current,
-            currentIdRef.current,
-          );
+          artPlayerRef.current.pause();
         } catch (err) {
-          console.error('清除播放记录失败:', err);
+          console.warn('换源时暂停当前视频失败:', err);
         }
       }
+      cleanupPlayer();
 
-      if (currentSourceRef.current && currentIdRef.current) {
-        try {
-          await deleteSkipConfig(
-            currentSourceRef.current,
-            currentIdRef.current,
-          );
-          await saveSkipConfig(newSource, newId, skipConfigRef.current);
-        } catch (err) {
-          console.error('清除跳过片头片尾配置失败:', err);
-        }
-      }
-
-      let newDetail = availableSources.find(
-        (source) => source.source === newSource && source.id === newId,
-      );
-      if (!newDetail) {
-        setError('未找到匹配结果');
-        return;
-      }
+      let newDetail = targetSource;
 
       // episodes 为空（如 giri 搜索阶段的残缺数据），补调 detail 获取完整信息
       if (!newDetail.episodes || newDetail.episodes.length === 0) {
@@ -554,6 +570,9 @@ function PlayPageClient() {
           const detailRes = await fetch(
             `/api/detail?source=${newSource}&id=${newId}`,
           );
+          if (currentRequestId !== sourceChangeRequestIdRef.current) {
+            return;
+          }
           if (detailRes.ok) {
             const fullDetail = (await detailRes.json()) as SearchResult;
             if (fullDetail.episodes && fullDetail.episodes.length > 0) {
@@ -571,6 +590,10 @@ function PlayPageClient() {
         }
       }
 
+      if (currentRequestId !== sourceChangeRequestIdRef.current) {
+        return;
+      }
+
       // 使用 ref 获取最新集数索引，避免闭包捕获到过期的 state 值
       const latestEpisodeIndex = currentEpisodeIndexRef.current;
       let targetIndex = latestEpisodeIndex;
@@ -580,10 +603,7 @@ function PlayPageClient() {
 
       if (targetIndex !== latestEpisodeIndex) {
         resumeTimeRef.current = 0;
-      } else if (
-        (!resumeTimeRef.current || resumeTimeRef.current === 0) &&
-        currentPlayTime > 1
-      ) {
+      } else if (currentPlayTime > 1) {
         resumeTimeRef.current = currentPlayTime;
       }
 
@@ -601,7 +621,27 @@ function PlayPageClient() {
       setCurrentId(newId);
       setDetail(newDetail);
       setCurrentEpisodeIndex(targetIndex);
+
+      if (previousSource && previousId) {
+        void (async () => {
+          try {
+            await deletePlayRecord(previousSource, previousId);
+          } catch (err) {
+            console.error('清除播放记录失败:', err);
+          }
+
+          try {
+            await deleteSkipConfig(previousSource, previousId);
+            await saveSkipConfig(newSource, newId, previousSkipConfig);
+          } catch (err) {
+            console.error('迁移跳过片头片尾配置失败:', err);
+          }
+        })();
+      }
     } catch (err) {
+      if (currentRequestId !== sourceChangeRequestIdRef.current) {
+        return;
+      }
       setIsVideoLoading(false);
       setRealtimeLoadSpeed('');
       setError(err instanceof Error ? err.message : '换源失败');

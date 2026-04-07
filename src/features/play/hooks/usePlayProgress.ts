@@ -6,6 +6,7 @@ import {
   deletePlayRecord,
   generateStorageKey,
   getAllPlayRecords,
+  PlayRecord,
   savePlayRecord,
 } from '@/lib/db.client';
 import { SearchResult } from '@/lib/types';
@@ -111,6 +112,55 @@ export function restorePlaybackCheckpoint(
 // 保存播放进度到 IndexedDB
 // ---------------------------------------------------------------------------
 
+type PendingPlayProgressSave = {
+  source: string;
+  id: string;
+  record: PlayRecord;
+  fingerprint: string;
+};
+
+export interface PlayProgressSaveState {
+  inFlight: boolean;
+  pending: PendingPlayProgressSave | null;
+  lastSavedFingerprint: string | null;
+}
+
+function buildPlayProgressFingerprint(
+  source: string,
+  id: string,
+  record: PlayRecord,
+): string {
+  return [source, id, record.index, record.play_time, record.total_time].join(
+    '|',
+  );
+}
+
+async function flushPlayProgressSave(
+  saveStateRef: MutableRefObject<PlayProgressSaveState>,
+  lastSaveTimeRef: MutableRefObject<number>,
+  payload: PendingPlayProgressSave,
+): Promise<void> {
+  saveStateRef.current.inFlight = true;
+  lastSaveTimeRef.current = Date.now();
+
+  try {
+    await savePlayRecord(payload.source, payload.id, payload.record);
+    saveStateRef.current.lastSavedFingerprint = payload.fingerprint;
+  } finally {
+    saveStateRef.current.inFlight = false;
+
+    const pending = saveStateRef.current.pending;
+    saveStateRef.current.pending = null;
+
+    if (
+      pending &&
+      pending.fingerprint !== saveStateRef.current.lastSavedFingerprint
+    ) {
+      await flushPlayProgressSave(saveStateRef, lastSaveTimeRef, pending);
+    }
+  }
+}
+
 export async function saveCurrentPlayProgress(
   artPlayerRef: MutableRefObject<Artplayer | null>,
   currentSourceRef: MutableRefObject<string>,
@@ -118,6 +168,7 @@ export async function saveCurrentPlayProgress(
   videoTitleRef: MutableRefObject<string>,
   detailRef: MutableRefObject<SearchResult | null>,
   currentEpisodeIndexRef: MutableRefObject<number>,
+  saveStateRef: MutableRefObject<PlayProgressSaveState>,
   lastSaveTimeRef: MutableRefObject<number>,
   searchTitle: string,
 ) {
@@ -140,21 +191,46 @@ export async function saveCurrentPlayProgress(
     return;
   }
 
-  try {
-    await savePlayRecord(currentSourceRef.current, currentIdRef.current, {
-      title: videoTitleRef.current,
-      source_name: detailRef.current?.source_name || '',
-      year: detailRef.current?.year,
-      cover: detailRef.current?.poster || '',
-      index: currentEpisodeIndexRef.current + 1,
-      total_episodes: detailRef.current?.episodes.length || 1,
-      play_time: Math.floor(currentTime),
-      total_time: Math.floor(duration),
-      save_time: Date.now(),
-      search_title: searchTitle,
-    });
+  const record: PlayRecord = {
+    title: videoTitleRef.current,
+    source_name: detailRef.current?.source_name || '',
+    year: detailRef.current?.year,
+    cover: detailRef.current?.poster || '',
+    index: currentEpisodeIndexRef.current + 1,
+    total_episodes: detailRef.current?.episodes.length || 1,
+    play_time: Math.floor(currentTime),
+    total_time: Math.floor(duration),
+    save_time: Date.now(),
+    search_title: searchTitle,
+  };
 
-    lastSaveTimeRef.current = Date.now();
+  const fingerprint = buildPlayProgressFingerprint(
+    currentSourceRef.current,
+    currentIdRef.current,
+    record,
+  );
+
+  if (fingerprint === saveStateRef.current.lastSavedFingerprint) {
+    return;
+  }
+
+  try {
+    if (saveStateRef.current.inFlight) {
+      saveStateRef.current.pending = {
+        source: currentSourceRef.current,
+        id: currentIdRef.current,
+        record,
+        fingerprint,
+      };
+      return;
+    }
+
+    await flushPlayProgressSave(saveStateRef, lastSaveTimeRef, {
+      source: currentSourceRef.current,
+      id: currentIdRef.current,
+      record,
+      fingerprint,
+    });
   } catch (err) {
     console.error('保存播放进度失败:', err);
   }
@@ -172,6 +248,7 @@ interface UsePlayProgressParams {
   detailRef: MutableRefObject<SearchResult | null>;
   currentEpisodeIndexRef: MutableRefObject<number>;
   resumeTimeRef: MutableRefObject<number | null>;
+  saveStateRef: MutableRefObject<PlayProgressSaveState>;
   lastSaveTimeRef: MutableRefObject<number>;
   saveIntervalRef: MutableRefObject<NodeJS.Timeout | null>;
   wakeLockRef: MutableRefObject<WakeLockSentinel | null>;
@@ -192,6 +269,7 @@ export function usePlayProgress({
   detailRef,
   currentEpisodeIndexRef,
   resumeTimeRef,
+  saveStateRef,
   lastSaveTimeRef,
   saveIntervalRef,
   wakeLockRef,
@@ -211,6 +289,7 @@ export function usePlayProgress({
       videoTitleRef,
       detailRef,
       currentEpisodeIndexRef,
+      saveStateRef,
       lastSaveTimeRef,
       searchTitle,
     );
@@ -249,6 +328,12 @@ export function usePlayProgress({
       console.warn('Wake Lock 释放失败:', err);
     }
   };
+
+  useEffect(() => {
+    // 切换到新视频时丢弃旧请求的排队状态，避免旧进度回写到新条目。
+    saveStateRef.current.pending = null;
+    saveStateRef.current.lastSavedFingerprint = null;
+  }, [currentSource, currentId]);
 
   // 播放记录处理：source/id 就绪后检查恢复点与播放记录
   useEffect(() => {

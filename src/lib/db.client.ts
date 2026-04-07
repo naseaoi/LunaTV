@@ -21,6 +21,7 @@ import {
   fetchFromApi,
   fetchWithAuth,
   handleDatabaseOperationFailure,
+  retryClientRequest,
   triggerGlobalError,
   createCacheFirstReader,
   createOptimisticWriter,
@@ -157,14 +158,21 @@ export async function savePlayRecord(
       return stored;
     },
     syncToServer: () =>
-      fetchWithAuth('/api/playrecords', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, record }),
-      }).then(() => {}),
+      retryClientRequest(
+        () =>
+          fetchWithAuth('/api/playrecords', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, record }),
+            keepalive: true,
+          }).then(() => {}),
+        {
+          retries: 2,
+          delayMs: 600,
+        },
+      ),
     onServerError: async (err) => {
       await handleDatabaseOperationFailure('playRecords', err);
-      triggerGlobalError('保存播放记录失败');
     },
   });
 }
@@ -189,7 +197,6 @@ export async function deletePlayRecord(
       }).then(() => {}),
     onServerError: async (err) => {
       await handleDatabaseOperationFailure('playRecords', err);
-      triggerGlobalError('删除播放记录失败');
     },
   });
 }
@@ -204,7 +211,6 @@ export async function clearAllPlayRecords(): Promise<void> {
     });
   } catch (err) {
     await handleDatabaseOperationFailure('playRecords', err);
-    triggerGlobalError('清空播放记录失败');
     throw err;
   }
 }
@@ -308,7 +314,6 @@ export async function saveFavorite(
       }).then(() => {}),
     onServerError: async (err) => {
       await handleDatabaseOperationFailure('favorites', err);
-      triggerGlobalError('保存收藏失败');
     },
   });
 }
@@ -333,7 +338,6 @@ export async function deleteFavorite(
       }).then(() => {}),
     onServerError: async (err) => {
       await handleDatabaseOperationFailure('favorites', err);
-      triggerGlobalError('删除收藏失败');
     },
   });
 }
@@ -392,7 +396,6 @@ export async function clearAllFavorites(): Promise<void> {
     });
   } catch (err) {
     await handleDatabaseOperationFailure('favorites', err);
-    triggerGlobalError('清空收藏失败');
     throw err;
   }
 }

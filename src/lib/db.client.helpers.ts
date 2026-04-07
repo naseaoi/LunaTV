@@ -37,12 +37,148 @@ type SessionLostDetail = {
   inPlayerPage: boolean;
 };
 
+export type ClientRequestErrorKind =
+  | 'network'
+  | 'request_aborted'
+  | 'http'
+  | 'auth_rejected'
+  | 'session_lost';
+
+type ClientRequestErrorOptions = {
+  kind: ClientRequestErrorKind;
+  url: string;
+  method: string;
+  status?: number;
+  sessionReason?: SessionProbeResult['reason'];
+  cause?: unknown;
+};
+
+export class ClientRequestError extends Error {
+  readonly kind: ClientRequestErrorKind;
+  readonly url: string;
+  readonly method: string;
+  readonly status?: number;
+  readonly sessionReason?: SessionProbeResult['reason'];
+  readonly cause?: unknown;
+
+  constructor(options: ClientRequestErrorOptions) {
+    const { kind, url, method, status, sessionReason, cause } = options;
+    const detail = status ? ` (${status})` : '';
+    super(`[${method}] ${url} 请求失败${detail}: ${kind}`);
+    this.name = 'ClientRequestError';
+    this.kind = kind;
+    this.url = url;
+    this.method = method;
+    this.status = status;
+    this.sessionReason = sessionReason;
+    this.cause = cause;
+  }
+}
+
+export function isClientRequestError(
+  error: unknown,
+): error is ClientRequestError {
+  return error instanceof ClientRequestError;
+}
+
 let authLossHandling = false;
 
 const AUTH_SOFT_RECOVERY_EVENT = 'auth:session-lost';
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getRequestMethod(options?: RequestInit): string {
+  return (options?.method || 'GET').toUpperCase();
+}
+
+function createHttpRequestError(
+  url: string,
+  method: string,
+  status: number,
+): ClientRequestError {
+  return new ClientRequestError({
+    kind: 'http',
+    url,
+    method,
+    status,
+  });
+}
+
+async function requestOnce(
+  url: string,
+  options?: RequestInit,
+): Promise<Response> {
+  const method = getRequestMethod(options);
+
+  try {
+    return await fetch(url, options);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new ClientRequestError({
+        kind: 'request_aborted',
+        url,
+        method,
+        cause: error,
+      });
+    }
+
+    throw new ClientRequestError({
+      kind: 'network',
+      url,
+      method,
+      cause: error,
+    });
+  }
+}
+
+function isTransientHttpStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+export function isRetryableClientRequestError(error: unknown): boolean {
+  if (!isClientRequestError(error)) {
+    return false;
+  }
+
+  if (error.kind === 'network' || error.kind === 'request_aborted') {
+    return true;
+  }
+
+  if (error.kind === 'auth_rejected') {
+    return true;
+  }
+
+  if (error.kind === 'http' && error.status) {
+    return isTransientHttpStatus(error.status);
+  }
+
+  return false;
+}
+
+export async function retryClientRequest<T>(
+  task: () => Promise<T>,
+  options?: {
+    retries?: number;
+    delayMs?: number;
+  },
+): Promise<T> {
+  const retries = Math.max(0, options?.retries ?? 0);
+  const delayMs = Math.max(0, options?.delayMs ?? 400);
+
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await task();
+    } catch (error) {
+      if (attempt >= retries || !isRetryableClientRequestError(error)) {
+        throw error;
+      }
+
+      // 网络抖动和服务端短暂异常时，延迟后再尝试一次。
+      await wait(delayMs * (attempt + 1));
+    }
+  }
 }
 
 async function probeSession(): Promise<SessionProbeResult> {
@@ -179,31 +315,44 @@ export async function fetchWithAuth(
   url: string,
   options?: RequestInit,
 ): Promise<Response> {
-  const initialRes = await fetch(url, options);
+  const method = getRequestMethod(options);
+  const initialRes = await requestOnce(url, options);
 
   if (initialRes.ok) {
     return initialRes;
   }
 
-  if (initialRes.status !== 401) {
-    throw new Error(`请求 ${url} 失败: ${initialRes.status}`);
+  if (initialRes.status !== 401 && initialRes.status !== 403) {
+    throw createHttpRequestError(url, method, initialRes.status);
   }
 
-  await wait(500);
-  const retryRes = await fetch(url, options);
-  if (retryRes.ok) {
-    return retryRes;
-  }
+  let authFailureRes = initialRes;
 
-  if (retryRes.status !== 401) {
-    throw new Error(`请求 ${url} 失败: ${retryRes.status}`);
+  if (initialRes.status === 401) {
+    await wait(500);
+    const retryRes = await requestOnce(url, options);
+    if (retryRes.ok) {
+      return retryRes;
+    }
+
+    if (retryRes.status !== 401 && retryRes.status !== 403) {
+      throw createHttpRequestError(url, method, retryRes.status);
+    }
+
+    authFailureRes = retryRes;
   }
 
   const session = await probeSession();
 
   if (session.authenticated) {
     triggerGlobalError('请求暂时失败，已自动重试，请稍后继续操作');
-    throw new Error(`请求 ${url} 失败: 会话有效但接口返回未授权`);
+    throw new ClientRequestError({
+      kind: 'auth_rejected',
+      url,
+      method,
+      status: authFailureRes.status,
+      sessionReason: session.reason,
+    });
   }
 
   if (session.reason === 'user_banned') {
@@ -216,7 +365,13 @@ export async function fetchWithAuth(
 
   notifySessionLost(session.reason, url);
   resetAuthLossHandlingFlag();
-  throw new Error(`登录状态失效: ${session.reason}`);
+  throw new ClientRequestError({
+    kind: 'session_lost',
+    url,
+    method,
+    status: authFailureRes.status,
+    sessionReason: session.reason,
+  });
 }
 
 export async function fetchFromApi<T>(path: string): Promise<T> {
@@ -468,7 +623,15 @@ export async function handleDatabaseOperationFailure(
   error: unknown,
 ): Promise<void> {
   console.error(`数据库操作失败 (${dataType}):`, error);
-  triggerGlobalError(`数据库操作失败`);
+
+  const message = getDatabaseOperationFailureMessage(dataType, error);
+  if (message) {
+    triggerGlobalError(message);
+  }
+
+  if (!shouldRefreshDatabaseCache(dataType, error)) {
+    return;
+  }
 
   try {
     let freshData: unknown;
@@ -503,6 +666,74 @@ export async function handleDatabaseOperationFailure(
     console.error(`刷新${dataType}缓存失败:`, refreshErr);
     triggerGlobalError(`刷新${dataType}缓存失败`);
   }
+}
+
+function getDatabaseOperationFailureMessage(
+  dataType: 'playRecords' | 'favorites' | 'searchHistory',
+  error: unknown,
+): string | null {
+  if (isClientRequestError(error)) {
+    if (error.kind === 'session_lost' || error.kind === 'auth_rejected') {
+      return null;
+    }
+
+    if (dataType === 'playRecords') {
+      if (error.kind === 'network' || error.kind === 'request_aborted') {
+        return '播放进度暂时保存失败，当前进度已保留，稍后会继续尝试';
+      }
+
+      if (error.kind === 'http' && error.status) {
+        if (isTransientHttpStatus(error.status)) {
+          return '播放进度暂时保存失败，服务稍后恢复后会继续尝试';
+        }
+
+        return '播放进度保存请求无效，请刷新页面后重试';
+      }
+    }
+
+    if (error.kind === 'network' || error.kind === 'request_aborted') {
+      return '数据同步失败，网络恢复后请重试';
+    }
+
+    if (error.kind === 'http' && error.status) {
+      if (isTransientHttpStatus(error.status)) {
+        return '数据同步失败，服务暂时不可用，请稍后重试';
+      }
+
+      return '数据同步失败，请刷新页面后重试';
+    }
+  }
+
+  return '数据库操作失败';
+}
+
+function shouldRefreshDatabaseCache(
+  dataType: 'playRecords' | 'favorites' | 'searchHistory',
+  error: unknown,
+): boolean {
+  if (isClientRequestError(error)) {
+    if (
+      error.kind === 'session_lost' ||
+      error.kind === 'auth_rejected' ||
+      error.kind === 'network' ||
+      error.kind === 'request_aborted'
+    ) {
+      return false;
+    }
+
+    if (error.kind === 'http' && error.status) {
+      if (isTransientHttpStatus(error.status)) {
+        return false;
+      }
+
+      // 播放进度保存时保留乐观缓存，避免被旧服务端数据回滚。
+      if (dataType === 'playRecords') {
+        return false;
+      }
+    }
+  }
+
+  return true;
 }
 
 // ================================================================

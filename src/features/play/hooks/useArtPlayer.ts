@@ -586,12 +586,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
             const now = Date.now();
             if (now - lastSaveTimeRef.current > 5000) {
               saveCurrentPlayProgress();
-              lastSaveTimeRef.current = now;
             }
-          });
-
-          artPlayerRef.current.on('pause', () => {
-            saveCurrentPlayProgress();
           });
 
           if (artPlayerRef.current?.video) {
