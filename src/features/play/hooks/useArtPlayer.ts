@@ -48,6 +48,7 @@ export interface UseArtPlayerParams {
   lastSaveTimeRef: MutableRefObject<number>;
   detailRef: MutableRefObject<SearchResult | null>;
   currentEpisodeIndexRef: MutableRefObject<number>;
+  videoLoadingStageRef: MutableRefObject<'initing' | 'sourceChanging'>;
   wakeLockRef: MutableRefObject<WakeLockSentinel | null>;
   setError: Dispatch<SetStateAction<string | null>>;
   setIsVideoLoading: Dispatch<SetStateAction<boolean>>;
@@ -94,6 +95,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
     lastSaveTimeRef,
     detailRef,
     currentEpisodeIndexRef,
+    videoLoadingStageRef,
     setError,
     setIsVideoLoading,
     setIsPlaying,
@@ -252,6 +254,90 @@ export function useArtPlayer(params: UseArtPlayerParams) {
                   );
                 }, 5000);
 
+                let lastStallRecoveryAt = 0;
+
+                const getBufferedRanges = () => {
+                  const ranges: Array<[number, number]> = [];
+                  for (let i = 0; i < video.buffered.length; i += 1) {
+                    ranges.push([
+                      video.buffered.start(i),
+                      video.buffered.end(i),
+                    ]);
+                  }
+                  return ranges;
+                };
+
+                const tryRecoverPlaybackStall = (
+                  reason: 'waiting' | 'stalled',
+                ) => {
+                  if (video.paused || video.ended) {
+                    return;
+                  }
+
+                  const currentTime = video.currentTime || 0;
+                  const ranges = getBufferedRanges();
+                  const activeRange = ranges.find(
+                    ([start, end]) => currentTime >= start && currentTime < end,
+                  );
+                  const nextRange = ranges.find(
+                    ([start]) => start > currentTime,
+                  );
+                  const bufferedAhead = activeRange
+                    ? activeRange[1] - currentTime
+                    : 0;
+                  const gapToNext = nextRange
+                    ? nextRange[0] -
+                      (activeRange ? activeRange[1] : currentTime)
+                    : null;
+
+                  console.warn('检测到点播播放卡顿，尝试恢复', {
+                    reason,
+                    currentTime: Number(currentTime.toFixed(2)),
+                    readyState: video.readyState,
+                    networkState: video.networkState,
+                    bufferedAhead: Number(bufferedAhead.toFixed(2)),
+                    gapToNext:
+                      gapToNext === null ? null : Number(gapToNext.toFixed(2)),
+                    bufferedRanges: ranges.map(([start, end]) => [
+                      Number(start.toFixed(2)),
+                      Number(end.toFixed(2)),
+                    ]),
+                  });
+
+                  const now = Date.now();
+                  if (now - lastStallRecoveryAt < 1500) {
+                    return;
+                  }
+                  lastStallRecoveryAt = now;
+
+                  if (bufferedAhead > 1.5) {
+                    video.currentTime = Math.min(
+                      currentTime + 0.1,
+                      activeRange ? activeRange[1] - 0.05 : currentTime + 0.1,
+                    );
+                    return;
+                  }
+
+                  if (
+                    nextRange &&
+                    gapToNext !== null &&
+                    gapToNext > 0 &&
+                    gapToNext <= 1
+                  ) {
+                    video.currentTime = nextRange[0] + 0.05;
+                    return;
+                  }
+
+                  hls.startLoad();
+                };
+
+                video.addEventListener('waiting', () => {
+                  tryRecoverPlaybackStall('waiting');
+                });
+                video.addEventListener('stalled', () => {
+                  tryRecoverPlaybackStall('stalled');
+                });
+
                 hls.on(Hls.Events.ERROR, function (_event, data) {
                   console.error('HLS Error:', _event, data);
                   if (data.fatal) {
@@ -259,11 +345,12 @@ export function useArtPlayer(params: UseArtPlayerParams) {
                   }
                 });
 
-                // manifest 解析成功即表示播放源可用，兜底清除 loading overlay
-                // 某些场景下 canplay 事件不触发（如 autoplay 被阻止），
-                // 此时用户至少能看到播放器并手动点击播放
+                // 首次进入页面仍保留 manifest 兜底，避免 autoplay 被阻止时
+                // 整层遮罩一直盖住播放器；但切源时不要过早移除遮罩。
                 hls.on(Hls.Events.MANIFEST_PARSED, function () {
-                  setIsVideoLoading(false);
+                  if (videoLoadingStageRef.current !== 'sourceChanging') {
+                    setIsVideoLoading(false);
+                  }
                 });
 
                 hls.on(Hls.Events.FRAG_LOADED, function (_, data) {
@@ -450,6 +537,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
           // 某些 HLS 流 canplay 可能不触发，用 playing 兜底清除 loading
           artPlayerRef.current.on('video:playing', () => {
             setIsVideoLoading(false);
+            setRealtimeLoadSpeed('');
           });
 
           artPlayerRef.current.on('pause', () => {
@@ -521,8 +609,10 @@ export function useArtPlayer(params: UseArtPlayerParams) {
               artPlayerRef.current.notice.show = '';
             }, 0);
 
-            setIsVideoLoading(false);
-            setRealtimeLoadSpeed('');
+            if (videoLoadingStageRef.current !== 'sourceChanging') {
+              setIsVideoLoading(false);
+              setRealtimeLoadSpeed('');
+            }
           });
 
           // 跳过片头片尾

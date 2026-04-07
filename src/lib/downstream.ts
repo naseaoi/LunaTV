@@ -1,4 +1,9 @@
 import { API_CONFIG, ApiSite, getConfig } from '@/lib/config';
+import {
+  buildGirigiriVariantId,
+  extractGirigiriEpisodeVariants,
+  parseGirigiriVariantId,
+} from '@/lib/giri';
 import { getCachedSearchPage, setCachedSearchPage } from '@/lib/search-cache';
 import { SearchResult } from '@/lib/types';
 import { cleanHtmlTags } from '@/lib/utils';
@@ -262,8 +267,9 @@ async function getDetailFromGirigiri(
   apiSite: ApiSite,
   id: string,
 ): Promise<SearchResult> {
+  const { videoId, groupId: preferredGroupId } = parseGirigiriVariantId(id);
   const origin = getSiteOrigin(apiSite);
-  const detailUrl = `${origin}/GV${id}/`;
+  const detailUrl = `${origin}/GV${videoId}/`;
   const html = await fetchGiriHtml(detailUrl);
 
   if (!html) {
@@ -292,22 +298,18 @@ async function getDetailFromGirigiri(
     '';
   const poster = toAbsoluteUrl(posterRaw, origin);
 
-  const episodeMap = new Map<string, string>();
-  const episodeRegex = /href="(\/playGV\d+-\d+-\d+\/)"[^>]*>([\s\S]*?)<\/a>/g;
-  const episodeMatches = Array.from(html.matchAll(episodeRegex));
-  for (const match of episodeMatches) {
-    const playPath = match[1];
-    const epTitle =
-      cleanHtmlTags(match[2] || '').trim() || `${episodeMap.size + 1}`;
-    if (!episodeMap.has(playPath)) {
-      episodeMap.set(playPath, epTitle);
-    }
-  }
-
-  const episodeEntries = Array.from(episodeMap.entries());
-  if (episodeEntries.length === 0) {
+  const episodeVariants = extractGirigiriEpisodeVariants(html);
+  if (episodeVariants.length === 0) {
     throw new Error('详情页未提取到可播放剧集');
   }
+
+  const selectedVariant =
+    episodeVariants.find((variant) => variant.groupId === preferredGroupId) ||
+    episodeVariants[0];
+  const episodeEntries = selectedVariant.episodes.map(
+    (entry, index) =>
+      [entry.playPath, entry.title || `${index + 1}`] as [string, string],
+  );
 
   const playResults = await runWithConcurrency(
     episodeEntries.map(
@@ -340,19 +342,52 @@ async function getDetailFromGirigiri(
     throw new Error('未提取到有效播放地址');
   }
 
+  const relatedSources = episodeVariants
+    .filter((variant) => variant.groupId !== selectedVariant.groupId)
+    .map(
+      (variant) =>
+        ({
+          id: buildGirigiriVariantId(
+            videoId,
+            variant.groupId,
+            variant.isDefault,
+          ),
+          title: finalTitle,
+          poster: finalPoster,
+          episodes: [],
+          episodes_titles: variant.episodes.map(
+            (entry, index) => entry.title || `${index + 1}`,
+          ),
+          source: apiSite.key,
+          source_name: apiSite.name,
+          variant_label: variant.label,
+          class: '',
+          year: finalYear,
+          desc: finalDesc,
+          type_name: '',
+          douban_id: 0,
+        }) satisfies SearchResult,
+    );
+
   return {
-    id,
+    id: buildGirigiriVariantId(
+      videoId,
+      selectedVariant.groupId,
+      selectedVariant.isDefault,
+    ),
     title: finalTitle,
     poster: finalPoster,
     episodes,
     episodes_titles: episodesTitles,
     source: apiSite.key,
     source_name: apiSite.name,
+    variant_label: selectedVariant.label,
     class: '',
     year: finalYear,
     desc: finalDesc,
     type_name: '',
     douban_id: 0,
+    related_sources: relatedSources,
   };
 }
 

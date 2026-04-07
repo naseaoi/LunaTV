@@ -33,7 +33,7 @@ export interface IStorage {
   setPlayRecord(
     userName: string,
     key: string,
-    record: PlayRecord
+    record: PlayRecord,
   ): Promise<void>;
   getAllPlayRecords(userName: string): Promise<{ [key: string]: PlayRecord }>;
   deletePlayRecord(userName: string, key: string): Promise<void>;
@@ -70,13 +70,13 @@ export interface IStorage {
   getSkipConfig(
     userName: string,
     source: string,
-    id: string
+    id: string,
   ): Promise<SkipConfig | null>;
   setSkipConfig(
     userName: string,
     source: string,
     id: string,
-    config: SkipConfig
+    config: SkipConfig,
   ): Promise<void>;
   deleteSkipConfig(userName: string, source: string, id: string): Promise<void>;
   getAllSkipConfigs(userName: string): Promise<{ [key: string]: SkipConfig }>;
@@ -94,11 +94,13 @@ export interface SearchResult {
   episodes_titles: string[];
   source: string;
   source_name: string;
+  variant_label?: string;
   class?: string;
   year: string;
   desc?: string;
   type_name?: string;
   douban_id?: number;
+  related_sources?: SearchResult[];
 }
 
 // 豆瓣数据结构

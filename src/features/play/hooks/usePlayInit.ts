@@ -1,6 +1,7 @@
 import { Dispatch, MutableRefObject, SetStateAction, useEffect } from 'react';
 
 import { filterSourcesForPlayback } from '@/lib/source_match';
+import { mergeSourceBundle } from '@/lib/source-bundle';
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8 } from '@/lib/hls-utils';
 import { getProxyModes } from '@/lib/proxy-modes';
@@ -392,13 +393,7 @@ export function usePlayInit({
             detailedSource,
             matchedSource,
           );
-          sourcesInfo = [
-            mergedCurrentSource,
-            ...sourcesInfo.filter(
-              (source) =>
-                !(source.source === currentSource && source.id === currentId),
-            ),
-          ];
+          sourcesInfo = mergeSourceBundle(sourcesInfo, mergedCurrentSource);
         }
         setAvailableSources(sourcesInfo);
       }
@@ -449,16 +444,7 @@ export function usePlayInit({
         );
         if (fullDetail) {
           detailData = mergeSourceResult(fullDetail, detailData);
-          sourcesInfo = [
-            detailData,
-            ...sourcesInfo.filter(
-              (source) =>
-                !(
-                  source.source === detailData.source &&
-                  source.id === detailData.id
-                ),
-            ),
-          ];
+          sourcesInfo = mergeSourceBundle(sourcesInfo, detailData);
           setAvailableSources(sourcesInfo);
         }
       }

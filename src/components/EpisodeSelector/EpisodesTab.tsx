@@ -6,12 +6,19 @@ import React, {
   useState,
 } from 'react';
 
+import { SearchResult } from '@/lib/types';
+import { normalizeInlineText } from '@/lib/utils';
+
 interface EpisodesTabProps {
   totalEpisodes: number;
   episodes_titles: string[];
   episodesPerPage: number;
   value: number;
   onChange?: (episodeNumber: number) => void;
+  variantSources?: SearchResult[];
+  currentSource?: string;
+  currentId?: string;
+  onSourceChange?: (source: string, id: string, title: string) => void;
 }
 
 export const EpisodesTab: React.FC<EpisodesTabProps> = ({
@@ -20,10 +27,15 @@ export const EpisodesTab: React.FC<EpisodesTabProps> = ({
   episodesPerPage,
   value,
   onChange,
+  variantSources = [],
+  currentSource,
+  currentId,
+  onSourceChange,
 }) => {
   const pageCount = Math.ceil(totalEpisodes / episodesPerPage);
   const initialPage = Math.floor((value - 1) / episodesPerPage);
   const [currentPage, setCurrentPage] = useState<number>(initialPage);
+  const showPagination = pageCount > 1;
 
   const categoriesAsc = useMemo(() => {
     return Array.from({ length: pageCount }, (_, i) => {
@@ -89,6 +101,10 @@ export const EpisodesTab: React.FC<EpisodesTabProps> = ({
     }
   }, [currentPage, pageCount]);
 
+  useEffect(() => {
+    setCurrentPage(Math.floor((value - 1) / episodesPerPage));
+  }, [episodesPerPage, value]);
+
   const handleCategoryClick = useCallback((index: number) => {
     setCurrentPage(index);
   }, []);
@@ -101,53 +117,103 @@ export const EpisodesTab: React.FC<EpisodesTabProps> = ({
 
   return (
     <>
-      {/* 工具栏：分页标签 */}
-      <div className='flex flex-shrink-0 items-center gap-2 px-5 py-3 sm:px-6'>
-        {/* 分页标签（仅多页时显示） */}
-        {pageCount > 1 && (
-          <div
-            className='flex-1 overflow-x-auto'
-            ref={categoryContainerRef}
-            onMouseEnter={() => setIsCategoryHovered(true)}
-            onMouseLeave={() => setIsCategoryHovered(false)}
-          >
-            <div className='flex w-max min-w-full justify-center gap-1'>
-              {categories.map((label, idx) => {
-                const isActive = idx === currentPage;
+      {(variantSources.length > 1 || showPagination) && (
+        <div className='flex flex-shrink-0 flex-col gap-3 px-5 py-3 sm:px-6'>
+          {variantSources.length > 1 && (
+            <div className='flex flex-wrap justify-center gap-2'>
+              {variantSources.map((variant, index) => {
+                const isActive =
+                  variant.source === currentSource && variant.id === currentId;
+                const episodeCount = Math.max(
+                  variant.episodes.length,
+                  variant.episodes_titles.length,
+                );
+                const variantLabel = normalizeInlineText(
+                  variant.variant_label || `版本${index + 1}`,
+                );
+
                 return (
                   <button
-                    key={label}
-                    ref={(el) => {
-                      buttonRefs.current[idx] = el;
+                    key={`${variant.source}-${variant.id}`}
+                    onClick={() => {
+                      if (!isActive) {
+                        onSourceChange?.(
+                          variant.source,
+                          variant.id,
+                          variant.title,
+                        );
+                      }
                     }}
-                    onClick={() => handleCategoryClick(idx)}
-                    className={`whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-150
+                    className={`inline-flex max-w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-all duration-150
                       ${
                         isActive
-                          ? 'bg-green-500 text-white shadow-sm'
-                          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-gray-200'
+                          ? 'bg-green-500 text-white shadow-sm shadow-green-500/20'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-white/[0.06] dark:text-gray-300 dark:hover:bg-white/[0.12]'
                       }
                     `.trim()}
+                    title={variantLabel}
                   >
-                    {label}
+                    <span className='max-w-[10rem] truncate'>
+                      {variantLabel}
+                    </span>
+                    {episodeCount > 0 && (
+                      <span
+                        className={`rounded-full px-1.5 py-0.5 text-[10px]
+                          ${
+                            isActive
+                              ? 'bg-white/20 text-white'
+                              : 'bg-black/5 text-gray-500 dark:bg-white/10 dark:text-gray-400'
+                          }
+                        `.trim()}
+                      >
+                        {episodeCount}集
+                      </span>
+                    )}
                   </button>
                 );
               })}
             </div>
-          </div>
-        )}
-        {/* 单页时显示集数范围 */}
-        {pageCount <= 1 && (
-          <span className='flex-1 text-center text-xs font-medium text-gray-500 dark:text-gray-400'>
-            1-{totalEpisodes}
-          </span>
-        )}
-      </div>
+          )}
 
-      {/* 分割线：更柔和、左右留白 */}
-      <div className='mx-5 h-px bg-gradient-to-r from-transparent via-gray-200/80 to-transparent dark:via-white/[0.10] sm:mx-6' />
+          {showPagination && (
+            <div
+              className='overflow-x-auto'
+              ref={categoryContainerRef}
+              onMouseEnter={() => setIsCategoryHovered(true)}
+              onMouseLeave={() => setIsCategoryHovered(false)}
+            >
+              <div className='flex w-max min-w-full justify-center gap-1'>
+                {categories.map((label, idx) => {
+                  const isActive = idx === currentPage;
+                  return (
+                    <button
+                      key={label}
+                      ref={(el) => {
+                        buttonRefs.current[idx] = el;
+                      }}
+                      onClick={() => handleCategoryClick(idx)}
+                      className={`whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-150
+                        ${
+                          isActive
+                            ? 'bg-green-500 text-white shadow-sm'
+                            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-gray-200'
+                        }
+                      `.trim()}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
-      {/* 集数网格 */}
+      {showPagination && (
+        <div className='mx-5 h-px bg-gradient-to-r from-transparent via-gray-200/80 to-transparent dark:via-white/[0.10] sm:mx-6' />
+      )}
+
       <div className='flex flex-1 flex-wrap content-start justify-center gap-2 overflow-y-auto p-5 sm:p-6'>
         {(() => {
           const len = currentEnd - currentStart + 1;
@@ -161,9 +227,6 @@ export const EpisodesTab: React.FC<EpisodesTabProps> = ({
               ? match[1]
               : rawTitle
             : `${episodeNumber}`;
-          const isNumericLabel = /^\d+$/.test(displayTitle);
-          // 基于像素估算：CJK ≈ 13px，Latin ≈ 7.5px，按钮 px-2 内边距 16px
-          // 列宽 3rem(48px) + gap-2(8px)，span N 可用文本宽度 ≈ 56N - 24
           const estimatedPx = Array.from(displayTitle).reduce(
             (sum, char) =>
               sum +

@@ -6,6 +6,7 @@ import React, {
   useState,
 } from 'react';
 
+import { collapseSourcesForDisplay } from '@/lib/source-bundle';
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8 } from '@/lib/hls-utils';
 import { getProxyModes } from '@/lib/proxy-modes';
@@ -84,6 +85,11 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
     return true;
   });
 
+  const displaySources = useMemo(
+    () => collapseSourcesForDisplay(availableSources, currentSource, currentId),
+    [availableSources, currentSource, currentId],
+  );
+
   // 搜索更多源站
   const [isSearchingMore, setIsSearchingMore] = useState(false);
   const [searchMoreDone, setSearchMoreDone] = useState(false);
@@ -92,13 +98,13 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
 
   // 进入换源 Tab 时：用缓存快速回填，确保立即显示已有测速结果
   useEffect(() => {
-    if (!isActive || availableSources.length === 0) return;
+    if (!isActive || displaySources.length === 0) return;
 
     const now = Date.now();
     const cachedEntries: Array<[string, VideoInfo]> = [];
     const cachedKeys = new Set<string>();
 
-    for (const source of availableSources) {
+    for (const source of displaySources) {
       const sourceKey = `${source.source}-${source.id}`;
       const cached = videoInfoCache.get(sourceKey);
       if (cached && now - cached.ts < VIDEO_INFO_TTL_MS) {
@@ -120,7 +126,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
       return next;
     });
     cachedKeys.forEach((k) => attemptedSourcesRef.current.add(k));
-  }, [availableSources, isActive]);
+  }, [displaySources, isActive]);
 
   const getVideoInfo = useCallback(
     async (source: SearchResult, options?: { force?: boolean }) => {
@@ -288,10 +294,10 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
   // 异步获取视频信息（后台预检测，不依赖 Tab 是否激活）
   useEffect(() => {
     const fetchVideoInfosInBatches = async () => {
-      if (availableSources.length === 0) return;
+      if (displaySources.length === 0) return;
 
       const now = Date.now();
-      for (const source of availableSources) {
+      for (const source of displaySources) {
         const sourceKey = `${source.source}-${source.id}`;
         const cached = videoInfoCache.get(sourceKey);
         if (cached && now - cached.ts < VIDEO_INFO_TTL_MS) {
@@ -306,7 +312,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
         attemptedSourcesRef.current.add(currentKey);
       }
 
-      const pendingSources = availableSources.filter((source) => {
+      const pendingSources = displaySources.filter((source) => {
         const sourceKey = `${source.source}-${source.id}`;
         return !attemptedSourcesRef.current.has(sourceKey);
       });
@@ -315,7 +321,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
       await probeSourcesInBatches(pendingSources);
     };
     fetchVideoInfosInBatches();
-  }, [availableSources, probeSourcesInBatches, currentSource, currentId]);
+  }, [displaySources, probeSourcesInBatches, currentSource, currentId]);
 
   const handleSourceClick = useCallback(
     (source: SearchResult) => {
@@ -374,7 +380,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
   };
 
   const sortedSources = useMemo(() => {
-    return availableSources
+    return displaySources
       .map((source, index) => {
         const sourceKey = `${source.source}-${source.id}`;
         const videoInfo = videoInfoMap.get(sourceKey);
@@ -418,7 +424,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
         return a.index - b.index;
       })
       .map((item) => item.source);
-  }, [availableSources, videoInfoMap]);
+  }, [displaySources, videoInfoMap]);
 
   useEffect(() => {
     if (!isActive) return;
@@ -473,7 +479,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
     );
   }
 
-  if (availableSources.length === 0) {
+  if (displaySources.length === 0) {
     return (
       <div className='flex flex-1 items-center justify-center py-8'>
         <div className='text-center'>
@@ -501,6 +507,10 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
           const sourceKey = `${source.source}-${source.id}`;
           const videoInfo = videoInfoMap.get(sourceKey);
           const isTesting = videoInfo?.loadSpeed === '测量中...';
+          const episodeCount = Math.max(
+            source.episodes.length,
+            source.episodes_titles?.length || 0,
+          );
 
           return (
             <div
@@ -571,9 +581,9 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
                 <span className='truncate rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-white/[0.08] dark:text-gray-400'>
                   {source.source_name}
                 </span>
-                {source.episodes.length > 1 && (
+                {episodeCount > 1 && (
                   <span className='flex-shrink-0 text-[10px] text-gray-400 dark:text-gray-500'>
-                    {source.episodes.length}集
+                    {episodeCount}集
                   </span>
                 )}
               </div>
@@ -648,7 +658,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
             onClick={async () => {
               setIsRetestingAll(true);
               // 清除所有缓存和已尝试标记
-              for (const source of availableSources) {
+              for (const source of displaySources) {
                 const key = `${source.source}-${source.id}`;
                 videoInfoCache.delete(key);
                 attemptedSourcesRef.current.delete(key);
@@ -679,7 +689,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
               }
 
               // 逐批重测（排除当前源）
-              const toTest = availableSources.filter((s) => {
+              const toTest = displaySources.filter((s) => {
                 const key = `${s.source}-${s.id}`;
                 return key !== curKey;
               });

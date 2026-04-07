@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
+import { getSourceBundle } from '@/lib/source-bundle';
 import { SearchResult } from '@/lib/types';
 
 import { EpisodesTab } from './EpisodesTab';
@@ -68,21 +69,37 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   onSourceDetailFetched,
   onAddSources,
 }) => {
+  const variantSources = useMemo(() => {
+    if (!detail) {
+      return [];
+    }
+
+    return getSourceBundle(detail);
+  }, [detail]);
+
+  const hasEpisodesTab = totalEpisodes > 1 || variantSources.length > 1;
   const [activeTab, setActiveTab] = useState<TabKey>(
-    totalEpisodes > 1 ? 'episodes' : 'info',
+    hasEpisodesTab ? 'episodes' : 'info',
   );
 
   const tabs: { key: TabKey; label: string; show: boolean }[] = [
-    { key: 'episodes', label: '选集', show: totalEpisodes > 1 },
+    { key: 'episodes', label: '选集', show: hasEpisodesTab },
     { key: 'info', label: '信息', show: true },
     { key: 'sources', label: '换源', show: true },
   ];
 
-  const visibleTabs = tabs.filter((t) => t.show);
+  const visibleTabs = tabs.filter((tab) => tab.show);
+
+  useEffect(() => {
+    if (visibleTabs.some((tab) => tab.key === activeTab)) {
+      return;
+    }
+
+    setActiveTab(visibleTabs[0]?.key || 'info');
+  }, [activeTab, visibleTabs]);
 
   return (
     <div className='flex h-full flex-col overflow-hidden rounded-xl bg-white/60 ring-1 ring-black/[0.06] backdrop-blur-sm dark:bg-white/[0.04] dark:ring-white/[0.08] md:ml-1'>
-      {/* Tab 栏 */}
       <div className='flex flex-shrink-0 border-b border-gray-200/80 dark:border-white/10'>
         {visibleTabs.map((tab) => (
           <button
@@ -104,14 +121,17 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
         ))}
       </div>
 
-      {/* Tab 内容 */}
-      {activeTab === 'episodes' && totalEpisodes > 1 && (
+      {activeTab === 'episodes' && hasEpisodesTab && (
         <EpisodesTab
           totalEpisodes={totalEpisodes}
           episodes_titles={episodes_titles}
           episodesPerPage={episodesPerPage}
           value={value}
           onChange={onChange}
+          variantSources={variantSources}
+          currentSource={currentSource}
+          currentId={currentId}
+          onSourceChange={onSourceChange}
         />
       )}
 

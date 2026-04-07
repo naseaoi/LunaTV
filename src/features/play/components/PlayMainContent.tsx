@@ -14,6 +14,7 @@ import LoadingStatePanel from '@/components/LoadingStatePanel';
 import PageLayout from '@/components/PageLayout';
 import { BackButton } from '@/components/BackButton';
 import { SearchResult } from '@/lib/types';
+import { normalizeInlineText } from '@/lib/utils';
 
 interface PlayMainContentProps {
   videoTitle: string;
@@ -173,11 +174,15 @@ export function PlayMainContent(props: PlayMainContentProps) {
     );
   }, [availableSources, currentSource, currentId]);
 
-  const headerSourceText =
+  const headerSourceText = [
     currentSourceMeta?.source_name ||
-    currentSourceMeta?.source?.toString() ||
-    currentSource?.toString() ||
-    '';
+      currentSourceMeta?.source?.toString() ||
+      currentSource?.toString() ||
+      '',
+    normalizeInlineText(currentSourceMeta?.variant_label || ''),
+  ]
+    .filter(Boolean)
+    .join(' · ');
   const headerYearText = (detail?.year || videoYear || '').toString();
 
   // 播放器容器高度：面板展开时用 aspect-video 自适应，面板折叠时锁定高度

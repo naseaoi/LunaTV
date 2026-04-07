@@ -1,17 +1,15 @@
 import { NextResponse } from 'next/server';
 
-import { getConfig } from '@/lib/config';
 import { validateProxyUrl } from '@/lib/url-guard';
+
+import { getProxySourceKey, resolveProxyUserAgent } from '../utils';
 
 export const runtime = 'nodejs';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const url = searchParams.get('url');
-  const source =
-    searchParams.get('icetv-source') ||
-    searchParams.get('moontv-source') ||
-    searchParams.get('source');
+  const source = getProxySourceKey(searchParams);
   if (!url) {
     return NextResponse.json({ error: 'Missing url' }, { status: 400 });
   }
@@ -21,142 +19,63 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: validation.reason }, { status: 403 });
   }
 
-  const config = await getConfig();
-  const liveSource = source
-    ? config.LiveConfig?.find((s: any) => s.key === source)
-    : null;
-  if (source && !liveSource) {
-    return NextResponse.json({ error: 'Source not found' }, { status: 404 });
-  }
-  const ua = liveSource?.ua || 'AptvPlayer/1.4.10';
-
-  let response: Response | null = null;
-  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  const ua = await resolveProxyUserAgent(source);
+  const range = request.headers.get('range');
 
   try {
-    response = await fetch(validation.url, {
-      headers: {
-        'User-Agent': ua,
-      },
-    });
+    const headers: Record<string, string> = {
+      'User-Agent': ua,
+    };
+    if (range) {
+      headers.Range = range;
+    }
+
+    const response = await fetch(validation.url, { headers });
     if (!response.ok) {
       return NextResponse.json(
         { error: 'Failed to fetch segment' },
-        { status: 500 },
+        { status: response.status },
       );
     }
 
-    const headers = new Headers();
-    headers.set('Content-Type', 'video/mp2t');
-    headers.set('Access-Control-Allow-Origin', '*');
-    headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    headers.set(
+    const responseHeaders = new Headers();
+    responseHeaders.set('Access-Control-Allow-Origin', '*');
+    responseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    responseHeaders.set(
       'Access-Control-Allow-Headers',
       'Content-Type, Range, Origin, Accept',
     );
-    headers.set('Accept-Ranges', 'bytes');
-    headers.set(
+    responseHeaders.set(
       'Access-Control-Expose-Headers',
       'Content-Length, Content-Range',
     );
+
+    const contentType = response.headers.get('content-type');
+    if (contentType) {
+      responseHeaders.set('Content-Type', contentType);
+    }
+
     const contentLength = response.headers.get('content-length');
     if (contentLength) {
-      headers.set('Content-Length', contentLength);
+      responseHeaders.set('Content-Length', contentLength);
     }
 
-    // 使用流式传输，避免占用内存
-    const stream = new ReadableStream({
-      start(controller) {
-        if (!response?.body) {
-          controller.close();
-          return;
-        }
+    const acceptRanges = response.headers.get('accept-ranges');
+    if (acceptRanges) {
+      responseHeaders.set('Accept-Ranges', acceptRanges);
+    }
 
-        reader = response.body.getReader();
-        const isCancelled = false;
+    const contentRange = response.headers.get('content-range');
+    if (contentRange) {
+      responseHeaders.set('Content-Range', contentRange);
+    }
 
-        function pump() {
-          if (isCancelled || !reader) {
-            return;
-          }
-
-          reader
-            .read()
-            .then(({ done, value }) => {
-              if (isCancelled) {
-                return;
-              }
-
-              if (done) {
-                controller.close();
-                cleanup();
-                return;
-              }
-
-              controller.enqueue(value);
-              pump();
-            })
-            .catch((error) => {
-              if (!isCancelled) {
-                controller.error(error);
-                cleanup();
-              }
-            });
-        }
-
-        function cleanup() {
-          if (reader) {
-            try {
-              reader.releaseLock();
-            } catch (e) {
-              // reader 可能已经被释放，忽略错误
-            }
-            reader = null;
-          }
-        }
-
-        pump();
-      },
-      cancel() {
-        // 当流被取消时，确保释放所有资源
-        if (reader) {
-          try {
-            reader.releaseLock();
-          } catch (e) {
-            // reader 可能已经被释放，忽略错误
-          }
-          reader = null;
-        }
-
-        if (response?.body) {
-          try {
-            response.body.cancel();
-          } catch (e) {
-            // 忽略取消时的错误
-          }
-        }
-      },
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: responseHeaders,
     });
-
-    return new Response(stream, { headers });
   } catch (error) {
-    // 确保在错误情况下也释放资源
-    if (reader) {
-      try {
-        (reader as ReadableStreamDefaultReader<Uint8Array>).releaseLock();
-      } catch (e) {
-        // 忽略错误
-      }
-    }
-
-    if (response?.body) {
-      try {
-        response.body.cancel();
-      } catch (e) {
-        // 忽略错误
-      }
-    }
-
     return NextResponse.json(
       { error: 'Failed to fetch segment' },
       { status: 500 },

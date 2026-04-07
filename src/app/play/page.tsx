@@ -10,6 +10,7 @@ import {
   getSkipConfig,
   saveSkipConfig,
 } from '@/lib/db.client';
+import { mergeSourceBundle } from '@/lib/source-bundle';
 import { SearchResult } from '@/lib/types';
 import { preloadProxyModes } from '@/lib/proxy-modes';
 
@@ -22,6 +23,7 @@ import { useArtPlayer } from '@/features/play/hooks/useArtPlayer';
 import { usePlayerKeyboard } from '@/hooks/usePlayerKeyboard';
 import { usePlayFavorite } from '@/features/play/hooks/usePlayFavorite';
 import { usePlayInit, updateVideoUrl } from '@/features/play/hooks/usePlayInit';
+import { resolveEpisodeTargetIndex } from '@/features/play/lib/episodeMapping';
 import {
   PlayProgressSaveState,
   usePlayProgress,
@@ -179,6 +181,10 @@ function PlayPageClient() {
   const [videoLoadingStage, setVideoLoadingStage] = useState<
     'initing' | 'sourceChanging'
   >('initing');
+  const videoLoadingStageRef = useRef(videoLoadingStage);
+  useEffect(() => {
+    videoLoadingStageRef.current = videoLoadingStage;
+  }, [videoLoadingStage]);
   const [realtimeLoadSpeed, setRealtimeLoadSpeed] =
     useState<string>('测速中...');
   const [authRecoveryVisible, setAuthRecoveryVisible] = useState(false);
@@ -326,6 +332,12 @@ function PlayPageClient() {
   useEffect(() => {
     updateVideoUrl(detail, currentEpisodeIndex, videoUrl, setVideoUrl);
   }, [detail, currentEpisodeIndex]);
+
+  useEffect(() => {
+    if (!isVideoLoading && videoLoadingStage === 'sourceChanging') {
+      setVideoLoadingStage('initing');
+    }
+  }, [isVideoLoading, videoLoadingStage]);
 
   // ---------------------------------------------------------------------------
   // 初始化 hook
@@ -542,6 +554,7 @@ function PlayPageClient() {
     const currentRequestId = ++sourceChangeRequestIdRef.current;
     const previousSource = currentSourceRef.current;
     const previousId = currentIdRef.current;
+    const previousDetail = detailRef.current;
     const previousSkipConfig = { ...skipConfigRef.current };
     const currentPlayTime =
       artPlayerRef.current?.currentTime || resumeTimeRef.current || 0;
@@ -577,11 +590,9 @@ function PlayPageClient() {
             const fullDetail = (await detailRes.json()) as SearchResult;
             if (fullDetail.episodes && fullDetail.episodes.length > 0) {
               newDetail = fullDetail;
-              // 同步更新 availableSources，后续切换/测速不再重复请求
+              // giri 多版本详情会携带 sibling 版本，一起并回源列表。
               setAvailableSources((prev) =>
-                prev.map((s) =>
-                  s.source === newSource && s.id === newId ? fullDetail : s,
-                ),
+                mergeSourceBundle(prev, fullDetail),
               );
             }
           }
@@ -596,20 +607,28 @@ function PlayPageClient() {
 
       // 使用 ref 获取最新集数索引，避免闭包捕获到过期的 state 值
       const latestEpisodeIndex = currentEpisodeIndexRef.current;
-      let targetIndex = latestEpisodeIndex;
+      const resolvedEpisodeTarget = resolveEpisodeTargetIndex(
+        previousDetail,
+        latestEpisodeIndex,
+        newDetail,
+      );
+      let targetIndex = resolvedEpisodeTarget.index;
+      let preserveProgress = resolvedEpisodeTarget.preserveProgress;
+
       if (!newDetail.episodes || targetIndex >= newDetail.episodes.length) {
         targetIndex = 0;
+        preserveProgress = false;
       }
 
-      if (targetIndex !== latestEpisodeIndex) {
-        resumeTimeRef.current = 0;
-      } else if (currentPlayTime > 1) {
+      if (preserveProgress && currentPlayTime > 1) {
         resumeTimeRef.current = currentPlayTime;
+      } else {
+        resumeTimeRef.current = 0;
       }
 
       const newUrl = new URL(window.location.href);
-      newUrl.searchParams.set('source', newSource);
-      newUrl.searchParams.set('id', newId);
+      newUrl.searchParams.set('source', newDetail.source);
+      newUrl.searchParams.set('id', newDetail.id);
       newUrl.searchParams.set('year', newDetail.year);
       window.history.replaceState({}, '', newUrl.toString());
 
@@ -617,8 +636,8 @@ function PlayPageClient() {
       setVideoYear(newDetail.year);
       setVideoCover(newDetail.poster);
       setVideoDoubanId(newDetail.douban_id || 0);
-      setCurrentSource(newSource);
-      setCurrentId(newId);
+      setCurrentSource(newDetail.source);
+      setCurrentId(newDetail.id);
       setDetail(newDetail);
       setCurrentEpisodeIndex(targetIndex);
 
@@ -632,7 +651,11 @@ function PlayPageClient() {
 
           try {
             await deleteSkipConfig(previousSource, previousId);
-            await saveSkipConfig(newSource, newId, previousSkipConfig);
+            await saveSkipConfig(
+              newDetail.source,
+              newDetail.id,
+              previousSkipConfig,
+            );
           } catch (err) {
             console.error('迁移跳过片头片尾配置失败:', err);
           }
@@ -650,11 +673,7 @@ function PlayPageClient() {
 
   // 测速补全 detail 后，同步更新 availableSources 中对应条目
   const handleSourceDetailFetched = useCallback((updated: SearchResult) => {
-    setAvailableSources((prev) =>
-      prev.map((s) =>
-        s.source === updated.source && s.id === updated.id ? updated : s,
-      ),
-    );
+    setAvailableSources((prev) => mergeSourceBundle(prev, updated));
   }, []);
 
   // 搜索更多源站后，追加到 availableSources（去重）
@@ -692,6 +711,7 @@ function PlayPageClient() {
     lastSaveTimeRef,
     detailRef,
     currentEpisodeIndexRef,
+    videoLoadingStageRef,
     wakeLockRef,
     setError,
     setIsVideoLoading,

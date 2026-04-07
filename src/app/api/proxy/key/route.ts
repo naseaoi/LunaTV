@@ -1,17 +1,15 @@
 import { NextResponse } from 'next/server';
 
-import { getConfig } from '@/lib/config';
 import { validateProxyUrl } from '@/lib/url-guard';
+
+import { getProxySourceKey, resolveProxyUserAgent } from '../utils';
 
 export const runtime = 'nodejs';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const url = searchParams.get('url');
-  const source =
-    searchParams.get('icetv-source') ||
-    searchParams.get('moontv-source') ||
-    searchParams.get('source');
+  const source = getProxySourceKey(searchParams);
   if (!url) {
     return NextResponse.json({ error: 'Missing url' }, { status: 400 });
   }
@@ -21,14 +19,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: validation.reason }, { status: 403 });
   }
 
-  const config = await getConfig();
-  const liveSource = source
-    ? config.LiveConfig?.find((s: any) => s.key === source)
-    : null;
-  if (source && !liveSource) {
-    return NextResponse.json({ error: 'Source not found' }, { status: 404 });
-  }
-  const ua = liveSource?.ua || 'AptvPlayer/1.4.10';
+  const ua = await resolveProxyUserAgent(source);
 
   try {
     const response = await fetch(validation.url, {
@@ -44,8 +35,11 @@ export async function GET(request: Request) {
     }
     const keyData = await response.arrayBuffer();
     return new Response(keyData, {
+      status: response.status,
+      statusText: response.statusText,
       headers: {
-        'Content-Type': 'application/octet-stream',
+        'Content-Type':
+          response.headers.get('Content-Type') || 'application/octet-stream',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Cache-Control': 'public, max-age=3600',

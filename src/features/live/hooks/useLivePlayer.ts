@@ -182,7 +182,11 @@ export function useLivePlayer({
           }
         }
         const hls = new Hls({
-          ...createHlsConfig(),
+          ...createHlsConfig({
+            lowLatencyMode: true,
+            maxBufferLength: 30,
+            backBufferLength: 30,
+          }),
           loader:
             CustomHlsJsLoader as unknown as typeof Hls.DefaultConfig.loader,
         });

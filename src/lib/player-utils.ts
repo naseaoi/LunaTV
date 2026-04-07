@@ -57,6 +57,9 @@ export interface HlsConfigOverrides {
   maxBufferLength?: number;
   backBufferLength?: number;
   maxBufferSize?: number;
+  maxBufferHole?: number;
+  nudgeOffset?: number;
+  nudgeMaxRetry?: number;
   loader?: unknown;
 }
 
@@ -65,10 +68,14 @@ export function createHlsConfig(overrides?: HlsConfigOverrides) {
   return {
     debug: false,
     enableWorker: true,
-    lowLatencyMode: true,
-    maxBufferLength: 30,
-    backBufferLength: 30,
+    // 默认按点播场景取更稳妥的缓冲策略，直播再单独覆盖。
+    lowLatencyMode: false,
+    maxBufferLength: 90,
+    backBufferLength: 90,
     maxBufferSize: 60 * 1000 * 1000,
+    maxBufferHole: 0.5,
+    nudgeOffset: 0.1,
+    nudgeMaxRetry: 8,
     ...overrides,
   };
 }
