@@ -135,35 +135,19 @@ export function mergeAdRanges(ranges: AdRange[]): AdRange[] {
   return merged;
 }
 
-/**
- * 按 DISCONTINUITY 将 M3U8 行切分为多个区间，计算每个区间的总时长，
- * 识别广告区间并移除，只保留正片区间。
- *
- * 判定策略（保守）：
- * 1. 最长区间一定是正片，绝不删除
- * 2. 短区间（时长 < 最长区间的 20% 且 < 120s）标记为疑似广告
- * 3. 区间内片段 URL 命中广告关键词 → 强判定为广告
- * 4. 区间内存在 CUE-OUT / SCTE35 等广告标签 → 强判定为广告
- * 5. 仅凭时长短不足以删除（避免误删短正片），需要位于首尾位置才删除
- *
- * 返回过滤后的 M3U8 文本。如果无法识别任何广告区间，退化为仅删除
- * DISCONTINUITY 标签（与旧逻辑一致，保证不会比原来更差）。
- */
-export function filterAdsFromM3U8(m3u8Content: string): string {
-  if (!m3u8Content) return '';
-  if (!m3u8Content.includes('#EXT-X-DISCONTINUITY')) return m3u8Content;
+type ParsedDiscontinuitySegment = {
+  lines: string[];
+  duration: number;
+  hasAdTag: boolean;
+  hasAdUri: boolean;
+};
 
+function parseDiscontinuitySegments(
+  m3u8Content: string,
+): ParsedDiscontinuitySegment[] {
   const lines = m3u8Content.split('\n');
-
-  // --- 第一步：按 DISCONTINUITY 切分区间 ---
-  type Segment = {
-    lines: string[];
-    duration: number;
-    hasAdTag: boolean;
-    hasAdUri: boolean;
-  };
-  const segments: Segment[] = [];
-  let current: Segment = {
+  const segments: ParsedDiscontinuitySegment[] = [];
+  let current: ParsedDiscontinuitySegment = {
     lines: [],
     duration: 0,
     hasAdTag: false,
@@ -175,7 +159,7 @@ export function filterAdsFromM3U8(m3u8Content: string): string {
   for (const rawLine of lines) {
     const line = rawLine.trim();
 
-    // DISCONTINUITY 标签作为区间分隔符，不放入任何区间
+    // DISCONTINUITY 本身只用来划分区间，不应写回原区间内容。
     if (line === '#EXT-X-DISCONTINUITY') {
       if (current.lines.length > 0) {
         segments.push(current);
@@ -202,7 +186,6 @@ export function filterAdsFromM3U8(m3u8Content: string): string {
       continue;
     }
 
-    // 非注释行 = 片段 URL
     if (pendingDuration > 0) {
       current.duration += pendingDuration;
       pendingDuration = 0;
@@ -214,32 +197,117 @@ export function filterAdsFromM3U8(m3u8Content: string): string {
       current.hasAdUri = true;
     }
   }
+
   if (current.lines.length > 0) {
     segments.push(current);
   }
+
+  return segments;
+}
+
+function isShortEdgeAdCandidate(
+  segment: ParsedDiscontinuitySegment,
+  maxDuration: number,
+) {
+  return (
+    segment.duration > 0 &&
+    segment.duration < 120 &&
+    segment.duration < maxDuration * 0.2
+  );
+}
+
+function isShortMidrollAdCandidate(
+  segments: ParsedDiscontinuitySegment[],
+  index: number,
+  maxDuration: number,
+) {
+  if (index <= 0 || index >= segments.length - 1) return false;
+
+  const segment = segments[index];
+  const prev = segments[index - 1];
+  const next = segments[index + 1];
+  if (!prev || !next) return false;
+
+  // 中插广告通常表现为“很短的一段”夹在两段明显更长的正片之间。
+  const isVeryShortMidroll =
+    segment.duration > 0 &&
+    segment.duration <= 45 &&
+    segment.duration < maxDuration * 0.15;
+  if (!isVeryShortMidroll) return false;
+
+  const neighborThreshold = Math.max(segment.duration * 3, 90);
+  return (
+    prev.duration >= neighborThreshold && next.duration >= neighborThreshold
+  );
+}
+
+function getSegmentAdReason(
+  segments: ParsedDiscontinuitySegment[],
+  index: number,
+  maxDuration: number,
+) {
+  const segment = segments[index];
+  if (segment.hasAdTag) return 'tag';
+  if (segment.hasAdUri) return 'uri';
+  if (isShortMidrollAdCandidate(segments, index, maxDuration)) {
+    return 'midroll-short';
+  }
+  if (isShortEdgeAdCandidate(segment, maxDuration)) {
+    return 'edge-short';
+  }
+  return 'unknown';
+}
+
+function isAdSegment(
+  segments: ParsedDiscontinuitySegment[],
+  index: number,
+  maxDuration: number,
+): boolean {
+  const segment = segments[index];
+
+  // 强信号：广告标签或广告 URL，直接判定为广告。
+  if (segment.hasAdTag || segment.hasAdUri) return true;
+
+  // 首尾短区间沿用旧策略，优先清理片头片尾广告。
+  const isEdge = index === 0 || index === segments.length - 1;
+  if (isEdge && isShortEdgeAdCandidate(segment, maxDuration)) {
+    return true;
+  }
+
+  // 补充中插广告场景：很多源站不会打广告标签，但会用一个很短的中间区间插播广告。
+  return isShortMidrollAdCandidate(segments, index, maxDuration);
+}
+
+/**
+ * 按 DISCONTINUITY 将 M3U8 行切分为多个区间，计算每个区间的总时长，
+ * 识别广告区间并移除，只保留正片区间。
+ *
+ * 判定策略（保守）：
+ * 1. 最长区间一定是正片，绝不删除
+ * 2. 短区间（时长 < 最长区间的 20% 且 < 120s）标记为疑似广告
+ * 3. 区间内片段 URL 命中广告关键词 → 强判定为广告
+ * 4. 区间内存在 CUE-OUT / SCTE35 等广告标签 → 强判定为广告
+ * 5. 无标签短区间默认只删除首尾；若中间区间非常短且两侧明显更长，
+ *    则视为中插广告一并删除
+ *
+ * 返回过滤后的 M3U8 文本。如果无法识别任何广告区间，退化为仅删除
+ * DISCONTINUITY 标签（与旧逻辑一致，保证不会比原来更差）。
+ */
+export function filterAdsFromM3U8(m3u8Content: string): string {
+  if (!m3u8Content) return '';
+  if (!m3u8Content.includes('#EXT-X-DISCONTINUITY')) return m3u8Content;
+
+  const lines = m3u8Content.split('\n');
+  const segments = parseDiscontinuitySegments(m3u8Content);
 
   // 只有 0 或 1 个区间，没有广告可删
   if (segments.length <= 1) return m3u8Content;
 
   // --- 第二步：识别广告区间 ---
   const maxDuration = Math.max(...segments.map((s) => s.duration));
-
-  const isAdSegment = (seg: Segment, index: number): boolean => {
-    // 强信号：广告标签或广告 URL
-    if (seg.hasAdTag || seg.hasAdUri) return true;
-
-    // 弱信号：时长短 + 位于首尾位置
-    const isShort =
-      seg.duration > 0 &&
-      seg.duration < 120 &&
-      seg.duration < maxDuration * 0.2;
-    const isEdge = index === 0 || index === segments.length - 1;
-    if (isShort && isEdge) return true;
-
-    return false;
-  };
-
-  const adFlags = segments.map((seg, i) => isAdSegment(seg, i));
+  const adFlags = segments.map((_segment, index) =>
+    isAdSegment(segments, index, maxDuration),
+  );
   const hasAnyAd = adFlags.some(Boolean);
 
   // 没识别出任何广告 → 退化为旧逻辑（仅删 DISCONTINUITY 标签）
@@ -270,6 +338,35 @@ export function filterAdsFromM3U8(m3u8Content: string): string {
 
 export function collectAdRangesFromM3U8(m3u8Content: string): AdRange[] {
   if (!m3u8Content || !m3u8Content.includes('#EXTINF')) return [];
+
+  if (m3u8Content.includes('#EXT-X-DISCONTINUITY')) {
+    const segments = parseDiscontinuitySegments(m3u8Content);
+    if (!segments.length) return [];
+
+    const maxDuration = Math.max(
+      ...segments.map((segment) => segment.duration),
+    );
+    const ranges: AdRange[] = [];
+    let timeline = 0;
+
+    for (let i = 0; i < segments.length; i++) {
+      const segment = segments[i];
+      const start = timeline;
+      const end = timeline + segment.duration;
+
+      if (segment.duration > 0 && isAdSegment(segments, i, maxDuration)) {
+        ranges.push({
+          start,
+          end,
+          reason: getSegmentAdReason(segments, i, maxDuration),
+        });
+      }
+
+      timeline = end;
+    }
+
+    return mergeAdRanges(ranges);
+  }
 
   const lines = m3u8Content.split('\n');
   const ranges: AdRange[] = [];
