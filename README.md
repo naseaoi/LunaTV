@@ -174,7 +174,7 @@ IceTV 支持标准的苹果 CMS V10 API 格式。
 
 ## 客户端
 
-v100.0.0 以上版本可配合 [Selene](https://github.com/MoonTechLab/Selene) 使用，移动端体验更加友好，数据完全同步。
+v0.0.0 以上版本可配合 [Selene](https://github.com/MoonTechLab/Selene) 使用，移动端体验更加友好，数据完全同步。
 
 ## AndroidTV 使用
 

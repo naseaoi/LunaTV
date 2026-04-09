@@ -1,9 +1,9 @@
 {
   "name": "icetv",
-  "version": "0.1.0",
+  "version": "0.2.5",
   "private": true,
   "scripts": {
-    "dev": "pnpm gen:changelog && pnpm gen:manifest && next dev --webpack -H 0.0.0.0",
+    "dev": "pnpm gen:manifest && next dev --webpack -H 0.0.0.0",
     "build": "pnpm gen:changelog && pnpm gen:manifest && next build --webpack",
     "start": "next start",
     "lint": "next lint",
