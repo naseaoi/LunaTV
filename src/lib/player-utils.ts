@@ -55,11 +55,15 @@ export interface HlsConfigOverrides {
   enableWorker?: boolean;
   lowLatencyMode?: boolean;
   maxBufferLength?: number;
+  maxMaxBufferLength?: number;
   backBufferLength?: number;
   maxBufferSize?: number;
   maxBufferHole?: number;
   nudgeOffset?: number;
   nudgeMaxRetry?: number;
+  startFragPrefetch?: boolean;
+  progressive?: boolean;
+  testBandwidth?: boolean;
   loader?: unknown;
 }
 
@@ -71,11 +75,16 @@ export function createHlsConfig(overrides?: HlsConfigOverrides) {
     // 默认按点播场景取更稳妥的缓冲策略，直播再单独覆盖。
     lowLatencyMode: false,
     maxBufferLength: 90,
+    maxMaxBufferLength: 120,
     backBufferLength: 90,
     maxBufferSize: 60 * 1000 * 1000,
     maxBufferHole: 0.5,
     nudgeOffset: 0.1,
     nudgeMaxRetry: 8,
+    // 允许更早拉起首个分片，缩短首帧等待。
+    startFragPrefetch: true,
+    progressive: true,
+    testBandwidth: true,
     ...overrides,
   };
 }

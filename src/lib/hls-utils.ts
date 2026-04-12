@@ -1,193 +1,174 @@
-import Hls from 'hls.js';
+import { formatBytesPerSecond } from '@/lib/player-utils';
+
+type VideoProbeResult = {
+  quality: string;
+  loadSpeed: string;
+  pingTime: number;
+};
+
+type MasterVariant = {
+  url: string;
+  width: number;
+};
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+) {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+function mapWidthToQuality(width: number): string {
+  if (width >= 3840) return '4K';
+  if (width >= 2560) return '2K';
+  if (width >= 1920) return '1080p';
+  if (width >= 1280) return '720p';
+  if (width >= 854) return '480p';
+  if (width > 0) return 'SD';
+  return '未知';
+}
+
+function getNonCommentLines(content: string): string[] {
+  return content
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'));
+}
+
+function parseMasterVariants(content: string): MasterVariant[] {
+  const lines = content.split('\n');
+  const variants: MasterVariant[] = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i].trim();
+    if (!line.startsWith('#EXT-X-STREAM-INF:')) continue;
+
+    const nextLine = lines[i + 1]?.trim() || '';
+    if (!nextLine || nextLine.startsWith('#')) continue;
+
+    const resolutionMatch = line.match(/RESOLUTION=(\d+)x(\d+)/i);
+    const width = resolutionMatch ? Number.parseInt(resolutionMatch[1], 10) : 0;
+    variants.push({
+      url: nextLine,
+      width,
+    });
+  }
+
+  return variants;
+}
+
+function pickProbeVariant(variants: MasterVariant[]) {
+  if (!variants.length) return null;
+
+  const bestVariant = [...variants].sort((a, b) => b.width - a.width)[0];
+
+  return {
+    bestQualityWidth: bestVariant?.width || 0,
+    // 测速优先选择首个变体，尽量贴近实际起播路径。
+    probePlaylistUrl: variants[0].url,
+  };
+}
+
+function getFirstSegmentUrl(content: string): string | null {
+  return getNonCommentLines(content)[0] || null;
+}
 
 /**
- * 从m3u8地址获取视频质量等级和网络信息
- * @param m3u8Url m3u8播放列表的URL
- * @param useProxy 是否走服务端代理（默认 true，兼容旧调用）
- * @returns Promise<{quality: string, loadSpeed: string, pingTime: number}> 视频质量等级和网络信息
+ * 从 m3u8 地址获取视频质量等级和网络信息。
+ * 改为直接请求 playlist 与首个分片，避免为每个源创建隐藏 video+hls 实例。
  */
 export async function getVideoResolutionFromM3u8(
   m3u8Url: string,
   useProxy = true,
-): Promise<{
-  quality: string; // 如720p、1080p等
-  loadSpeed: string; // 自动转换为KB/s或MB/s
-  pingTime: number; // 网络延迟（毫秒）
-}> {
+): Promise<VideoProbeResult> {
   try {
     // useProxy=true 走服务端代理；false 走 allowCORS 模式（浏览器直连 ts 片段）
     const proxyUrl = useProxy
       ? `/api/proxy/m3u8?url=${encodeURIComponent(m3u8Url)}`
       : `/api/proxy/m3u8?url=${encodeURIComponent(m3u8Url)}&allowCORS=true`;
 
-    return new Promise((resolve, reject) => {
-      const video = document.createElement('video');
-      video.muted = true;
-      video.preload = 'metadata';
+    const pingStart = performance.now();
+    const pingPromise = fetch(proxyUrl, { method: 'HEAD' })
+      .catch(() => null)
+      .then(() => Math.round(performance.now() - pingStart));
 
-      // 测量网络延迟（ping时间）
-      const pingStart = performance.now();
-      let pingTime = 0;
+    const playlistResponse = await withTimeout(
+      fetch(proxyUrl, { cache: 'no-store' }),
+      8000,
+      'Timeout loading playlist',
+    );
+    if (!playlistResponse.ok) {
+      throw new Error('Failed to load playlist');
+    }
 
-      fetch(proxyUrl, { method: 'HEAD' })
-        .then(() => {
-          pingTime = performance.now() - pingStart;
-        })
-        .catch(() => {
-          pingTime = performance.now() - pingStart;
-        });
+    const playlistContent = await playlistResponse.text();
+    const variants = parseMasterVariants(playlistContent);
+    const pickedVariant = pickProbeVariant(variants);
 
-      // 固定使用hls.js加载
-      const hls = new Hls();
+    let quality = mapWidthToQuality(pickedVariant?.bestQualityWidth || 0);
+    let mediaPlaylistUrl = proxyUrl;
+    let mediaPlaylistContent = playlistContent;
 
-      // 设置超时处理（8秒，兼顾慢速源）
-      const timeout = setTimeout(() => {
-        // 超时但已有部分结果时，返回部分数据而非直接失败
-        if (hasMetadataLoaded || hasSpeedCalculated) {
-          const width = video.videoWidth;
-          const quality =
-            width >= 3840
-              ? '4K'
-              : width >= 2560
-                ? '2K'
-                : width >= 1920
-                  ? '1080p'
-                  : width >= 1280
-                    ? '720p'
-                    : width >= 854
-                      ? '480p'
-                      : '未知';
-          hls.destroy();
-          video.remove();
-          resolve({
-            quality,
-            loadSpeed: actualLoadSpeed,
-            pingTime: Math.round(pingTime),
-          });
-        } else {
-          hls.destroy();
-          video.remove();
-          reject(new Error('Timeout loading video metadata'));
-        }
-      }, 8000);
+    if (pickedVariant?.probePlaylistUrl) {
+      mediaPlaylistUrl = pickedVariant.probePlaylistUrl;
 
-      video.onerror = () => {
-        clearTimeout(timeout);
-        hls.destroy();
-        video.remove();
-        reject(new Error('Failed to load video metadata'));
-      };
+      const mediaPlaylistResponse = await withTimeout(
+        fetch(mediaPlaylistUrl, { cache: 'no-store' }),
+        8000,
+        'Timeout loading media playlist',
+      );
+      if (!mediaPlaylistResponse.ok) {
+        throw new Error('Failed to load media playlist');
+      }
+      mediaPlaylistContent = await mediaPlaylistResponse.text();
+    }
 
-      let actualLoadSpeed = '未知';
-      let hasSpeedCalculated = false;
-      let hasMetadataLoaded = false;
+    const firstSegmentUrl = getFirstSegmentUrl(mediaPlaylistContent);
+    if (!firstSegmentUrl) {
+      throw new Error('Missing media segment url');
+    }
 
-      let fragmentStartTime = 0;
+    const segmentStart = performance.now();
+    const segmentResponse = await withTimeout(
+      fetch(firstSegmentUrl, {
+        cache: 'no-store',
+        headers: {
+          Range: 'bytes=0-65535',
+        },
+      }),
+      8000,
+      'Timeout loading first segment',
+    );
+    if (!segmentResponse.ok) {
+      throw new Error('Failed to load first segment');
+    }
 
-      // 检查是否可以返回结果
-      const checkAndResolve = () => {
-        if (
-          hasMetadataLoaded &&
-          (hasSpeedCalculated || actualLoadSpeed !== '未知')
-        ) {
-          clearTimeout(timeout);
-          const width = video.videoWidth;
-          if (width && width > 0) {
-            hls.destroy();
-            video.remove();
+    const segmentBuffer = await segmentResponse.arrayBuffer();
+    const elapsedMs = performance.now() - segmentStart;
+    const loadSpeed =
+      segmentBuffer.byteLength > 0 && elapsedMs > 0
+        ? formatBytesPerSecond(segmentBuffer.byteLength / (elapsedMs / 1000))
+        : '未知';
 
-            // 根据视频宽度判断视频质量等级，使用经典分辨率的宽度作为分割点
-            const quality =
-              width >= 3840
-                ? '4K' // 4K: 3840x2160
-                : width >= 2560
-                  ? '2K' // 2K: 2560x1440
-                  : width >= 1920
-                    ? '1080p' // 1080p: 1920x1080
-                    : width >= 1280
-                      ? '720p' // 720p: 1280x720
-                      : width >= 854
-                        ? '480p'
-                        : 'SD'; // 480p: 854x480
-
-            resolve({
-              quality,
-              loadSpeed: actualLoadSpeed,
-              pingTime: Math.round(pingTime),
-            });
-          } else {
-            // webkit 无法获取尺寸，直接返回
-            resolve({
-              quality: '未知',
-              loadSpeed: actualLoadSpeed,
-              pingTime: Math.round(pingTime),
-            });
-          }
-        }
-      };
-
-      // 监听片段加载开始
-      hls.on(Hls.Events.FRAG_LOADING, () => {
-        fragmentStartTime = performance.now();
-      });
-
-      // 监听片段加载完成，只需首个分片即可计算速度
-      hls.on(Hls.Events.FRAG_LOADED, (event: any, data: any) => {
-        if (
-          fragmentStartTime > 0 &&
-          data &&
-          data.payload &&
-          !hasSpeedCalculated
-        ) {
-          const loadTime = performance.now() - fragmentStartTime;
-          const size = data.payload.byteLength || 0;
-
-          if (loadTime > 0 && size > 0) {
-            const speedKBps = size / 1024 / (loadTime / 1000);
-
-            // 转换为 MB/s（网络速率单位）：KB/s / 1024 = MB/s
-            const speedMBps = speedKBps / 1024;
-            actualLoadSpeed = `${speedMBps.toFixed(2)} MB/s`;
-            hasSpeedCalculated = true;
-            checkAndResolve(); // 尝试返回结果
-          }
-        }
-      });
-
-      hls.loadSource(proxyUrl);
-      hls.attachMedia(video);
-
-      // 监听hls.js错误
-      hls.on(Hls.Events.ERROR, (event: any, data: any) => {
-        console.error('HLS错误:', data);
-        if (data.fatal) {
-          clearTimeout(timeout);
-          hls.destroy();
-          video.remove();
-          reject(new Error(`HLS播放失败: ${data.type}`));
-        }
-      });
-
-      // 使用 loadeddata 代替 loadedmetadata，确保首帧已解码
-      // 这样 videoWidth/videoHeight 反映的是真实编码分辨率，
-      // 而非 m3u8 master playlist 中可能虚标的 RESOLUTION 值
-      video.onloadeddata = () => {
-        hasMetadataLoaded = true;
-        checkAndResolve();
-      };
-      // loadedmetadata 作为后备，某些环境下 loadeddata 可能不触发
-      video.onloadedmetadata = () => {
-        if (!hasMetadataLoaded) {
-          // 延迟读取，给浏览器时间完成实际帧解码
-          setTimeout(() => {
-            if (!hasMetadataLoaded) {
-              hasMetadataLoaded = true;
-              checkAndResolve();
-            }
-          }, 300);
-        }
-      };
-    });
+    return {
+      quality,
+      loadSpeed,
+      pingTime: await pingPromise,
+    };
   } catch (error) {
     throw new Error(
       `Error getting video resolution: ${

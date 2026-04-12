@@ -10,6 +10,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const url = searchParams.get('url');
   const source = getProxySourceKey(searchParams);
+  const isLiveStream = Boolean(source);
   if (!url) {
     return NextResponse.json({ error: 'Missing url' }, { status: 400 });
   }
@@ -48,6 +49,13 @@ export async function GET(request: Request) {
     responseHeaders.set(
       'Access-Control-Expose-Headers',
       'Content-Length, Content-Range',
+    );
+    // 直播分片必须实时回源，点播分片则允许浏览器短时复用。
+    responseHeaders.set(
+      'Cache-Control',
+      isLiveStream
+        ? 'no-cache'
+        : 'public, max-age=3600, stale-while-revalidate=300',
     );
 
     const contentType = response.headers.get('content-type');

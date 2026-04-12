@@ -10,10 +10,18 @@ import type ArtplayerType from 'artplayer';
 
 import type { LiveChannel, LiveSource } from '../types';
 import {
+  createHlsLoaderClass,
+  destroyManagedHls,
+  getManagedVideo,
+  getPlayerModules,
+  runManagedVideoCleanup,
+} from '@/lib/player-runtime';
+import {
   ensureVideoSource,
   createHlsConfig,
   createArtPlayerConfig,
   configureArtplayerStatics,
+  handleHlsFatalError,
 } from '@/lib/player-utils';
 
 // ----- 播放器工具函数 -----
@@ -24,14 +32,12 @@ function cleanupPlayer(artPlayerRef: MutableRefObject<ArtplayerType | null>) {
   try {
     const video = artPlayerRef.current.video;
     if (video) {
+      runManagedVideoCleanup(video);
       video.pause();
       video.src = '';
       video.load();
     }
-    if (video?.hls) {
-      video.hls.destroy();
-      video.hls = null;
-    }
+    destroyManagedHls(video);
     if (video?.flv) {
       try {
         video.flv.unload?.();
@@ -85,10 +91,12 @@ export function useLivePlayer({
   setUnsupportedType,
 }: UseLivePlayerParams) {
   const artPlayerRef = useRef<ArtplayerType | null>(null);
+  const loadedUrlRef = useRef('');
 
   /** 外部可调用的清理方法 */
   const doCleanup = () => {
     setUnsupportedType(null);
+    loadedUrlRef.current = '';
     cleanupPlayer(artPlayerRef);
   };
 
@@ -101,119 +109,117 @@ export function useLivePlayer({
         return;
       }
 
-      // 动态导入 artplayer 和 hls.js，避免在非直播页面打包
-      const [{ default: Artplayer }, { default: Hls }] = await Promise.all([
-        import('artplayer'),
-        import('hls.js'),
-      ]);
-
-      if (cancelled || !artRef.current) return;
-
-      if (artPlayerRef.current) {
-        cleanupPlayer(artPlayerRef);
-      }
-
-      // precheck type
-      let type = 'm3u8';
-      const precheckUrl = `/api/live/precheck?url=${encodeURIComponent(videoUrl)}&icetv-source=${currentSourceRef.current?.key || ''}`;
-      const precheckResponse = await fetch(precheckUrl);
-      if (!precheckResponse.ok) {
-        console.error('预检查失败:', precheckResponse.statusText);
-        return;
-      }
-      const precheckResult = await precheckResponse.json();
-      if (precheckResult.success) {
-        type = precheckResult.type;
-      }
-
-      if (type !== 'm3u8') {
-        setUnsupportedType(type);
-        setIsVideoLoading(false);
-        return;
-      }
-
-      setUnsupportedType(null);
-
-      // HLS 自定义 Loader（为请求注入 icetv-source 参数）
-      const CustomHlsJsLoader = class extends (Hls.DefaultConfig
-        .loader as unknown as {
-        new (config: unknown): { load: (...args: unknown[]) => void };
-      }) {
-        constructor(config: unknown) {
-          super(config);
-          const load = this.load.bind(this);
-
-          this.load = function (context: any, cfg: any, callbacks: any) {
-            try {
-              const url = new URL(context.url);
-              url.searchParams.set(
-                'icetv-source',
-                currentSourceRef.current?.key || '',
-              );
-              context.url = url.toString();
-            } catch {
-              // ignore
-            }
-            if (context.type === 'manifest' || context.type === 'level') {
-              const isLiveDirectConnect =
-                localStorage.getItem('liveDirectConnect') === 'true';
-              if (isLiveDirectConnect) {
-                try {
-                  const url = new URL(context.url);
-                  url.searchParams.set('allowCORS', 'true');
-                  context.url = url.toString();
-                } catch {
-                  context.url = context.url + '&allowCORS=true';
-                }
-              }
-            }
-            load(context, cfg, callbacks);
-          };
-        }
-      };
-
-      function m3u8Loader(video: HTMLVideoElement, url: string) {
-        if (video.hls) {
-          try {
-            video.hls.destroy();
-            video.hls = null;
-          } catch (err) {
-            console.warn('清理 HLS 实例时出错:', err);
-          }
-        }
-        const hls = new Hls({
-          ...createHlsConfig({
-            lowLatencyMode: true,
-            maxBufferLength: 30,
-            backBufferLength: 30,
-          }),
-          loader:
-            CustomHlsJsLoader as unknown as typeof Hls.DefaultConfig.loader,
-        });
-        hls.loadSource(url);
-        hls.attachMedia(video);
-        video.hls = hls;
-
-        hls.on(Hls.Events.ERROR, function (_event: any, data: any) {
-          console.error('HLS Error:', _event, data);
-          if (data.fatal) {
-            switch (data.type) {
-              case Hls.ErrorTypes.NETWORK_ERROR:
-                hls.startLoad();
-                break;
-              case Hls.ErrorTypes.MEDIA_ERROR:
-                break;
-              default:
-                hls.destroy();
-                break;
-            }
-          }
-        });
-      }
-
-      const customType = { m3u8: m3u8Loader };
-      const targetUrl = `/api/proxy/m3u8?url=${encodeURIComponent(videoUrl)}&icetv-source=${currentSourceRef.current?.key || ''}`;
       try {
+        const { Artplayer, Hls } = await getPlayerModules();
+
+        if (cancelled || !artRef.current) return;
+
+        // precheck type
+        let type = 'm3u8';
+        const precheckUrl = `/api/live/precheck?url=${encodeURIComponent(videoUrl)}&icetv-source=${currentSourceRef.current?.key || ''}`;
+        const precheckResponse = await fetch(precheckUrl);
+        if (!precheckResponse.ok) {
+          console.error('预检查失败:', precheckResponse.statusText);
+          return;
+        }
+        const precheckResult = await precheckResponse.json();
+        if (precheckResult.success) {
+          type = precheckResult.type;
+        }
+
+        const targetUrl = `/api/proxy/m3u8?url=${encodeURIComponent(videoUrl)}&icetv-source=${currentSourceRef.current?.key || ''}`;
+
+        if (type !== 'm3u8') {
+          loadedUrlRef.current = '';
+          cleanupPlayer(artPlayerRef);
+          setUnsupportedType(type);
+          setIsVideoLoading(false);
+          return;
+        }
+
+        setUnsupportedType(null);
+
+        if (artPlayerRef.current && loadedUrlRef.current === targetUrl) {
+          return;
+        }
+
+        const LiveHlsLoader = createHlsLoaderClass(
+          Hls.DefaultConfig.loader as unknown as new (config: unknown) => {
+            load: (...args: unknown[]) => void;
+          },
+          {
+            rewriteContext: (context) => {
+              const currentUrl = context.url;
+              if (!currentUrl) return;
+
+              const isLiveDirectConnect =
+                typeof window !== 'undefined' &&
+                localStorage.getItem('liveDirectConnect') === 'true';
+
+              try {
+                const nextUrl = new URL(currentUrl, window.location.origin);
+                nextUrl.searchParams.set(
+                  'icetv-source',
+                  currentSourceRef.current?.key || '',
+                );
+                if (
+                  isLiveDirectConnect &&
+                  (context.type === 'manifest' || context.type === 'level')
+                ) {
+                  nextUrl.searchParams.set('allowCORS', 'true');
+                }
+                context.url = nextUrl.toString();
+              } catch {
+                const separator = currentUrl.includes('?') ? '&' : '?';
+                let nextUrl = `${currentUrl}${separator}icetv-source=${encodeURIComponent(currentSourceRef.current?.key || '')}`;
+                if (
+                  isLiveDirectConnect &&
+                  (context.type === 'manifest' || context.type === 'level')
+                ) {
+                  nextUrl = `${nextUrl}&allowCORS=true`;
+                }
+                context.url = nextUrl;
+              }
+            },
+          },
+        );
+
+        const m3u8Loader = (video: HTMLVideoElement, url: string) => {
+          const managedVideo = getManagedVideo(video);
+          runManagedVideoCleanup(managedVideo);
+          destroyManagedHls(managedVideo);
+
+          const hls = new Hls({
+            ...createHlsConfig({
+              lowLatencyMode: true,
+              maxBufferLength: 30,
+              backBufferLength: 30,
+            }),
+            loader: LiveHlsLoader as unknown as typeof Hls.DefaultConfig.loader,
+          });
+          hls.loadSource(url);
+          hls.attachMedia(video);
+          managedVideo.hls = hls;
+
+          hls.on(Hls.Events.ERROR, function (_event: any, data: any) {
+            console.error('HLS Error:', _event, data);
+            if (data.fatal) {
+              handleHlsFatalError(hls, data.type, Hls.ErrorTypes);
+            }
+          });
+        };
+
+        if (artPlayerRef.current) {
+          setIsVideoLoading(true);
+          artPlayerRef.current.switch = targetUrl;
+          if (artPlayerRef.current.video) {
+            ensureVideoSource(artPlayerRef.current.video, targetUrl);
+          }
+          loadedUrlRef.current = targetUrl;
+          return;
+        }
+
+        const customType = { m3u8: m3u8Loader };
         configureArtplayerStatics(Artplayer);
 
         artPlayerRef.current = new Artplayer({
@@ -224,8 +230,9 @@ export function useLivePlayer({
             moreVideoAttr: { preload: 'metadata' },
           }),
           type: type,
-          customType: customType,
+          customType,
         });
+        loadedUrlRef.current = targetUrl;
 
         // Artplayer 运行时支持这些事件名，但 TS 类型定义未包含
         const ap = artPlayerRef.current as unknown as {
@@ -272,6 +279,7 @@ export function useLivePlayer({
   // ----- 组件卸载清理 -----
   useEffect(() => {
     return () => {
+      loadedUrlRef.current = '';
       cleanupPlayer(artPlayerRef);
     };
   }, []);
@@ -279,11 +287,13 @@ export function useLivePlayer({
   // ----- 页面卸载清理 -----
   useEffect(() => {
     const handleBeforeUnload = () => {
+      loadedUrlRef.current = '';
       cleanupPlayer(artPlayerRef);
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      loadedUrlRef.current = '';
       cleanupPlayer(artPlayerRef);
     };
   }, []);

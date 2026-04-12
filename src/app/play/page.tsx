@@ -10,6 +10,10 @@ import {
   getSkipConfig,
   saveSkipConfig,
 } from '@/lib/db.client';
+import {
+  destroyManagedHls,
+  runManagedVideoCleanup,
+} from '@/lib/player-runtime';
 import { mergeSourceBundle } from '@/lib/source-bundle';
 import { SearchResult } from '@/lib/types';
 import { preloadProxyModes } from '@/lib/proxy-modes';
@@ -218,13 +222,11 @@ function PlayPageClient() {
     if (player) {
       try {
         if (player.video) {
+          runManagedVideoCleanup(player.video);
           player.video.pause();
           player.video.removeAttribute('src');
           player.video.load();
-          if (player.video.hls) {
-            player.video.hls.destroy();
-            player.video.hls = null;
-          }
+          destroyManagedHls(player.video);
         }
         player.destroy();
       } catch (err) {

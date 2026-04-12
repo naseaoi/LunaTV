@@ -478,8 +478,8 @@ export function usePlayInit({
 
       setLoadingStage('ready');
       setLoadingMessage('准备就绪，即将开始播放...');
-      // 等进度条动画跑满 100% 后再切换到播放页
-      await new Promise((r) => setTimeout(r, 600));
+      // 保留很短的过渡，避免 loading 文案闪烁。
+      await new Promise((r) => setTimeout(r, 200));
       setLoading(false);
     };
 

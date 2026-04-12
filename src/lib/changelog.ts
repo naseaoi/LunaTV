@@ -11,6 +11,21 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '0.2.6',
+    date: '2026-04-12',
+    added: [
+      // 无新增内容
+    ],
+    changed: [
+      '优化播放器首帧加载、切集连播和源站测速链路',
+      '优化直播切台复用与点播分片缓存策略',
+    ],
+    fixed: [
+      '修复直播媒体错误后无法自动恢复的问题',
+      '修复播放器切换时监听器和 HLS 实例残留问题',
+    ],
+  },
+  {
     version: '0.2.5',
     date: '2026-04-07',
     added: [
