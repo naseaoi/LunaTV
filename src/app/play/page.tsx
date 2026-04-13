@@ -823,7 +823,15 @@ function formatTimeSimple(seconds: number): string {
 
 export default function PlayPage() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense
+      fallback={
+        <PlayLoadingView
+          loadingStage='searching'
+          loadingMessage='正在搜索播放源...'
+          onBack={() => window.history.back()}
+        />
+      }
+    >
       <PlayPageClient />
     </Suspense>
   );

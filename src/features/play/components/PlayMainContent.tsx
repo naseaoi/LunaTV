@@ -1,12 +1,4 @@
-import {
-  AlertTriangle,
-  Cat,
-  Clover,
-  Film,
-  Play,
-  RefreshCw,
-  Tv,
-} from 'lucide-react';
+import { AlertTriangle, Cat, Clover, Film, Play, Tv } from 'lucide-react';
 import { RefObject, useEffect, useMemo, useRef, useState } from 'react';
 
 import EpisodeSelector from '@/components/EpisodeSelector';
@@ -375,7 +367,7 @@ export function PlayMainContent(props: PlayMainContentProps) {
                 ></div>
 
                 {isVideoLoading && (
-                  <div className='absolute inset-0 z-[500] flex items-center justify-center rounded-xl bg-black/85 backdrop-blur-sm transition-all duration-300'>
+                  <div className='absolute inset-0 z-[500] flex items-center justify-center overflow-hidden rounded-xl bg-black/85 backdrop-blur-sm transition-all duration-300'>
                     {loadingTimedOut ? (
                       <LoadingStatePanel
                         compact
@@ -386,19 +378,11 @@ export function PlayMainContent(props: PlayMainContentProps) {
                             ? '切换播放源超时'
                             : '加载视频超时'
                         }
-                        titleClassName='text-white'
-                      >
-                        <p className='mb-3 text-center text-sm text-gray-300'>
-                          已等待超过 30 秒，可能是网络问题或播放源不可用
-                        </p>
-                        <button
-                          onClick={() => window.location.reload()}
-                          className='flex w-full items-center justify-center gap-2 rounded-lg bg-white/10 px-4 py-2.5 font-medium text-white transition-colors hover:bg-white/20'
-                        >
-                          <RefreshCw className='h-4 w-4' />
-                          刷新页面重试
-                        </button>
-                      </LoadingStatePanel>
+                        titleClassName='text-xl text-white sm:text-2xl'
+                        message='已等待超过 30 秒，可能是网络问题或播放源不可用'
+                        messageClassName='mx-auto max-w-[16rem] text-sm leading-6 text-gray-300 sm:max-w-none'
+                        className='max-w-[19rem] p-4 sm:max-w-lg sm:p-6'
+                      />
                     ) : (
                       <div className='flex flex-col items-center'>
                         {/* 复用全局 LoadingStatePanel 的 spinner 结构 */}

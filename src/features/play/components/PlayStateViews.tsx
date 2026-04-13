@@ -1,3 +1,5 @@
+'use client';
+
 import {
   AlertTriangle,
   ArrowLeft,
@@ -18,7 +20,7 @@ type LoadingStage = 'searching' | 'preferring' | 'fetching' | 'ready';
 interface PlayLoadingViewProps {
   loadingStage: LoadingStage;
   loadingMessage: string;
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 interface PlayErrorViewProps {
@@ -126,7 +128,14 @@ export function PlayLoadingView({
             onClick={onBack}
             aria-label='取消加载'
             title='取消加载'
-            className='inline-flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-700 transition-colors hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
+            disabled={!onBack}
+            aria-hidden={!onBack}
+            tabIndex={onBack ? 0 : -1}
+            className={`inline-flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-700 transition-colors dark:bg-gray-800 dark:text-gray-200 ${
+              onBack
+                ? 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                : 'pointer-events-none invisible'
+            }`}
           >
             <X className='h-5 w-5' />
           </button>
