@@ -185,6 +185,7 @@ function PlayPageClient() {
   const [videoLoadingStage, setVideoLoadingStage] = useState<
     'initing' | 'sourceChanging'
   >('initing');
+  const [videoLoadingAttempt, setVideoLoadingAttempt] = useState(0);
   const videoLoadingStageRef = useRef(videoLoadingStage);
   useEffect(() => {
     videoLoadingStageRef.current = videoLoadingStage;
@@ -430,6 +431,7 @@ function PlayPageClient() {
       }
       setIsVideoLoading(true);
       setVideoLoadingStage('sourceChanging');
+      setVideoLoadingAttempt((prev) => prev + 1);
       setCurrentEpisodeIndex(episodeNumber);
     }
   };
@@ -564,6 +566,7 @@ function PlayPageClient() {
     try {
       setVideoLoadingStage('sourceChanging');
       setIsVideoLoading(true);
+      setVideoLoadingAttempt((prev) => prev + 1);
       setRealtimeLoadSpeed('测速中...');
       setError(null);
       setVideoUrl('');
@@ -780,6 +783,7 @@ function PlayPageClient() {
       isVideoLoading={isVideoLoading}
       isPlaying={isPlaying}
       videoLoadingStage={videoLoadingStage}
+      videoLoadingAttempt={videoLoadingAttempt}
       realtimeLoadSpeed={realtimeLoadSpeed}
       authRecoveryVisible={authRecoveryVisible}
       authRecoveryReasonMessage={getAuthRecoveryMessage(authRecoveryReason)}

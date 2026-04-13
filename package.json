@@ -1,6 +1,6 @@
 {
   "name": "icetv",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "private": true,
   "scripts": {
     "dev": "pnpm gen:manifest && next dev --webpack -H 0.0.0.0",

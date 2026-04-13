@@ -27,6 +27,7 @@ interface PlayMainContentProps {
   isVideoLoading: boolean;
   isPlaying: boolean;
   videoLoadingStage: 'initing' | 'sourceChanging';
+  videoLoadingAttempt: number;
   realtimeLoadSpeed: string;
   authRecoveryVisible: boolean;
   authRecoveryReasonMessage: string;
@@ -96,6 +97,7 @@ export function PlayMainContent(props: PlayMainContentProps) {
     isVideoLoading,
     isPlaying,
     videoLoadingStage,
+    videoLoadingAttempt,
     realtimeLoadSpeed,
     authRecoveryVisible,
     authRecoveryReasonMessage,
@@ -222,6 +224,7 @@ export function PlayMainContent(props: PlayMainContentProps) {
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
 
   useEffect(() => {
+    // 每次发起新的加载轮次都重置超时计时，避免上一轮超时状态残留到下一次换源。
     if (!isVideoLoading) {
       setLoadingTimedOut(false);
       return;
@@ -229,7 +232,7 @@ export function PlayMainContent(props: PlayMainContentProps) {
     setLoadingTimedOut(false);
     const timer = setTimeout(() => setLoadingTimedOut(true), 30_000);
     return () => clearTimeout(timer);
-  }, [isVideoLoading, videoLoadingStage]);
+  }, [isVideoLoading, videoLoadingStage, videoLoadingAttempt]);
 
   return (
     <PageLayout activePath='/play'>

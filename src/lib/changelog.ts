@@ -11,6 +11,17 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '0.2.7',
+    date: '2026-04-13',
+    added: [
+      // 无新增内容
+    ],
+    changed: [
+      // 无变更内容
+    ],
+    fixed: ['修复播放页切换源站超时后再次切换时，播放器仍停留在超时状态的问题'],
+  },
+  {
     version: '0.2.6',
     date: '2026-04-12',
     added: [
