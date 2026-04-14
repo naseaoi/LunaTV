@@ -103,4 +103,18 @@ describe('collapseSourcesForDisplay', () => {
       ),
     ).toEqual(['123__giri_2']);
   });
+
+  it('会把同一源站的不同视频 ID 折叠成一个入口', () => {
+    const sources = [
+      buildSource({ id: '123' }),
+      buildSource({ id: '456' }),
+      buildSource({ source: 'other', id: 'x1', source_name: 'Other' }),
+    ];
+
+    expect(
+      collapseSourcesForDisplay(sources).map(
+        (item) => `${item.source}-${item.id}`,
+      ),
+    ).toEqual(['giri-123', 'other-x1']);
+  });
 });

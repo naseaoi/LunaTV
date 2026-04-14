@@ -23,11 +23,6 @@ function getSourceKey(item: Pick<SearchResult, 'source' | 'id'>): string {
   return `${item.source}-${item.id}`;
 }
 
-function getBundleKey(item: Pick<SearchResult, 'source' | 'id'>): string {
-  const meta = parseVariantMeta(item.id);
-  return `${item.source}-${meta.videoId}`;
-}
-
 function compareBundleItems(a: SearchResult, b: SearchResult): number {
   if (a.source !== b.source) {
     return 0;
@@ -93,63 +88,45 @@ export function collapseSourcesForDisplay(
   currentSource?: string,
   currentId?: string,
 ): SearchResult[] {
-  const groups = new Map<string, SearchResult[]>();
+  const sourceGroups = new Map<string, SearchResult[]>();
 
   for (const item of sources) {
-    const bundleKey = getBundleKey(item);
-    const group = groups.get(bundleKey);
+    const group = sourceGroups.get(item.source);
     if (group) {
       group.push(item);
     } else {
-      groups.set(bundleKey, [item]);
+      sourceGroups.set(item.source, [item]);
     }
-  }
-
-  const collapsibleBundleKeys = new Set<string>();
-  const bundleRepresentatives = new Map<string, SearchResult>();
-
-  for (const [bundleKey, groupItems] of Array.from(groups.entries())) {
-    const hasVariantMembers = groupItems.some(
-      (item) => parseVariantMeta(item.id).groupId !== null,
-    );
-    const hasRelatedSources = groupItems.some(
-      (item) => (item.related_sources?.length || 0) > 0,
-    );
-
-    if ((!hasVariantMembers || groupItems.length === 1) && !hasRelatedSources) {
-      continue;
-    }
-
-    collapsibleBundleKeys.add(bundleKey);
-    const sortedGroup = [...groupItems].sort(compareBundleItems);
-    const currentItem = sortedGroup.find(
-      (item) => item.source === currentSource && item.id === currentId,
-    );
-    const defaultItem = sortedGroup.find(
-      (item) => parseVariantMeta(item.id).groupId === null,
-    );
-    bundleRepresentatives.set(
-      bundleKey,
-      currentItem || defaultItem || sortedGroup[0],
-    );
   }
 
   const collapsed: SearchResult[] = [];
-  const seenBundleKeys = new Set<string>();
+  const seenSources = new Set<string>();
 
   for (const item of sources) {
-    const bundleKey = getBundleKey(item);
-    if (!collapsibleBundleKeys.has(bundleKey)) {
+    if (seenSources.has(item.source)) {
+      continue;
+    }
+    seenSources.add(item.source);
+
+    const group = sourceGroups.get(item.source)!;
+    if (group.length === 1) {
       collapsed.push(item);
       continue;
     }
 
-    if (seenBundleKeys.has(bundleKey)) {
+    // Multiple items from the same source – pick the best representative
+    const currentItem = group.find(
+      (g) => g.source === currentSource && g.id === currentId,
+    );
+    if (currentItem) {
+      collapsed.push(currentItem);
       continue;
     }
 
-    seenBundleKeys.add(bundleKey);
-    collapsed.push(bundleRepresentatives.get(bundleKey) || item);
+    const defaultItem = group.find(
+      (g) => parseVariantMeta(g.id).groupId === null,
+    );
+    collapsed.push(defaultItem || group[0]);
   }
 
   return collapsed;

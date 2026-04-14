@@ -48,3 +48,6 @@ public/workbox-*.js
 
 # local data
 /data/
+
+# claude code
+.claude/
