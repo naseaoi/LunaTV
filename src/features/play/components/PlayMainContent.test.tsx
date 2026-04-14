@@ -4,6 +4,8 @@ import { act, render, screen } from '@testing-library/react';
 import { PlayMainContent } from '@/features/play/components/PlayMainContent';
 import type { SearchResult } from '@/lib/types';
 
+const PLAYER_LOADING_TIMEOUT_MS = 15_000;
+
 jest.mock('@/components/PageLayout', () => ({
   __esModule: true,
   default: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -120,7 +122,7 @@ describe('PlayMainContent', () => {
     const { rerender } = render(<PlayMainContent {...baseProps} />);
 
     act(() => {
-      jest.advanceTimersByTime(30_000);
+      jest.advanceTimersByTime(PLAYER_LOADING_TIMEOUT_MS);
     });
 
     expect(screen.getByText('切换播放源超时')).toBeInTheDocument();

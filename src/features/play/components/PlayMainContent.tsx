@@ -46,6 +46,9 @@ interface PlayMainContentProps {
   onAddSources?: (newSources: SearchResult[]) => void;
 }
 
+const PLAYER_LOADING_TIMEOUT_MS = 15_000;
+const PLAYER_LOADING_TIMEOUT_SECONDS = PLAYER_LOADING_TIMEOUT_MS / 1000;
+
 const TogglePanelButton = ({
   collapsed,
   onClick,
@@ -212,7 +215,7 @@ export function PlayMainContent(props: PlayMainContentProps) {
     return () => mq.removeEventListener('change', handler);
   }, []);
 
-  // 视频加载超时检测（30秒）
+  // 视频加载超时检测（15秒）
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
 
   useEffect(() => {
@@ -222,7 +225,10 @@ export function PlayMainContent(props: PlayMainContentProps) {
       return;
     }
     setLoadingTimedOut(false);
-    const timer = setTimeout(() => setLoadingTimedOut(true), 30_000);
+    const timer = setTimeout(
+      () => setLoadingTimedOut(true),
+      PLAYER_LOADING_TIMEOUT_MS,
+    );
     return () => clearTimeout(timer);
   }, [isVideoLoading, videoLoadingStage, videoLoadingAttempt]);
 
@@ -379,7 +385,7 @@ export function PlayMainContent(props: PlayMainContentProps) {
                             : '加载视频超时'
                         }
                         titleClassName='text-xl text-white sm:text-2xl'
-                        message='已等待超过 30 秒，可能是网络问题或播放源不可用'
+                        message={`已等待超过 ${PLAYER_LOADING_TIMEOUT_SECONDS} 秒，可能是网络问题或播放源不可用`}
                         messageClassName='mx-auto max-w-[16rem] text-sm leading-6 text-gray-300 sm:max-w-none'
                         className='max-w-[19rem] p-4 sm:max-w-lg sm:p-6'
                       />

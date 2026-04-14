@@ -15,7 +15,7 @@ import {
   runManagedVideoCleanup,
 } from '@/lib/player-runtime';
 import { mergeSourceBundle } from '@/lib/source-bundle';
-import { SearchResult } from '@/lib/types';
+import { SearchResult, SkipConfig } from '@/lib/types';
 import { preloadProxyModes } from '@/lib/proxy-modes';
 
 import { PlayMainContent } from '@/features/play/components/PlayMainContent';
@@ -32,6 +32,11 @@ import {
   PlayProgressSaveState,
   usePlayProgress,
 } from '@/features/play/hooks/usePlayProgress';
+import {
+  finalizeSourceSwitchCleanup,
+  shouldFinalizeSourceSwitchCleanup,
+  SourceSwitchCleanupTask,
+} from '@/features/play/lib/sourceSwitchCleanup';
 import {
   AUTH_LOST_EVENT,
   SessionLostDetail,
@@ -157,6 +162,9 @@ function PlayPageClient() {
     null,
   );
   const sourceChangeRequestIdRef = useRef(0);
+  const pendingSourceSwitchCleanupRef = useRef<SourceSwitchCleanupTask | null>(
+    null,
+  );
 
   const [optimizationEnabled] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -186,10 +194,6 @@ function PlayPageClient() {
     'initing' | 'sourceChanging'
   >('initing');
   const [videoLoadingAttempt, setVideoLoadingAttempt] = useState(0);
-  const videoLoadingStageRef = useRef(videoLoadingStage);
-  useEffect(() => {
-    videoLoadingStageRef.current = videoLoadingStage;
-  }, [videoLoadingStage]);
   const [realtimeLoadSpeed, setRealtimeLoadSpeed] =
     useState<string>('测速中...');
   const [authRecoveryVisible, setAuthRecoveryVisible] = useState(false);
@@ -235,6 +239,25 @@ function PlayPageClient() {
       }
     }
   }, []);
+
+  const finalizePendingSourceSwitchCleanup = useCallback(
+    async (activeSource: string, activeId: string) => {
+      const task = pendingSourceSwitchCleanupRef.current;
+      if (!shouldFinalizeSourceSwitchCleanup(task, activeSource, activeId)) {
+        return;
+      }
+
+      // 先清空 ref，避免 playing/canplay 连续触发时重复执行迁移。
+      pendingSourceSwitchCleanupRef.current = null;
+
+      await finalizeSourceSwitchCleanup(task, {
+        deletePlayRecord,
+        deleteSkipConfig,
+        saveSkipConfig,
+      });
+    },
+    [],
+  );
 
   // 跳过片头片尾配置相关函数
   const handleSkipConfigChange = useCallback(
@@ -559,9 +582,11 @@ function PlayPageClient() {
     const previousSource = currentSourceRef.current;
     const previousId = currentIdRef.current;
     const previousDetail = detailRef.current;
-    const previousSkipConfig = { ...skipConfigRef.current };
+    const previousSkipConfig: SkipConfig = { ...skipConfigRef.current };
     const currentPlayTime =
       artPlayerRef.current?.currentTime || resumeTimeRef.current || 0;
+
+    pendingSourceSwitchCleanupRef.current = null;
 
     try {
       setVideoLoadingStage('sourceChanging');
@@ -646,30 +671,25 @@ function PlayPageClient() {
       setDetail(newDetail);
       setCurrentEpisodeIndex(targetIndex);
 
-      if (previousSource && previousId) {
-        void (async () => {
-          try {
-            await deletePlayRecord(previousSource, previousId);
-          } catch (err) {
-            console.error('清除播放记录失败:', err);
-          }
-
-          try {
-            await deleteSkipConfig(previousSource, previousId);
-            await saveSkipConfig(
-              newDetail.source,
-              newDetail.id,
-              previousSkipConfig,
-            );
-          } catch (err) {
-            console.error('迁移跳过片头片尾配置失败:', err);
-          }
-        })();
+      if (
+        previousSource &&
+        previousId &&
+        (previousSource !== newDetail.source || previousId !== newDetail.id)
+      ) {
+        // 新源真正开始播放后再清理旧记录，避免加载中返回时误删继续观看。
+        pendingSourceSwitchCleanupRef.current = {
+          previousSource,
+          previousId,
+          nextSource: newDetail.source,
+          nextId: newDetail.id,
+          previousSkipConfig,
+        };
       }
     } catch (err) {
       if (currentRequestId !== sourceChangeRequestIdRef.current) {
         return;
       }
+      pendingSourceSwitchCleanupRef.current = null;
       setIsVideoLoading(false);
       setRealtimeLoadSpeed('');
       setError(err instanceof Error ? err.message : '换源失败');
@@ -716,7 +736,6 @@ function PlayPageClient() {
     lastSaveTimeRef,
     detailRef,
     currentEpisodeIndexRef,
-    videoLoadingStageRef,
     wakeLockRef,
     setError,
     setIsVideoLoading,
@@ -730,6 +749,15 @@ function PlayPageClient() {
     requestWakeLock,
     releaseWakeLock,
     cleanupPlayer,
+    onPlaybackStarted: useCallback(() => {
+      const activeSource = currentSourceRef.current;
+      const activeId = currentIdRef.current;
+      if (!activeSource || !activeId) {
+        return;
+      }
+
+      void finalizePendingSourceSwitchCleanup(activeSource, activeId);
+    }, [finalizePendingSourceSwitchCleanup]),
     onCurrentSourceVideoInfo: useCallback(
       (info: { quality: string; loadSpeed: string; pingTime: number }) => {
         const src = currentSourceRef.current;

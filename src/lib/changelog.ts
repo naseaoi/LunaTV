@@ -11,6 +11,18 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '0.2.8',
+    date: '2026-04-14',
+    added: [
+      // 无新增内容
+    ],
+    changed: ['将播放页超时判定从 30 秒调整为 15 秒'],
+    fixed: [
+      '修复继续观看进入播放页时加载遮罩过早消失的问题',
+      '修复加载中返回导致继续观看记录被提前清除的问题',
+    ],
+  },
+  {
     version: '0.2.7',
     date: '2026-04-13',
     added: [

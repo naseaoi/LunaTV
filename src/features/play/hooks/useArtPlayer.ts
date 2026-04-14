@@ -20,6 +20,7 @@ import {
   handleHlsFatalError,
 } from '@/lib/player-utils';
 
+import { shouldDismissLoadingFromCanPlay } from '@/features/play/lib/playerLoading';
 import { WakeLockSentinel } from '@/features/play/lib/playTypes';
 import { filterAdsFromM3U8 } from '@/features/play/lib/playUtils';
 
@@ -53,7 +54,6 @@ export interface UseArtPlayerParams {
   lastSaveTimeRef: MutableRefObject<number>;
   detailRef: MutableRefObject<SearchResult | null>;
   currentEpisodeIndexRef: MutableRefObject<number>;
-  videoLoadingStageRef: MutableRefObject<'initing' | 'sourceChanging'>;
   wakeLockRef: MutableRefObject<WakeLockSentinel | null>;
   setError: Dispatch<SetStateAction<string | null>>;
   setIsVideoLoading: Dispatch<SetStateAction<boolean>>;
@@ -67,6 +67,7 @@ export interface UseArtPlayerParams {
   requestWakeLock: () => Promise<void>;
   releaseWakeLock: () => Promise<void>;
   cleanupPlayer: () => void;
+  onPlaybackStarted?: () => void;
   /** 播放器收集到当前源的测速数据后回调（速度+分辨率+延迟） */
   onCurrentSourceVideoInfo?: (info: {
     quality: string;
@@ -100,7 +101,6 @@ export function useArtPlayer(params: UseArtPlayerParams) {
     lastSaveTimeRef,
     detailRef,
     currentEpisodeIndexRef,
-    videoLoadingStageRef,
     setError,
     setIsVideoLoading,
     setIsPlaying,
@@ -113,6 +113,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
     requestWakeLock,
     releaseWakeLock,
     cleanupPlayer,
+    onPlaybackStarted,
     onCurrentSourceVideoInfo,
   } = params;
 
@@ -350,14 +351,6 @@ export function useArtPlayer(params: UseArtPlayerParams) {
                 }
               });
 
-              // 首次进入页面仍保留 manifest 兜底，避免 autoplay 被阻止时
-              // 整层遮罩一直盖住播放器；但切源时不要过早移除遮罩。
-              hls.on(Hls.Events.MANIFEST_PARSED, function () {
-                if (videoLoadingStageRef.current !== 'sourceChanging') {
-                  setIsVideoLoading(false);
-                }
-              });
-
               hls.on(Hls.Events.FRAG_LOADED, function (_: unknown, data: any) {
                 clearTimeout(speedFallbackTimer);
                 const stats = data.frag.stats;
@@ -544,6 +537,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
         player.on('video:playing', () => {
           setIsVideoLoading(false);
           setRealtimeLoadSpeed('');
+          onPlaybackStarted?.();
         });
 
         player.on('pause', () => {
@@ -605,9 +599,10 @@ export function useArtPlayer(params: UseArtPlayerParams) {
             player.notice.show = '';
           }, 0);
 
-          if (videoLoadingStageRef.current !== 'sourceChanging') {
+          if (shouldDismissLoadingFromCanPlay(player.video)) {
             setIsVideoLoading(false);
             setRealtimeLoadSpeed('');
+            onPlaybackStarted?.();
           }
         });
 
@@ -685,5 +680,5 @@ export function useArtPlayer(params: UseArtPlayerParams) {
     return () => {
       cancelled = true;
     };
-  }, [videoUrl, loading, blockAdEnabled]);
+  }, [videoUrl, loading, blockAdEnabled, onPlaybackStarted]);
 }

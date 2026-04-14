@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 
-let appVersion = '0.2.7';
+let appVersion = '0.2.8';
 
 function extractLatestVersionFromChangelog(content) {
   const match = content.match(/^## \[([\d.]+)\] - \d{4}-\d{2}-\d{2}/m);
