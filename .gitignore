@@ -51,3 +51,6 @@ public/workbox-*.js
 
 # claude code
 .claude/
+
+# local editor settings
+.vscode/
