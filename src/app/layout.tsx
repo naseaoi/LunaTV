@@ -9,10 +9,13 @@ import { getConfig } from '@/lib/config';
 import { GlobalErrorIndicator } from '../components/GlobalErrorIndicator';
 import { CardInteractionProvider } from '../components/CardInteractionProvider';
 import { SiteProvider } from '../components/SiteProvider';
+import { SWRegister } from '../components/SWRegister';
 import { ThemeProvider } from '../components/ThemeProvider';
 
 const inter = Inter({
   subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800'],
+  display: 'swap',
   fallback: [
     'system-ui',
     '-apple-system',
@@ -164,6 +167,7 @@ export default async function RootLayout({
             <CardInteractionProvider>
               {children}
               <GlobalErrorIndicator />
+              <SWRegister />
             </CardInteractionProvider>
           </SiteProvider>
         </ThemeProvider>

@@ -7,6 +7,52 @@ import { getProxySourceKey, resolveProxyUserAgent } from '../utils';
 
 export const runtime = 'nodejs';
 
+// ================================================================
+// VOD M3U8 清单缓存（减少重复请求上游源站）
+// ================================================================
+
+type M3U8CacheEntry = {
+  content: string;
+  contentType: string;
+  finalUrl: string;
+  timestamp: number;
+};
+
+const m3u8Cache = new Map<string, M3U8CacheEntry>();
+const M3U8_CACHE_TTL_MS = 60_000;
+const M3U8_CACHE_MAX_SIZE = 200;
+
+function getM3U8Cache(url: string): M3U8CacheEntry | null {
+  const entry = m3u8Cache.get(url);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > M3U8_CACHE_TTL_MS) {
+    m3u8Cache.delete(url);
+    return null;
+  }
+  // LRU：命中时刷新位置
+  m3u8Cache.delete(url);
+  m3u8Cache.set(url, entry);
+  return entry;
+}
+
+function setM3U8Cache(
+  url: string,
+  content: string,
+  contentType: string,
+  finalUrl: string,
+): void {
+  if (m3u8Cache.size >= M3U8_CACHE_MAX_SIZE) {
+    const firstKey = m3u8Cache.keys().next().value;
+    if (firstKey) m3u8Cache.delete(firstKey);
+  }
+  m3u8Cache.set(url, {
+    content,
+    contentType,
+    finalUrl,
+    timestamp: Date.now(),
+  });
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const url = searchParams.get('url');
@@ -24,6 +70,34 @@ export async function GET(request: Request) {
   const ua = await resolveProxyUserAgent(source);
 
   try {
+    // 查询 VOD 清单缓存（避免重复请求上游源站）
+    const cached = getM3U8Cache(validation.url);
+    if (cached) {
+      const baseUrl = getBaseUrl(cached.finalUrl);
+      const modifiedContent = rewriteM3U8Content(
+        cached.content,
+        baseUrl,
+        request,
+        allowCORS,
+        source,
+      );
+
+      const headers = new Headers();
+      headers.set('Content-Type', cached.contentType);
+      headers.set('Access-Control-Allow-Origin', '*');
+      headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      headers.set(
+        'Access-Control-Allow-Headers',
+        'Content-Type, Range, Origin, Accept',
+      );
+      headers.set('Cache-Control', 'no-cache');
+      headers.set(
+        'Access-Control-Expose-Headers',
+        'Content-Length, Content-Range',
+      );
+      return new Response(modifiedContent, { status: 200, headers });
+    }
+
     const response = await fetch(validation.url, {
       cache: 'no-cache',
       redirect: 'follow',
@@ -48,6 +122,14 @@ export async function GET(request: Request) {
       const finalUrl = response.url;
       const m3u8Content = await response.text();
       const baseUrl = getBaseUrl(finalUrl);
+
+      // VOD / Master playlist 写入缓存（直播清单不缓存）
+      if (
+        m3u8Content.includes('#EXT-X-ENDLIST') ||
+        m3u8Content.includes('#EXT-X-STREAM-INF')
+      ) {
+        setM3U8Cache(validation.url, m3u8Content, contentType, finalUrl);
+      }
 
       const modifiedContent = rewriteM3U8Content(
         m3u8Content,

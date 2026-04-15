@@ -9,6 +9,25 @@ import { getProxyModes } from '@/lib/proxy-modes';
 import { calculateSourceScore } from '@/features/play/lib/playUtils';
 
 // ---------------------------------------------------------------------------
+// resolveHarvestWindow — 根据首个测速结果自适应调整收割窗口
+// ---------------------------------------------------------------------------
+
+/** 高速源缩短等待，低速源保持完整窗口 */
+function resolveHarvestWindow(testResult: { loadSpeed: string }): number {
+  const match = testResult.loadSpeed.match(/^([\d.]+)\s*(Mbps|KB\/s|MB\/s)$/);
+  if (!match) return 1500;
+  const value = parseFloat(match[1]);
+  const unit = match[2];
+  let speedKBps: number;
+  if (unit === 'Mbps') speedKBps = (value * 1024) / 8;
+  else speedKBps = unit === 'MB/s' ? value * 1024 : value;
+  // > 2 MB/s → 500ms，> 1 MB/s → 800ms，否则 1500ms
+  if (speedKBps >= 2048) return 500;
+  if (speedKBps >= 1024) return 800;
+  return 1500;
+}
+
+// ---------------------------------------------------------------------------
 // preferBestSource — 播放源优选（竞速模式）
 // 所有源同时并发测试，首个成功后启动短暂收割窗口，窗口结束后从已收集
 // 结果中选最优源。快源不再被慢源拖累，大幅缩短用户等待时间。
@@ -24,9 +43,6 @@ export async function preferBestSource(
   signal?: AbortSignal,
 ): Promise<SearchResult> {
   if (sources.length === 1) return sources[0];
-
-  // 收割窗口：首个源测速成功后，再等待此时间收集更多结果
-  const HARVEST_WINDOW_MS = 1500;
 
   // 预先获取流量路由配置（在 Promise 构造器外 await）
   const proxyModes = await getProxyModes();
@@ -138,9 +154,10 @@ export async function preferBestSource(
         .then((testResult) => {
           if (settled) return;
           collectedResults.push({ source, testResult });
-          // 首个成功：启动收割窗口
+          // 首个成功：启动自适应收割窗口
           if (!harvestTimer) {
-            harvestTimer = setTimeout(finalize, HARVEST_WINDOW_MS);
+            const windowMs = resolveHarvestWindow(testResult);
+            harvestTimer = setTimeout(finalize, windowMs);
           }
         })
         .catch(() => {

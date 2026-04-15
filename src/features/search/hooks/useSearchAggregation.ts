@@ -45,9 +45,9 @@ export function useSearchAggregation({
   searchQuery,
 }: UseSearchAggregationParams) {
   // 聚合卡片 refs 与统计缓存
-  const groupRefs = useRef<Map<string, React.RefObject<VideoCardHandle>>>(
-    new Map(),
-  );
+  const groupRefs = useRef<
+    Map<string, React.RefObject<VideoCardHandle | null>>
+  >(new Map());
   const groupStatsRef = useRef<
     Map<
       string,

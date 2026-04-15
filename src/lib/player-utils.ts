@@ -47,6 +47,44 @@ export function formatBytesPerSecond(bytesPerSecond: number): string {
 }
 
 // ---------------------------------------------------------------------------
+// HLS 初始带宽自适应估算
+// ---------------------------------------------------------------------------
+
+type NetworkInfoLike = {
+  saveData?: boolean;
+  effectiveType?: string;
+  downlink?: number;
+};
+
+/** 根据网络环境推算初始带宽估算值（bps），避免 HLS.js 从最低码率起播 */
+function resolveInitialBandwidthEstimate(): number {
+  // 2 Mbps，国内宽带的保守起步值
+  const DEFAULT_BPS = 2_000_000;
+  if (typeof navigator === 'undefined') return DEFAULT_BPS;
+
+  const conn = (navigator as Navigator & { connection?: NetworkInfoLike })
+    .connection;
+  if (!conn) return DEFAULT_BPS;
+  if (conn.saveData) return 500_000;
+
+  if (typeof conn.downlink === 'number' && conn.downlink > 0) {
+    // downlink 是 Mbps，转 bps 后取 70% 避免高估
+    return Math.max(500_000, Math.round(conn.downlink * 1_000_000 * 0.7));
+  }
+
+  switch (conn.effectiveType) {
+    case 'slow-2g':
+      return 100_000;
+    case '2g':
+      return 200_000;
+    case '3g':
+      return 800_000;
+    default:
+      return DEFAULT_BPS;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // HLS 配置工厂
 // ---------------------------------------------------------------------------
 
@@ -85,6 +123,8 @@ export function createHlsConfig(overrides?: HlsConfigOverrides) {
     startFragPrefetch: true,
     progressive: true,
     testBandwidth: true,
+    // 根据网络环境设定初始带宽估算，避免从最低码率起播
+    abrEwmaDefaultEstimate: resolveInitialBandwidthEstimate(),
     ...overrides,
   };
 }

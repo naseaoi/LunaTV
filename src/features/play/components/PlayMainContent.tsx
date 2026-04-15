@@ -15,7 +15,7 @@ interface PlayMainContentProps {
   currentEpisodeIndex: number;
   isEpisodeSelectorCollapsed: boolean;
   setIsEpisodeSelectorCollapsed: (collapsed: boolean) => void;
-  artRef: RefObject<HTMLDivElement>;
+  artRef: RefObject<HTMLDivElement | null>;
   isVideoLoading: boolean;
   isPlaying: boolean;
   videoLoadingStage: 'initing' | 'sourceChanging';

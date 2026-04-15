@@ -1,5 +1,43 @@
 import { DoubanItem, DoubanResult } from './types';
 
+// ================================================================
+// 请求去重 + 短时缓存：避免切换筛选条件后重复请求相同数据
+// ================================================================
+
+type CachedRequest = { promise: Promise<DoubanResult>; timestamp: number };
+const requestDedupCache = new Map<string, CachedRequest>();
+const DEDUP_CACHE_TTL = 2 * 60 * 1000;
+
+function withRequestDedup(
+  key: string,
+  fn: () => Promise<DoubanResult>,
+): Promise<DoubanResult> {
+  const cached = requestDedupCache.get(key);
+  if (cached && Date.now() - cached.timestamp < DEDUP_CACHE_TTL) {
+    return cached.promise;
+  }
+
+  const promise = fn()
+    .then((result) => {
+      const entry = requestDedupCache.get(key);
+      if (entry?.promise === promise) entry.timestamp = Date.now();
+      return result;
+    })
+    .catch((err) => {
+      requestDedupCache.delete(key);
+      throw err;
+    });
+
+  requestDedupCache.set(key, { promise, timestamp: Date.now() });
+
+  if (requestDedupCache.size > 100) {
+    const firstKey = requestDedupCache.keys().next().value;
+    if (firstKey) requestDedupCache.delete(firstKey);
+  }
+
+  return promise;
+}
+
 interface DoubanCategoriesParams {
   kind: 'tv' | 'movie';
   category: string;
@@ -195,30 +233,33 @@ export async function fetchDoubanCategories(
 /**
  * 统一的豆瓣分类数据获取函数，根据代理设置选择使用服务端 API 或客户端代理获取
  */
-export async function getDoubanCategories(
+export function getDoubanCategories(
   params: DoubanCategoriesParams,
 ): Promise<DoubanResult> {
   const { kind, category, type, pageLimit = 20, pageStart = 0 } = params;
-  const { proxyType, proxyUrl } = getDoubanProxyConfig();
-  switch (proxyType) {
-    case 'cors-proxy-zwei':
-      return fetchDoubanCategories(params, 'https://ciao-cors.is-an.org/');
-    case 'cmliussss-cdn-tencent':
-      return fetchDoubanCategories(params, '', true, false);
-    case 'cmliussss-cdn-ali':
-      return fetchDoubanCategories(params, '', false, true);
-    case 'cors-anywhere':
-      return fetchDoubanCategories(params, 'https://cors-anywhere.com/');
-    case 'custom':
-      return fetchDoubanCategories(params, proxyUrl);
-    case 'direct':
-    default:
-      const response = await fetch(
-        `/api/douban/categories?kind=${kind}&category=${category}&type=${type}&limit=${pageLimit}&start=${pageStart}`,
-      );
-
-      return response.json();
-  }
+  const key = `cat:${kind}:${category}:${type}:${pageLimit}:${pageStart}`;
+  return withRequestDedup(key, async () => {
+    const { proxyType, proxyUrl } = getDoubanProxyConfig();
+    switch (proxyType) {
+      case 'cors-proxy-zwei':
+        return fetchDoubanCategories(params, 'https://ciao-cors.is-an.org/');
+      case 'cmliussss-cdn-tencent':
+        return fetchDoubanCategories(params, '', true, false);
+      case 'cmliussss-cdn-ali':
+        return fetchDoubanCategories(params, '', false, true);
+      case 'cors-anywhere':
+        return fetchDoubanCategories(params, 'https://cors-anywhere.com/');
+      case 'custom':
+        return fetchDoubanCategories(params, proxyUrl);
+      case 'direct':
+      default: {
+        const response = await fetch(
+          `/api/douban/categories?kind=${kind}&category=${category}&type=${type}&limit=${pageLimit}&start=${pageStart}`,
+        );
+        return response.json();
+      }
+    }
+  });
 }
 
 interface DoubanListParams {
@@ -228,30 +269,31 @@ interface DoubanListParams {
   pageStart?: number;
 }
 
-export async function getDoubanList(
-  params: DoubanListParams,
-): Promise<DoubanResult> {
+export function getDoubanList(params: DoubanListParams): Promise<DoubanResult> {
   const { tag, type, pageLimit = 20, pageStart = 0 } = params;
-  const { proxyType, proxyUrl } = getDoubanProxyConfig();
-  switch (proxyType) {
-    case 'cors-proxy-zwei':
-      return fetchDoubanList(params, 'https://ciao-cors.is-an.org/');
-    case 'cmliussss-cdn-tencent':
-      return fetchDoubanList(params, '', true, false);
-    case 'cmliussss-cdn-ali':
-      return fetchDoubanList(params, '', false, true);
-    case 'cors-anywhere':
-      return fetchDoubanList(params, 'https://cors-anywhere.com/');
-    case 'custom':
-      return fetchDoubanList(params, proxyUrl);
-    case 'direct':
-    default:
-      const response = await fetch(
-        `/api/douban?tag=${tag}&type=${type}&pageSize=${pageLimit}&pageStart=${pageStart}`,
-      );
-
-      return response.json();
-  }
+  const key = `list:${tag}:${type}:${pageLimit}:${pageStart}`;
+  return withRequestDedup(key, async () => {
+    const { proxyType, proxyUrl } = getDoubanProxyConfig();
+    switch (proxyType) {
+      case 'cors-proxy-zwei':
+        return fetchDoubanList(params, 'https://ciao-cors.is-an.org/');
+      case 'cmliussss-cdn-tencent':
+        return fetchDoubanList(params, '', true, false);
+      case 'cmliussss-cdn-ali':
+        return fetchDoubanList(params, '', false, true);
+      case 'cors-anywhere':
+        return fetchDoubanList(params, 'https://cors-anywhere.com/');
+      case 'custom':
+        return fetchDoubanList(params, proxyUrl);
+      case 'direct':
+      default: {
+        const response = await fetch(
+          `/api/douban?tag=${tag}&type=${type}&pageSize=${pageLimit}&pageStart=${pageStart}`,
+        );
+        return response.json();
+      }
+    }
+  });
 }
 
 export async function fetchDoubanList(
@@ -337,7 +379,7 @@ interface DoubanRecommendsParams {
   sort?: string;
 }
 
-export async function getDoubanRecommends(
+export function getDoubanRecommends(
   params: DoubanRecommendsParams,
 ): Promise<DoubanResult> {
   const {
@@ -352,26 +394,29 @@ export async function getDoubanRecommends(
     platform,
     sort,
   } = params;
-  const { proxyType, proxyUrl } = getDoubanProxyConfig();
-  switch (proxyType) {
-    case 'cors-proxy-zwei':
-      return fetchDoubanRecommends(params, 'https://ciao-cors.is-an.org/');
-    case 'cmliussss-cdn-tencent':
-      return fetchDoubanRecommends(params, '', true, false);
-    case 'cmliussss-cdn-ali':
-      return fetchDoubanRecommends(params, '', false, true);
-    case 'cors-anywhere':
-      return fetchDoubanRecommends(params, 'https://cors-anywhere.com/');
-    case 'custom':
-      return fetchDoubanRecommends(params, proxyUrl);
-    case 'direct':
-    default:
-      const response = await fetch(
-        `/api/douban/recommends?kind=${kind}&limit=${pageLimit}&start=${pageStart}&category=${category}&format=${format}&region=${region}&year=${year}&platform=${platform}&sort=${sort}&label=${label}`,
-      );
-
-      return response.json();
-  }
+  const key = `rec:${kind}:${pageStart}:${pageLimit}:${category}:${format}:${label}:${region}:${year}:${platform}:${sort}`;
+  return withRequestDedup(key, async () => {
+    const { proxyType, proxyUrl } = getDoubanProxyConfig();
+    switch (proxyType) {
+      case 'cors-proxy-zwei':
+        return fetchDoubanRecommends(params, 'https://ciao-cors.is-an.org/');
+      case 'cmliussss-cdn-tencent':
+        return fetchDoubanRecommends(params, '', true, false);
+      case 'cmliussss-cdn-ali':
+        return fetchDoubanRecommends(params, '', false, true);
+      case 'cors-anywhere':
+        return fetchDoubanRecommends(params, 'https://cors-anywhere.com/');
+      case 'custom':
+        return fetchDoubanRecommends(params, proxyUrl);
+      case 'direct':
+      default: {
+        const response = await fetch(
+          `/api/douban/recommends?kind=${kind}&limit=${pageLimit}&start=${pageStart}&category=${category}&format=${format}&region=${region}&year=${year}&platform=${platform}&sort=${sort}&label=${label}`,
+        );
+        return response.json();
+      }
+    }
+  });
 }
 
 async function fetchDoubanRecommends(

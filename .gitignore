@@ -44,7 +44,7 @@ sitemap-*.xml
 src/lib/runtime.ts
 public/manifest.json
 public/sw.js
-public/workbox-*.js
+public/sw.js.map
 
 # local data
 /data/

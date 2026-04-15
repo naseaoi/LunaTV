@@ -431,14 +431,6 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
       getFavoriteStatus,
     ]);
 
-    const aggregateSources = useMemo(
-      () =>
-        isAggregate && dynamicSourceNames
-          ? Array.from(new Set(dynamicSourceNames))
-          : undefined,
-      [dynamicSourceNames, isAggregate],
-    );
-
     const closeActionSheet = useCallback(() => {
       setShowMobileActions(false);
       setActionSheetAnchorRect(null);
@@ -526,8 +518,8 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
       return configs[from] || configs.search;
     }, [from, isAggregate, douban_id, rate]);
 
-    // 移动端操作菜单配置
-    const mobileActions = useMemo(() => {
+    // 菜单操作项按需构建：仅在用户触发菜单时计算，避免每个卡片实例挂载时的开销
+    const buildMobileActions = useCallback(() => {
       const actions = [];
 
       // 播放操作
@@ -680,8 +672,11 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
         {
           title: actualTitle,
           poster: actualPoster,
-          actions: mobileActions,
-          sources: aggregateSources,
+          actions: buildMobileActions(),
+          sources:
+            isAggregate && dynamicSourceNames
+              ? Array.from(new Set(dynamicSourceNames))
+              : undefined,
           isAggregate,
           sourceName: source_name,
           currentEpisode,
@@ -700,13 +695,13 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
       actualEpisodes,
       actualPoster,
       actualTitle,
-      aggregateSources,
+      buildMobileActions,
       closeActionSheet,
       currentEpisode,
+      dynamicSourceNames,
       hideActionSheet,
       interactionId,
       isAggregate,
-      mobileActions,
       origin,
       showActionSheet,
       showMobileActions,

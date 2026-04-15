@@ -23,6 +23,13 @@ type LoaderCallbacks = {
 export type ManagedVideoElement = HTMLVideoElement & {
   hls?: HlsType | null;
   __icetvHlsCleanup?: (() => void) | null;
+  /** 上次创建 HLS 实例时的去广告开关状态（用于判断切集时是否可复用） */
+  __icetvBlockAd?: boolean;
+  /** HLS 事件处理器引用，复用时先移除旧的再绑定新的 */
+  __icetvHlsHandlers?: {
+    onError: (...args: unknown[]) => void;
+    onFragLoaded: (...args: unknown[]) => void;
+  } | null;
 };
 
 let playerModulesPromise: Promise<PlayerModules> | null = null;
@@ -42,6 +49,16 @@ export async function getPlayerModules(): Promise<PlayerModules> {
   }));
 
   return playerModulesPromise;
+}
+
+/** 预热播放器模块：页面加载时调用，提前触发动态导入 */
+export function preloadPlayerModules(): void {
+  getPlayerModules();
+}
+
+/** 预取 m3u8 代理地址（与模块加载并行），填充服务端缓存 */
+export function prefetchM3U8(proxyUrl: string): void {
+  fetch(proxyUrl, { cache: 'no-store' }).catch(() => {});
 }
 
 export function getManagedVideo(video: HTMLVideoElement): ManagedVideoElement {

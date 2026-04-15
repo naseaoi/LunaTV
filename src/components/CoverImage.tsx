@@ -117,8 +117,8 @@ function buildBlurDataURL(color: string): string {
 const MAX_RETRIES = 2;
 /** 每次重试间隔 ms */
 const RETRY_DELAY = 1200;
-/** 进入视口前的小范围预加载距离，避免滑到边缘才开始请求 */
-const VIEWPORT_PRELOAD_MARGIN = '320px';
+/** 进入视口前的预加载距离，提前约一屏开始加载，滚动时封面无感衔接 */
+const VIEWPORT_PRELOAD_MARGIN = '600px';
 
 // ================================================================
 // CoverImage 组件

@@ -66,7 +66,7 @@ export function CapsuleSelector({
   options: SelectorOption[];
   activeValue: string | undefined;
   onChange: (value: string) => void;
-  containerRef: React.RefObject<HTMLDivElement>;
+  containerRef: React.RefObject<HTMLDivElement | null>;
   buttonRefs: React.MutableRefObject<(HTMLButtonElement | null)[]>;
   indicatorStyle: IndicatorStyle;
 }) {

@@ -85,7 +85,7 @@ describe('PlayMainContent', () => {
       currentEpisodeIndex: 0,
       isEpisodeSelectorCollapsed: false,
       setIsEpisodeSelectorCollapsed: jest.fn(),
-      artRef: { current: null } as RefObject<HTMLDivElement>,
+      artRef: { current: null } as RefObject<HTMLDivElement | null>,
       isVideoLoading: true,
       isPlaying: false,
       videoLoadingStage: 'sourceChanging' as const,

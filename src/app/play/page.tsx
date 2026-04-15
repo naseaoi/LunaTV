@@ -12,6 +12,7 @@ import {
 } from '@/lib/db.client';
 import {
   destroyManagedHls,
+  preloadPlayerModules,
   runManagedVideoCleanup,
 } from '@/lib/player-runtime';
 import { mergeSourceBundle } from '@/lib/source-bundle';
@@ -48,9 +49,10 @@ function PlayPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // 预热源站流量路由缓存
+  // 预热源站流量路由缓存 + 播放器模块
   useEffect(() => {
     preloadProxyModes();
+    preloadPlayerModules();
   }, []);
 
   // ---------------------------------------------------------------------------

@@ -8,6 +8,7 @@ import {
   destroyManagedHls,
   getManagedVideo,
   getPlayerModules,
+  prefetchM3U8,
   runManagedVideoCleanup,
 } from '@/lib/player-runtime';
 import {
@@ -148,6 +149,14 @@ export function useArtPlayer(params: UseArtPlayerParams) {
 
     const initPlayer = async () => {
       try {
+        // 预取 m3u8 清单（与模块加载并行），填充服务端缓存
+        const preSourceKey = detailRef.current?.source || '';
+        const preUseProxy = isServerProxy(preSourceKey);
+        const preM3u8Url = preUseProxy
+          ? `/api/proxy/m3u8?url=${encodeURIComponent(videoUrl)}`
+          : `/api/proxy/m3u8?url=${encodeURIComponent(videoUrl)}&allowCORS=true`;
+        prefetchM3U8(preM3u8Url);
+
         const { Artplayer, Hls } = await getPlayerModules();
         if (cancelled || !artRef.current) return;
 
@@ -205,17 +214,36 @@ export function useArtPlayer(params: UseArtPlayerParams) {
               const managedVideo = getManagedVideo(video);
 
               runManagedVideoCleanup(managedVideo);
-              destroyManagedHls(managedVideo);
-              const hls = new Hls({
-                ...createHlsConfig({
-                  maxBufferLength: 30,
-                  maxMaxBufferLength: 120,
-                  backBufferLength: 30,
-                }),
-                loader: blockAdEnabledRef.current
-                  ? (AdBlockingHlsLoader as unknown as typeof Hls.DefaultConfig.loader)
-                  : Hls.DefaultConfig.loader,
-              });
+
+              // 切集复用：loader 配置未变时跳过 HLS 销毁重建，直接切换源
+              const currentBlockAd = blockAdEnabledRef.current;
+              const existingHls = managedVideo.hls;
+              const canReuseHls =
+                !!existingHls && managedVideo.__icetvBlockAd === currentBlockAd;
+
+              let hls: any;
+              if (canReuseHls) {
+                hls = existingHls;
+                // 移除旧的 HLS 事件监听器，后续重新绑定新的
+                const oldHandlers = managedVideo.__icetvHlsHandlers;
+                if (oldHandlers) {
+                  hls.off(Hls.Events.ERROR, oldHandlers.onError);
+                  hls.off(Hls.Events.FRAG_LOADED, oldHandlers.onFragLoaded);
+                }
+              } else {
+                destroyManagedHls(managedVideo);
+                hls = new Hls({
+                  ...createHlsConfig({
+                    maxBufferLength: 30,
+                    maxMaxBufferLength: 120,
+                    backBufferLength: 30,
+                  }),
+                  loader: currentBlockAd
+                    ? (AdBlockingHlsLoader as unknown as typeof Hls.DefaultConfig.loader)
+                    : Hls.DefaultConfig.loader,
+                });
+              }
+              managedVideo.__icetvBlockAd = currentBlockAd;
 
               // 根据源站流量路由配置决定是否走服务端代理
               const sourceKey = detailRef.current?.source || '';
@@ -330,51 +358,6 @@ export function useArtPlayer(params: UseArtPlayerParams) {
               video.addEventListener('waiting', onWaiting);
               video.addEventListener('stalled', onStalled);
 
-              hls.on(Hls.Events.ERROR, function (_event: unknown, data: any) {
-                console.error('HLS Error:', _event, data);
-                if (data.fatal) {
-                  handleHlsFatalError(
-                    {
-                      startLoad: () => hls.startLoad(),
-                      recoverMediaError: () => hls.recoverMediaError(),
-                      destroy: () => {
-                        cleanupVideoRuntime();
-                        hls.destroy();
-                        if (managedVideo.hls === hls) {
-                          managedVideo.hls = null;
-                        }
-                      },
-                    },
-                    data.type,
-                    Hls.ErrorTypes,
-                  );
-                }
-              });
-
-              hls.on(Hls.Events.FRAG_LOADED, function (_: unknown, data: any) {
-                clearTimeout(speedFallbackTimer);
-                const stats = data.frag.stats;
-                const loadedBytes = stats.loaded ?? stats.total ?? 0;
-                const startTime = stats.loading.first ?? 0;
-                const endTime = stats.loading.end ?? 0;
-                const elapsedMs = endTime > startTime ? endTime - startTime : 0;
-                if (loadedBytes > 0 && elapsedMs > 0) {
-                  const bytesPerSecond = loadedBytes / (elapsedMs / 1000);
-                  const speedStr = formatBytesPerSecond(bytesPerSecond);
-                  setRealtimeLoadSpeed(speedStr);
-                  // 收集首分片速度用于回填 SourcesTab
-                  if (!firstFragSpeed) {
-                    firstFragSpeed = speedStr;
-                    firstFragPing = Math.round(
-                      performance.now() - fragLoadStart,
-                    );
-                    tryReportVideoInfo();
-                  }
-                } else if (loadedBytes > 0) {
-                  setRealtimeLoadSpeed('0 KB/s');
-                }
-              });
-
               // 首帧解码后收集分辨率，与首分片速度合并回填
               const tryReportVideoInfo = () => {
                 if (videoInfoReported || !firstFragSpeed) return;
@@ -399,10 +382,66 @@ export function useArtPlayer(params: UseArtPlayerParams) {
                   pingTime: firstFragPing,
                 });
               };
+
+              const onHlsError = function (_event: unknown, data: any) {
+                console.error('HLS Error:', _event, data);
+                if (data.fatal) {
+                  handleHlsFatalError(
+                    {
+                      startLoad: () => hls.startLoad(),
+                      recoverMediaError: () => hls.recoverMediaError(),
+                      destroy: () => {
+                        cleanupVideoRuntime();
+                        hls.destroy();
+                        if (managedVideo.hls === hls) {
+                          managedVideo.hls = null;
+                          managedVideo.__icetvHlsHandlers = null;
+                        }
+                      },
+                    },
+                    data.type,
+                    Hls.ErrorTypes,
+                  );
+                }
+              };
+              const onHlsFragLoaded = function (_: unknown, data: any) {
+                clearTimeout(speedFallbackTimer);
+                const stats = data.frag.stats;
+                const loadedBytes = stats.loaded ?? stats.total ?? 0;
+                const startTime = stats.loading.first ?? 0;
+                const endTime = stats.loading.end ?? 0;
+                const elapsedMs = endTime > startTime ? endTime - startTime : 0;
+                if (loadedBytes > 0 && elapsedMs > 0) {
+                  const bytesPerSecond = loadedBytes / (elapsedMs / 1000);
+                  const speedStr = formatBytesPerSecond(bytesPerSecond);
+                  setRealtimeLoadSpeed(speedStr);
+                  // 收集首分片速度用于回填 SourcesTab
+                  if (!firstFragSpeed) {
+                    firstFragSpeed = speedStr;
+                    firstFragPing = Math.round(
+                      performance.now() - fragLoadStart,
+                    );
+                    tryReportVideoInfo();
+                  }
+                } else if (loadedBytes > 0) {
+                  setRealtimeLoadSpeed('0 KB/s');
+                }
+              };
+
+              hls.on(Hls.Events.ERROR, onHlsError);
+              hls.on(Hls.Events.FRAG_LOADED, onHlsFragLoaded);
+              // 保存处理器引用，复用时移除
+              managedVideo.__icetvHlsHandlers = {
+                onError: onHlsError,
+                onFragLoaded: onHlsFragLoaded,
+              };
+
               video.addEventListener('loadeddata', tryReportVideoInfo);
 
               hls.loadSource(targetUrl);
-              hls.attachMedia(video);
+              if (!canReuseHls) {
+                hls.attachMedia(video);
+              }
               managedVideo.hls = hls;
               ensureVideoSource(video, targetUrl);
             },

@@ -10,6 +10,7 @@ import PageLayout from '@/components/PageLayout';
 import SearchResultFilter from '@/components/SearchResultFilter';
 import SearchSuggestions from '@/components/SearchSuggestions';
 import VideoCard from '@/components/VideoCard';
+import { useProgressiveRender } from '@/hooks/useProgressiveRender';
 
 import {
   useSearchExecution,
@@ -132,6 +133,16 @@ export default function SearchPageClient() {
     });
 
   const trimmedSearchQuery = useMemo(() => searchQuery.trim(), [searchQuery]);
+
+  // 渐进渲染：大量结果时分批上屏，避免一次性创建全部 DOM 节点
+  const { visibleItems: visibleAggResults } = useProgressiveRender(
+    filteredAggResults,
+    { initialCount: 30, step: 24 },
+  );
+  const { visibleItems: visibleAllResults } = useProgressiveRender(
+    filteredAllResults,
+    { initialCount: 30, step: 24 },
+  );
 
   // 初始化：搜索历史、滚动监听、流式搜索设置
   useEffect(() => {
@@ -375,7 +386,7 @@ export default function SearchPageClient() {
                   className='grid grid-cols-3 justify-start gap-x-2 gap-y-14 px-0 sm:grid-cols-[repeat(auto-fill,_minmax(11rem,_1fr))] sm:gap-x-8 sm:gap-y-20 sm:px-2'
                 >
                   {viewMode === 'agg'
-                    ? filteredAggResults.map((item) => {
+                    ? visibleAggResults.map((item) => {
                         return (
                           <div key={`agg-${item.mapKey}`} className='w-full'>
                             <VideoCard
@@ -399,7 +410,7 @@ export default function SearchPageClient() {
                           </div>
                         );
                       })
-                    : filteredAllResults.map((item) => (
+                    : visibleAllResults.map((item) => (
                         <div
                           key={`all-${item.source}-${item.id}`}
                           className='w-full'

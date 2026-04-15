@@ -158,6 +158,18 @@ export default function HomeClient({ initialData }: HomeClientProps) {
   }, [announcement]);
 
   useEffect(() => {
+    // ISR 已提供有效数据时跳过客户端重复请求，节省带宽和加载时间
+    const hasInitialData =
+      initialData.hotMovies.length > 0 ||
+      initialData.hotTvShows.length > 0 ||
+      initialData.hotVarietyShows.length > 0 ||
+      initialData.bangumiCalendarData.length > 0;
+
+    if (hasInitialData) {
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
 
     const refreshRecommendData = async () => {
