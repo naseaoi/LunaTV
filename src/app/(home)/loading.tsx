@@ -1,3 +1,5 @@
+import { cookies } from 'next/headers';
+
 import PageLayout from '@/components/PageLayout';
 
 function CapsuleSwitchSkeleton() {
@@ -23,13 +25,9 @@ function SkeletonCard({ withSubtitle = false }: { withSubtitle?: boolean }) {
       <div className='relative aspect-[2/3] w-full animate-pulse overflow-hidden rounded-lg bg-gray-200 dark:bg-gray-800'>
         <div className='absolute inset-0 bg-gray-300 dark:bg-gray-700' />
       </div>
-      {/* 播放进度条占位 */}
+      <div className='mx-auto mt-2 h-5 w-4/5 animate-pulse rounded bg-gray-200 dark:bg-gray-800' />
       {withSubtitle && (
-        <div className='mt-1 h-1 w-full animate-pulse rounded-full bg-gray-200 dark:bg-gray-800' />
-      )}
-      <div className='mt-2 h-5 animate-pulse rounded bg-gray-200 dark:bg-gray-800' />
-      {withSubtitle && (
-        <div className='mt-1 h-3 animate-pulse rounded bg-gray-200 dark:bg-gray-800' />
+        <div className='mx-auto mt-1 h-[22px] w-16 animate-pulse rounded bg-gray-200 dark:bg-gray-800' />
       )}
     </div>
   );
@@ -62,45 +60,53 @@ function SkeletonSectionHeader() {
   );
 }
 
-/** 首页骨架屏：仅用于导航到首页时的过渡占位 */
-export default function HomeLoading() {
+/** 首页骨架屏：读取 cw_count cookie 适配"继续观看"区域 */
+export default async function HomeLoading() {
+  const cookieStore = await cookies();
+  const cwCount = Math.min(
+    parseInt(cookieStore.get('cw_count')?.value || '0', 10) || 0,
+    8,
+  );
+
   return (
     <PageLayout>
       <div className='overflow-visible px-2 pb-2 pt-4 sm:px-10 sm:pt-8'>
         {/* CapsuleSwitch 骨架 */}
-        <div className='mb-8 flex justify-center'>
+        <div className='mb-4 flex justify-center'>
           <CapsuleSwitchSkeleton />
         </div>
 
         <div className='mx-auto max-w-[95%]'>
-          {/* 继续观看骨架（与首页默认 tab 内容结构对齐） */}
-          <section className='mb-8'>
-            <div className='mb-4 flex items-center justify-between'>
-              <div className='h-7 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-800' />
-              <div className='h-5 w-10 animate-pulse rounded bg-gray-200 dark:bg-gray-800' />
-            </div>
-            <SkeletonRow count={6} withSubtitle />
+          {/* 继续观看骨架：根据 cookie 中缓存的数量渲染，无记录则不渲染 */}
+          {cwCount > 0 && (
+            <section className='mb-4'>
+              <div className='mb-4 flex items-center justify-between'>
+                <div className='h-7 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-800' />
+                <div className='h-5 w-10 animate-pulse rounded bg-gray-200 dark:bg-gray-800' />
+              </div>
+              <SkeletonRow count={cwCount} withSubtitle />
+            </section>
+          )}
+
+          {/* 推荐区域骨架 */}
+          <section className='mb-4'>
+            <SkeletonSectionHeader />
+            <SkeletonRow count={12} />
           </section>
 
-          {/* 推荐区域骨架：数量/间距尽量与真实页面一致，避免加载完成后跳动 */}
-          <section className='mb-8'>
+          <section className='mb-4'>
             <SkeletonSectionHeader />
-            <SkeletonRow count={8} />
+            <SkeletonRow count={12} />
           </section>
 
-          <section className='mb-8'>
+          <section className='mb-4'>
             <SkeletonSectionHeader />
-            <SkeletonRow count={8} />
+            <SkeletonRow count={12} />
           </section>
 
-          <section className='mb-8'>
+          <section className='mb-4'>
             <SkeletonSectionHeader />
-            <SkeletonRow count={8} />
-          </section>
-
-          <section className='mb-8'>
-            <SkeletonSectionHeader />
-            <SkeletonRow count={8} />
+            <SkeletonRow count={12} />
           </section>
         </div>
       </div>

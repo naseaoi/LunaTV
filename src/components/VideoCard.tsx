@@ -250,12 +250,24 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
         if (from === 'douban' || !actualSource || !actualId) return;
 
         try {
-          // 确定当前收藏状态
           const currentFavorited =
             from === 'search' ? searchFavorited : favorited;
 
           if (currentFavorited) {
-            // 如果已收藏，删除收藏
+            // 收藏页取消收藏需要二次确认
+            if (from === 'favorite') {
+              showConfirm(interactionId, {
+                title: '确认取消收藏？',
+                message: `确认取消收藏「${actualTitle}」吗？`,
+                danger: true,
+                cancelText: '再想想',
+                confirmText: '取消收藏',
+                onConfirm: async () => {
+                  await deleteFavorite(actualSource, actualId);
+                },
+              });
+              return;
+            }
             await deleteFavorite(actualSource, actualId);
             if (from === 'search') {
               setSearchFavorited(false);
@@ -289,6 +301,8 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
         actualEpisodes,
         favorited,
         searchFavorited,
+        showConfirm,
+        interactionId,
       ],
     );
 
@@ -486,7 +500,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
         },
         favorite: {
           showSourceName: true,
-          showProgress: false,
+          showProgress: true,
           showPlayButton: true,
           showHeart: true,
           showCheckCircle: false,
@@ -1013,27 +1027,27 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
                   </div>
                 );
               })()}
-          </div>
 
-          {/* 进度条 */}
-          {config.showProgress && progress !== undefined && (
-            <div
-              className='mt-1 h-1 w-full overflow-hidden rounded-full bg-gray-200'
-              style={noSelectStyle}
-              onContextMenu={preventContextMenu}
-            >
+            {/* 进度条：覆盖在封面底部 */}
+            {config.showProgress && progress !== undefined && progress > 0 && (
               <div
-                className='h-full bg-green-500 transition-all duration-500 ease-out'
-                style={
-                  {
-                    width: `${progress}%`,
-                    ...noSelectStyle,
-                  } as React.CSSProperties
-                }
+                className='absolute bottom-0 left-0 right-0 h-1 bg-black/30'
+                style={noSelectStyle}
                 onContextMenu={preventContextMenu}
-              />
-            </div>
-          )}
+              >
+                <div
+                  className='h-full bg-green-500 transition-all duration-500 ease-out'
+                  style={
+                    {
+                      width: `${progress}%`,
+                      ...noSelectStyle,
+                    } as React.CSSProperties
+                  }
+                  onContextMenu={preventContextMenu}
+                />
+              </div>
+            )}
+          </div>
 
           {/* 标题与来源 */}
           <div

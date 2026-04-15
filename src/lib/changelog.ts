@@ -11,6 +11,42 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '0.3.1',
+    date: '2026-04-15',
+    added: [
+      // 无新增内容
+    ],
+    changed: [
+      '优化首页与收藏页切换动效、卡片布局和进度展示',
+      '优化继续观看与首页骨架屏，按缓存数量渲染减少跳动',
+      '开发环境自动注销残留 Service Worker，避免缓存干扰调试',
+    ],
+    fixed: [
+      '修复播放页加载态高度和首页内容区布局异常',
+      '修复收藏页取消收藏缺少二次确认的问题',
+    ],
+  },
+  {
+    version: '0.3.0',
+    date: '2026-04-15',
+    added: [
+      // 无新增内容
+    ],
+    changed: [
+      '升级 React 18 至 React 19，修复 RefObject 类型适配',
+      '迁移 PWA 方案从 next-pwa 至 @serwist/next，保留原有缓存策略',
+      '优化封面预加载距离，从 320px 扩大至 600px 减少滚动白屏',
+      '优化搜索结果页渐进渲染，大量结果分批上屏',
+      '优化首页跳过 ISR 数据有效时的重复客户端请求',
+      '优化豆瓣数据请求增加去重缓存，2 分钟内相同参数复用结果',
+      '优化 VideoCard 菜单数据改为按需构建，减少列表页挂载开销',
+      '优化 Inter 字体限定常用 weight 范围减小加载体积',
+    ],
+    fixed: [
+      // 无修复内容
+    ],
+  },
+  {
     version: '0.2.9',
     date: '2026-04-15',
     added: [

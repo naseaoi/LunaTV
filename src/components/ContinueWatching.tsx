@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 
 import { History } from 'lucide-react';
 
@@ -16,6 +16,10 @@ import ScrollableRow from '@/components/ScrollableRow';
 import VideoCard from '@/components/VideoCard';
 import ConfirmModal from '@/components/modals/ConfirmModal';
 
+// 客户端用 useLayoutEffect（绘制前同步执行），SSR 用 useEffect（避免警告）
+const useIsomorphicLayoutEffect =
+  typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+
 interface ContinueWatchingProps {
   className?: string;
 }
@@ -24,33 +28,54 @@ export default function ContinueWatching({ className }: ContinueWatchingProps) {
   const [playRecords, setPlayRecords] = useState<
     (PlayRecord & { key: string })[]
   >([]);
-  // 未认证用户不显示骨架屏，直接标记为加载完成
-  const isAuthenticated =
-    typeof window !== 'undefined' && !!getAuthInfoFromBrowserCookie()?.username;
-  const [loading, setLoading] = useState(isAuthenticated);
+  const [loading, setLoading] = useState(false);
+  const [skeletonCount, setSkeletonCount] = useState(0);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   // 处理播放记录数据更新的函数
   const updatePlayRecords = (allRecords: Record<string, PlayRecord>) => {
-    // 将记录转换为数组并根据 save_time 由近到远排序
     const recordsArray = Object.entries(allRecords).map(([key, record]) => ({
       ...record,
       key,
     }));
 
-    // 按 save_time 降序排序（最新的在前面）
     const sortedRecords = recordsArray.sort(
       (a, b) => b.save_time - a.save_time,
     );
 
     setPlayRecords(sortedRecords);
+    // 缓存数量到 localStorage（客户端骨架）+ cookie（服务端骨架）
+    const count = String(sortedRecords.length);
+    try {
+      localStorage.setItem('continueWatchingCount', count);
+    } catch {
+      // localStorage 不可用时静默忽略
+    }
+    document.cookie = `cw_count=${count};path=/;max-age=${365 * 24 * 60 * 60};samesite=lax`;
   };
 
+  // 绘制前同步读取缓存，立即决定是否显示骨架，避免空白帧闪烁
+  useIsomorphicLayoutEffect(() => {
+    const isAuthenticated = !!getAuthInfoFromBrowserCookie()?.username;
+    if (!isAuthenticated) return;
+
+    const cached = parseInt(
+      localStorage.getItem('continueWatchingCount') || '0',
+      10,
+    );
+    if (cached > 0) {
+      setSkeletonCount(Math.min(cached, 8));
+      setLoading(true);
+    }
+  }, []);
+
+  // 异步加载播放记录数据
   useEffect(() => {
+    const isAuthenticated = !!getAuthInfoFromBrowserCookie()?.username;
+    if (!isAuthenticated) return;
+
     const fetchPlayRecords = async () => {
       try {
-        setLoading(true);
-
         // 从缓存或API获取所有播放记录
         const allRecords = await getAllPlayRecords();
         updatePlayRecords(allRecords);
@@ -94,7 +119,7 @@ export default function ContinueWatching({ className }: ContinueWatchingProps) {
 
   return (
     <>
-      <section className={`mb-8 ${className || ''}`}>
+      <section className={`mb-4 ${className || ''}`}>
         <div className='mb-4 flex items-center justify-between'>
           <h2 className='flex items-center gap-2 text-xl font-bold text-gray-800 dark:text-gray-200'>
             <History className='h-5 w-5 text-orange-500' />
@@ -111,8 +136,8 @@ export default function ContinueWatching({ className }: ContinueWatchingProps) {
         </div>
         <ScrollableRow>
           {loading
-            ? // 加载状态显示灰色占位数据
-              Array.from({ length: 6 }).map((_, index) => (
+            ? // 按缓存数量显示骨架占位，避免与加载后的布局不匹配
+              Array.from({ length: skeletonCount }).map((_, index) => (
                 <div
                   key={index}
                   className='w-24 min-w-[96px] sm:w-44 sm:min-w-[180px]'
@@ -120,9 +145,8 @@ export default function ContinueWatching({ className }: ContinueWatchingProps) {
                   <div className='relative aspect-[2/3] w-full animate-pulse overflow-hidden rounded-lg bg-gray-200 dark:bg-gray-800'>
                     <div className='absolute inset-0 bg-gray-300 dark:bg-gray-700'></div>
                   </div>
-                  <div className='mt-1 h-1 w-full animate-pulse rounded-full bg-gray-200 dark:bg-gray-800'></div>
-                  <div className='mt-2 h-5 animate-pulse rounded bg-gray-200 dark:bg-gray-800'></div>
-                  <div className='mt-1 h-3 animate-pulse rounded bg-gray-200 dark:bg-gray-800'></div>
+                  <div className='mx-auto mt-2 h-5 w-4/5 animate-pulse rounded bg-gray-200 dark:bg-gray-800'></div>
+                  <div className='mx-auto mt-1 h-[22px] w-16 animate-pulse rounded bg-gray-200 dark:bg-gray-800'></div>
                 </div>
               ))
             : // 显示真实数据
@@ -171,6 +195,10 @@ export default function ContinueWatching({ className }: ContinueWatchingProps) {
           await clearAllPlayRecords();
           setPlayRecords([]);
           setShowClearConfirm(false);
+          try {
+            localStorage.setItem('continueWatchingCount', '0');
+          } catch {}
+          document.cookie = 'cw_count=0;path=/;max-age=0;samesite=lax';
         }}
       />
     </>

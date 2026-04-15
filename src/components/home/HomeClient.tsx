@@ -45,6 +45,7 @@ type FavoriteItem = {
   episodes: number;
   source_name: string;
   currentEpisode?: number;
+  progress?: number;
   search_title?: string;
   origin?: 'vod' | 'live';
 };
@@ -82,7 +83,7 @@ function RecommendationSection({
   priorityCount?: number;
 }) {
   return (
-    <section className='mb-8'>
+    <section className='mb-4'>
       <div className='mb-4 flex items-center justify-between'>
         <h2 className='flex items-center gap-2 text-xl font-bold text-gray-800 dark:text-gray-200'>
           <Icon className={iconClassName} />
@@ -124,6 +125,16 @@ function RecommendationSection({
 
 export default function HomeClient({ initialData }: HomeClientProps) {
   const [activeTab, setActiveTab] = useState<'home' | 'favorites'>('home');
+  // 滑入方向：切到收藏时从右侧进入，切回首页时从左侧进入
+  const [slideKey, setSlideKey] = useState(0);
+  const [slideFrom, setSlideFrom] = useState<'left' | 'right' | null>(null);
+  const handleTabChange = (value: string) => {
+    const newTab = value as 'home' | 'favorites';
+    if (newTab === activeTab) return;
+    setSlideFrom(newTab === 'favorites' ? 'right' : 'left');
+    setSlideKey((k) => k + 1);
+    setActiveTab(newTab);
+  };
   const [hotMovies, setHotMovies] = useState(initialData.hotMovies);
   const [hotTvShows, setHotTvShows] = useState(initialData.hotTvShows);
   const [hotVarietyShows, setHotVarietyShows] = useState(
@@ -237,6 +248,10 @@ export default function HomeClient({ initialData }: HomeClientProps) {
           episodes: fav.total_episodes,
           source_name: fav.source_name,
           currentEpisode: playRecord?.index,
+          progress:
+            playRecord?.total_time > 0
+              ? (playRecord.play_time / playRecord.total_time) * 100
+              : 0,
           search_title: fav?.search_title,
           origin: fav?.origin,
         } as FavoriteItem;
@@ -294,96 +309,110 @@ export default function HomeClient({ initialData }: HomeClientProps) {
   return (
     <PageLayout>
       <div className='overflow-visible px-2 pb-2 pt-4 sm:px-10 sm:pt-8'>
-        <div className='mb-8 flex justify-center'>
+        <div className='mb-4 flex justify-center'>
           <CapsuleSwitch
             options={[
               { label: '首页', value: 'home', icon: HomeIcon },
               { label: '收藏', value: 'favorites', icon: Star },
             ]}
             active={activeTab}
-            onChange={(value) => setActiveTab(value as 'home' | 'favorites')}
+            onChange={handleTabChange}
           />
         </div>
 
         <div className='mx-auto max-w-[95%]'>
-          {activeTab === 'favorites' ? (
-            <section className='mb-8'>
-              <div className='mb-4 flex items-center justify-between'>
-                <h2 className='flex items-center gap-2 text-xl font-bold text-gray-800 dark:text-gray-200'>
-                  <Star className='h-5 w-5 text-amber-500' />
-                  我的收藏
-                </h2>
-                {favoriteItems.length > 0 && (
-                  <button
-                    className='text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
-                    onClick={() => setShowClearFavConfirm(true)}
-                  >
-                    清空
-                  </button>
-                )}
+          <div
+            key={slideKey}
+            className={
+              slideFrom === 'right'
+                ? 'animate-[slide-in-right_250ms_ease-out]'
+                : slideFrom === 'left'
+                  ? 'animate-[slide-in-left_250ms_ease-out]'
+                  : ''
+            }
+          >
+            {activeTab === 'favorites' ? (
+              <section className='mb-4'>
+                <div className='mb-4 flex items-center justify-between'>
+                  <h2 className='flex items-center gap-2 text-xl font-bold text-gray-800 dark:text-gray-200'>
+                    <Star className='h-5 w-5 text-amber-500' />
+                    我的收藏
+                  </h2>
+                  {favoriteItems.length > 0 && (
+                    <button
+                      className='text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                      onClick={() => setShowClearFavConfirm(true)}
+                    >
+                      清空
+                    </button>
+                  )}
+                </div>
+                <div className='grid grid-cols-3 justify-start gap-x-2 gap-y-14 px-0 sm:grid-cols-[repeat(auto-fill,_180px)] sm:gap-x-6 sm:gap-y-20 sm:px-2'>
+                  {favoriteItems.map((item) => (
+                    <div
+                      key={item.id + item.source}
+                      className='w-24 sm:w-[180px]'
+                    >
+                      <VideoCard
+                        query={item.search_title}
+                        {...item}
+                        from='favorite'
+                        type={item.episodes > 1 ? 'tv' : ''}
+                      />
+                    </div>
+                  ))}
+                  {favoriteItems.length === 0 && (
+                    <div className='col-span-full py-8 text-center text-gray-500 dark:text-gray-400'>
+                      暂无收藏内容
+                    </div>
+                  )}
+                </div>
+              </section>
+            ) : (
+              <div className='-mb-8 sm:-mb-10'>
+                <ContinueWatching />
+
+                <RecommendationSection
+                  title='热门电影'
+                  href='/douban?type=movie'
+                  icon={Film}
+                  iconClassName='h-5 w-5 text-blue-500'
+                  items={hotMovies}
+                  loading={loading && hotMovies.length === 0}
+                  type='movie'
+                  priorityCount={4}
+                />
+
+                <RecommendationSection
+                  title='热门剧集'
+                  href='/douban?type=tv'
+                  icon={Tv}
+                  iconClassName='h-5 w-5 text-emerald-500'
+                  items={hotTvShows}
+                  loading={loading && hotTvShows.length === 0}
+                />
+
+                <RecommendationSection
+                  title='新番放送'
+                  href='/douban?type=anime'
+                  icon={Cat}
+                  iconClassName='h-5 w-5 text-pink-500'
+                  items={todayAnimes}
+                  loading={loading && todayAnimes.length === 0}
+                  isBangumi={true}
+                />
+
+                <RecommendationSection
+                  title='热门综艺'
+                  href='/douban?type=show'
+                  icon={Clover}
+                  iconClassName='h-5 w-5 text-violet-500'
+                  items={hotVarietyShows}
+                  loading={loading && hotVarietyShows.length === 0}
+                />
               </div>
-              <div className='grid grid-cols-3 justify-start gap-x-2 gap-y-14 px-0 sm:grid-cols-[repeat(auto-fill,_minmax(11rem,_1fr))] sm:gap-x-8 sm:gap-y-20 sm:px-2'>
-                {favoriteItems.map((item) => (
-                  <div key={item.id + item.source} className='w-full'>
-                    <VideoCard
-                      query={item.search_title}
-                      {...item}
-                      from='favorite'
-                      type={item.episodes > 1 ? 'tv' : ''}
-                    />
-                  </div>
-                ))}
-                {favoriteItems.length === 0 && (
-                  <div className='col-span-full py-8 text-center text-gray-500 dark:text-gray-400'>
-                    暂无收藏内容
-                  </div>
-                )}
-              </div>
-            </section>
-          ) : (
-            <>
-              <ContinueWatching />
-
-              <RecommendationSection
-                title='热门电影'
-                href='/douban?type=movie'
-                icon={Film}
-                iconClassName='h-5 w-5 text-blue-500'
-                items={hotMovies}
-                loading={loading && hotMovies.length === 0}
-                type='movie'
-                priorityCount={4}
-              />
-
-              <RecommendationSection
-                title='热门剧集'
-                href='/douban?type=tv'
-                icon={Tv}
-                iconClassName='h-5 w-5 text-emerald-500'
-                items={hotTvShows}
-                loading={loading && hotTvShows.length === 0}
-              />
-
-              <RecommendationSection
-                title='新番放送'
-                href='/douban?type=anime'
-                icon={Cat}
-                iconClassName='h-5 w-5 text-pink-500'
-                items={todayAnimes}
-                loading={loading && todayAnimes.length === 0}
-                isBangumi={true}
-              />
-
-              <RecommendationSection
-                title='热门综艺'
-                href='/douban?type=show'
-                icon={Clover}
-                iconClassName='h-5 w-5 text-violet-500'
-                items={hotVarietyShows}
-                loading={loading && hotVarietyShows.length === 0}
-              />
-            </>
-          )}
+            )}
+          </div>
         </div>
       </div>
 

@@ -195,6 +195,28 @@ div[data-media-provider] video {
   }
 }
 
+/* 首页 Tab 切换滑入动画 */
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+@keyframes slide-in-right {
+  from {
+    transform: translateX(30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
 /* 播放页顶部流光呼吸动画 */
 @keyframes aurora-breathe {
   0% {

@@ -115,7 +115,7 @@ export function PlayLoadingView({
 
   return (
     <PageLayout activePath='/play'>
-      <div className='fixed inset-0 z-40 flex items-center justify-center overflow-hidden bg-white dark:bg-gray-950'>
+      <div className='flex h-[calc(100dvh-3rem-3.5rem-env(safe-area-inset-bottom))] items-center justify-center md:h-full'>
         <div className='flex w-full max-w-2xl flex-col items-center gap-4 px-4'>
           <LoadingStatePanel
             icon={getLoadingStageIcon(loadingStage)}
