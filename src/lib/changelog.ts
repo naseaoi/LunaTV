@@ -11,6 +11,20 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '0.2.9',
+    date: '2026-04-15',
+    added: [
+      // 无新增内容
+    ],
+    changed: ['优化封面图片加载策略，引入并发调度、内存缓存与跨实例同步'],
+    fixed: [
+      '修复瀑布流加载新卡片时全局抖动',
+      '修复侧栏图标刷新时左右抖动',
+      '修复首页骨架屏与加载后页面尺寸不一致',
+      '修复换源页面出现重复giri源站的问题',
+    ],
+  },
+  {
     version: '0.2.8',
     date: '2026-04-14',
     added: [

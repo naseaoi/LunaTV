@@ -55,7 +55,7 @@ function RecommendationSkeletonRow() {
       <div className='relative aspect-[2/3] w-full animate-pulse overflow-hidden rounded-lg bg-gray-200 dark:bg-gray-800'>
         <div className='absolute inset-0 bg-gray-300 dark:bg-gray-700'></div>
       </div>
-      <div className='mt-2 h-4 animate-pulse rounded bg-gray-200 dark:bg-gray-800'></div>
+      <div className='mt-2 h-5 animate-pulse rounded bg-gray-200 dark:bg-gray-800'></div>
     </div>
   ));
 }
@@ -69,6 +69,7 @@ function RecommendationSection({
   loading,
   type,
   isBangumi = false,
+  priorityCount = 0,
 }: {
   title: string;
   href: string;
@@ -78,6 +79,7 @@ function RecommendationSection({
   loading: boolean;
   type?: string;
   isBangumi?: boolean;
+  priorityCount?: number;
 }) {
   return (
     <section className='mb-8'>
@@ -97,7 +99,7 @@ function RecommendationSection({
       <ScrollableRow>
         {loading
           ? RecommendationSkeletonRow()
-          : items.map((item) => (
+          : items.map((item, index) => (
               <div
                 key={item.id}
                 className='w-24 min-w-[96px] sm:w-44 sm:min-w-[180px]'
@@ -111,6 +113,7 @@ function RecommendationSection({
                   year={item.year}
                   type={type}
                   isBangumi={isBangumi}
+                  priority={index < priorityCount}
                 />
               </div>
             ))}
@@ -337,6 +340,7 @@ export default function HomeClient({ initialData }: HomeClientProps) {
                 items={hotMovies}
                 loading={loading && hotMovies.length === 0}
                 type='movie'
+                priorityCount={4}
               />
 
               <RecommendationSection

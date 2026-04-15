@@ -115,6 +115,16 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
     }
   }, [isCollapsed]);
 
+  // 首次挂载后启用过渡动画，避免 SSR→客户端折叠状态差异导致闪烁
+  useLayoutEffect(() => {
+    requestAnimationFrame(() => {
+      document.querySelector('[data-sidebar]')?.setAttribute('data-ready', '');
+      document
+        .querySelector('[data-sidebar-offset]')
+        ?.setAttribute('data-ready', '');
+    });
+  }, []);
+
   const [active, setActive] = useState(activePath);
 
   useEffect(() => {
@@ -281,6 +291,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
             <div className='flex items-center px-2 pb-4 pt-6'>
               <Link
                 href='/'
+                data-brand-link
                 className={`flex min-h-[40px] w-full select-none items-center justify-start overflow-hidden rounded-lg py-2 transition-[padding,gap] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] hover:opacity-90 ${
                   isCollapsed ? 'gap-0 px-[2px]' : 'gap-3 px-2'
                 }`}
@@ -289,6 +300,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
                   <SiteIcon />
                 </div>
                 <span
+                  data-sidebar-label
                   className={`overflow-hidden whitespace-nowrap text-lg font-bold tracking-tight text-gray-800 transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] dark:text-gray-100 ${
                     isCollapsed
                       ? 'max-w-0 opacity-0'
@@ -316,6 +328,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
                   <Home className='h-4 w-4 text-gray-500 group-hover:text-green-600 data-[active=true]:text-green-700 dark:text-gray-400 dark:group-hover:text-green-400 dark:data-[active=true]:text-green-400' />
                 </div>
                 <span
+                  data-sidebar-label
                   className={`overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
                     isCollapsed
                       ? 'max-w-0 opacity-0'
@@ -346,6 +359,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
                   <Search className='h-4 w-4 text-gray-500 group-hover:text-green-600 data-[active=true]:text-green-700 dark:text-gray-400 dark:group-hover:text-green-400 dark:data-[active=true]:text-green-400' />
                 </div>
                 <span
+                  data-sidebar-label
                   className={`overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
                     isCollapsed
                       ? 'max-w-0 opacity-0'
@@ -388,6 +402,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
                         <Icon className='h-4 w-4 text-gray-500 group-hover:text-green-600 data-[active=true]:text-green-700 dark:text-gray-400 dark:group-hover:text-green-400 dark:data-[active=true]:text-green-400' />
                       </div>
                       <span
+                        data-sidebar-label
                         className={`overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
                           isCollapsed
                             ? 'max-w-0 opacity-0'
@@ -417,6 +432,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
                     <Menu className='h-4 w-4' />
                   </div>
                   <span
+                    data-sidebar-label
                     className={`overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
                       isCollapsed
                         ? 'max-w-0 opacity-0'
@@ -431,6 +447,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
           </div>
         </aside>
         <div
+          data-sidebar-offset
           className={`sidebar-offset transition-[width] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] ${
             isCollapsed ? 'w-16' : 'w-64'
           }`}

@@ -15,13 +15,89 @@ interface QueueItem {
   granted: boolean;
 }
 
+type NetworkInformationLike = {
+  saveData?: boolean;
+  effectiveType?: string;
+  downlink?: number;
+  addEventListener?: (type: 'change', listener: () => void) => void;
+};
+
+function getNetworkInformation(): NetworkInformationLike | undefined {
+  if (typeof navigator === 'undefined') {
+    return undefined;
+  }
+
+  return (navigator as Navigator & { connection?: NetworkInformationLike })
+    .connection;
+}
+
+function resolveAdaptiveConcurrency(defaultConcurrent: number): number {
+  const connection = getNetworkInformation();
+  if (!connection) {
+    return defaultConcurrent;
+  }
+
+  if (connection.saveData) {
+    return 3;
+  }
+
+  switch (connection.effectiveType) {
+    case 'slow-2g':
+      return 2;
+    case '2g':
+      return 3;
+    case '3g':
+      return 5;
+    default:
+      break;
+  }
+
+  const downlink = connection.downlink ?? 0;
+  if (downlink >= 10) {
+    return 12;
+  }
+  if (downlink >= 5) {
+    return 10;
+  }
+  if (downlink >= 2) {
+    return 8;
+  }
+
+  return defaultConcurrent;
+}
+
 class ImageScheduler {
-  private readonly maxConcurrent: number;
+  private readonly defaultConcurrent: number;
+  private maxConcurrent: number;
   private active = 0;
   private queue: QueueItem[] = [];
 
   constructor(maxConcurrent = 6) {
+    this.defaultConcurrent = maxConcurrent;
     this.maxConcurrent = maxConcurrent;
+    this.bindNetworkAwareness();
+  }
+
+  private bindNetworkAwareness() {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const syncConcurrency = () => {
+      const nextConcurrency = resolveAdaptiveConcurrency(
+        this.defaultConcurrent,
+      );
+      if (nextConcurrency === this.maxConcurrent) {
+        return;
+      }
+
+      this.maxConcurrent = nextConcurrency;
+      this.drain();
+    };
+
+    syncConcurrency();
+    getNetworkInformation()?.addEventListener?.('change', syncConcurrency);
+    window.addEventListener('online', syncConcurrency);
   }
 
   /**
@@ -67,5 +143,5 @@ class ImageScheduler {
   }
 }
 
-/** 全局单例，限制同时 6 张图片加载 */
+/** 全局单例，默认 6 并发，并按网络环境自适应调整 */
 export const imageScheduler = new ImageScheduler(6);

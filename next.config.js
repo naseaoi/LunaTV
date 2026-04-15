@@ -31,6 +31,52 @@ try {
   // Ignore and keep fallback version.
 }
 
+const runtimeCaching = [
+  {
+    urlPattern: /^https?:\/\/[^/]+\/_next\/image\?url=.+$/i,
+    handler: 'StaleWhileRevalidate',
+    options: {
+      cacheName: 'next-image-cache',
+      cacheableResponse: {
+        statuses: [0, 200],
+      },
+      expiration: {
+        maxEntries: 256,
+        maxAgeSeconds: 30 * 24 * 60 * 60,
+      },
+    },
+  },
+  {
+    urlPattern: /^https?:\/\/[^/]+\/api\/image-proxy\?url=.+$/i,
+    handler: 'CacheFirst',
+    options: {
+      cacheName: 'cover-proxy-cache',
+      cacheableResponse: {
+        statuses: [0, 200],
+      },
+      expiration: {
+        maxEntries: 256,
+        maxAgeSeconds: 30 * 24 * 60 * 60,
+      },
+    },
+  },
+  {
+    urlPattern:
+      /^https:\/\/(img\d+\.doubanio\.com|img3\.doubanio\.com|img\.doubanio\.cmliussss\.(net|com))\/.+$/i,
+    handler: 'StaleWhileRevalidate',
+    options: {
+      cacheName: 'external-cover-cache',
+      cacheableResponse: {
+        statuses: [0, 200],
+      },
+      expiration: {
+        maxEntries: 256,
+        maxAgeSeconds: 14 * 24 * 60 * 60,
+      },
+    },
+  },
+];
+
 const nextConfig = {
   output: 'standalone',
   reactStrictMode: false,
@@ -107,6 +153,7 @@ const withPWA = require('next-pwa')({
   disable: process.env.NODE_ENV === 'development',
   register: true,
   skipWaiting: true,
+  runtimeCaching,
 });
 
 module.exports = withPWA(nextConfig);

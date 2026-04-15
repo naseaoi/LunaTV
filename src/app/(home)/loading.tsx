@@ -3,7 +3,7 @@ import PageLayout from '@/components/PageLayout';
 function CapsuleSwitchSkeleton() {
   return (
     <div className='relative flex items-end'>
-      <div className='absolute bottom-0 left-0 right-0 h-px bg-gray-200/90 dark:bg-gray-700/80' />
+      <div className='absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-gray-300/60 to-transparent dark:via-white/20' />
 
       {Array.from({ length: 2 }).map((_, index) => (
         <div key={index} className='relative px-6 py-3'>
@@ -23,7 +23,11 @@ function SkeletonCard({ withSubtitle = false }: { withSubtitle?: boolean }) {
       <div className='relative aspect-[2/3] w-full animate-pulse overflow-hidden rounded-lg bg-gray-200 dark:bg-gray-800'>
         <div className='absolute inset-0 bg-gray-300 dark:bg-gray-700' />
       </div>
-      <div className='mt-2 h-4 animate-pulse rounded bg-gray-200 dark:bg-gray-800' />
+      {/* 播放进度条占位 */}
+      {withSubtitle && (
+        <div className='mt-1 h-1 w-full animate-pulse rounded-full bg-gray-200 dark:bg-gray-800' />
+      )}
+      <div className='mt-2 h-5 animate-pulse rounded bg-gray-200 dark:bg-gray-800' />
       {withSubtitle && (
         <div className='mt-1 h-3 animate-pulse rounded bg-gray-200 dark:bg-gray-800' />
       )}
@@ -52,8 +56,8 @@ function SkeletonRow({
 function SkeletonSectionHeader() {
   return (
     <div className='mb-4 flex items-center justify-between'>
-      <div className='h-6 w-28 animate-pulse rounded bg-gray-200 dark:bg-gray-800' />
-      <div className='h-4 w-16 animate-pulse rounded bg-gray-200 dark:bg-gray-800' />
+      <div className='h-7 w-28 animate-pulse rounded bg-gray-200 dark:bg-gray-800' />
+      <div className='h-5 w-16 animate-pulse rounded bg-gray-200 dark:bg-gray-800' />
     </div>
   );
 }
@@ -72,8 +76,8 @@ export default function HomeLoading() {
           {/* 继续观看骨架（与首页默认 tab 内容结构对齐） */}
           <section className='mb-8'>
             <div className='mb-4 flex items-center justify-between'>
-              <div className='h-6 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-800' />
-              <div className='h-4 w-10 animate-pulse rounded bg-gray-200 dark:bg-gray-800' />
+              <div className='h-7 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-800' />
+              <div className='h-5 w-10 animate-pulse rounded bg-gray-200 dark:bg-gray-800' />
             </div>
             <SkeletonRow count={6} withSubtitle />
           </section>

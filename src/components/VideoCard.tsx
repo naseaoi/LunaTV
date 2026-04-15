@@ -53,6 +53,7 @@ export interface VideoCardProps {
   title?: string;
   query?: string;
   poster?: string;
+  priority?: boolean;
   episodes?: number;
   source_name?: string;
   source_names?: string[];
@@ -130,6 +131,7 @@ function areVideoCardPropsEqual(
     prev.title === next.title &&
     prev.query === next.query &&
     prev.poster === next.poster &&
+    prev.priority === next.priority &&
     prev.episodes === next.episodes &&
     prev.source_name === next.source_name &&
     isSameStringArray(prev.source_names, next.source_names) &&
@@ -154,6 +156,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
       title = '',
       query = '',
       poster = '',
+      priority = false,
       episodes,
       source,
       source_name,
@@ -772,6 +775,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
             <CoverImage
               src={actualPoster}
               alt={actualTitle}
+              priority={priority}
               fit={origin === 'live' ? 'contain' : 'cover'}
             />
 

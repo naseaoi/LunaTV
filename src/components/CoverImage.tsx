@@ -19,29 +19,106 @@ import NoImageCover from '@/components/NoImageCover';
 // 封面图片内存缓存 + 跨实例通知
 // ================================================================
 
-const loadedImageCache = new Set<string>();
+const loadedImageCache = new Map<string, number>();
 const CACHE_MAX_SIZE = 500;
+const CACHE_TRIM_TO_SIZE = 250;
+
+const PLACEHOLDER_COLORS = [
+  '#94a3b8',
+  '#7c83fd',
+  '#60a5fa',
+  '#34d399',
+  '#f59e0b',
+  '#f472b6',
+  '#818cf8',
+  '#22c55e',
+];
 
 /** 全局事件总线：某个实例加载成功后通知同 src 的其他实例 */
 const imageLoadEmitter = new EventTarget();
 
 function markImageLoaded(url: string) {
   if (!url) return;
-  if (loadedImageCache.size >= CACHE_MAX_SIZE) {
-    loadedImageCache.clear();
+  loadedImageCache.delete(url);
+  loadedImageCache.set(url, Date.now());
+
+  if (loadedImageCache.size > CACHE_MAX_SIZE) {
+    const evictCount = loadedImageCache.size - CACHE_TRIM_TO_SIZE;
+    const cacheKeys = Array.from(loadedImageCache.keys());
+    for (
+      let index = 0;
+      index < evictCount && index < cacheKeys.length;
+      index += 1
+    ) {
+      loadedImageCache.delete(cacheKeys[index]);
+    }
   }
-  loadedImageCache.add(url);
+
   imageLoadEmitter.dispatchEvent(new CustomEvent('loaded', { detail: url }));
 }
 
 function isImageCached(url: string): boolean {
-  return loadedImageCache.has(url);
+  if (!url || !loadedImageCache.has(url)) {
+    return false;
+  }
+
+  // 命中时刷新访问顺序，避免热图被一次性淘汰。
+  const cachedAt = loadedImageCache.get(url) ?? Date.now();
+  loadedImageCache.delete(url);
+  loadedImageCache.set(url, cachedAt);
+  return true;
+}
+
+function pickPlaceholderColor(seed: string): string {
+  if (!seed) {
+    return PLACEHOLDER_COLORS[0];
+  }
+
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 33 + seed.charCodeAt(index)) >>> 0;
+  }
+
+  return PLACEHOLDER_COLORS[hash % PLACEHOLDER_COLORS.length];
+}
+
+function withAlpha(hex: string, alpha: number): string {
+  const normalized = hex.replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
+    return `rgba(148, 163, 184, ${alpha})`;
+  }
+
+  const r = parseInt(normalized.slice(0, 2), 16);
+  const g = parseInt(normalized.slice(2, 4), 16);
+  const b = parseInt(normalized.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function buildBlurDataURL(color: string): string {
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 48" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="${withAlpha(color, 0.92)}" />
+          <stop offset="55%" stop-color="${withAlpha(color, 0.58)}" />
+          <stop offset="100%" stop-color="${withAlpha(color, 0.3)}" />
+        </linearGradient>
+      </defs>
+      <rect width="32" height="48" fill="url(#g)" />
+      <circle cx="7" cy="10" r="10" fill="${withAlpha('#ffffff', 0.18)}" />
+      <circle cx="28" cy="38" r="13" fill="${withAlpha('#000000', 0.08)}" />
+    </svg>
+  `;
+
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
 /** 最大重试次数（首次加载不算，失败后最多再试 MAX_RETRIES 次） */
 const MAX_RETRIES = 2;
 /** 每次重试间隔 ms */
 const RETRY_DELAY = 1200;
+/** 进入视口前的小范围预加载距离，避免滑到边缘才开始请求 */
+const VIEWPORT_PRELOAD_MARGIN = '320px';
 
 // ================================================================
 // CoverImage 组件
@@ -50,12 +127,16 @@ const RETRY_DELAY = 1200;
 interface CoverImageProps {
   src: string;
   alt: string;
+  /** 首屏图片预加载，提高 LCP 表现 */
+  priority?: boolean;
   /** 传给 Next.js Image 的 sizes，默认 '(max-width: 640px) 96px, 180px' */
   sizes?: string;
   /** object-fit 模式，默认 'cover' */
   fit?: 'cover' | 'contain';
   /** 骨架屏宽高比 class，默认 'aspect-[2/3]' */
   aspectRatio?: string;
+  /** 可选占位主色，未传时根据 src 稳定生成 */
+  placeholderColor?: string;
   /** 加载失败后自动重试（最多 2 次），默认 true */
   enableRetry?: boolean;
   /** 无封面兜底文案 */
@@ -70,9 +151,10 @@ interface CoverImageProps {
 const CoverImage: React.FC<CoverImageProps> = memo(function CoverImage({
   src,
   alt,
+  priority = false,
   sizes = '(max-width: 640px) 96px, 180px',
   fit = 'cover',
-  aspectRatio = 'aspect-[2/3]',
+  placeholderColor,
   enableRetry = true,
   fallbackLabel = '无封面',
 }) {
@@ -81,8 +163,6 @@ const CoverImage: React.FC<CoverImageProps> = memo(function CoverImage({
   const retryCountRef = useRef(0);
   const releaseSlotRef = useRef<(() => void) | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  // 可见性门控：只有进入/接近可视区域才允许 acquire slot
-  const [isNearViewport, setIsNearViewport] = useState(false);
 
   const processed = useMemo(
     () => (isEmpty ? '' : processImageUrl(src)),
@@ -106,10 +186,33 @@ const CoverImage: React.FC<CoverImageProps> = memo(function CoverImage({
   );
 
   const cached = !isEmpty && isImageCached(src);
+  // 可见性门控：只有进入/接近可视区域才允许 acquire slot。
+  // 首屏 priority 图片直接放行，避免还在等待 IO 回调。
+  const [isNearViewport, setIsNearViewport] = useState(cached || priority);
   const [loaded, setLoaded] = useState(cached);
   const [hasError, setHasError] = useState(false);
   // 并发调度：是否已获得加载 slot（缓存命中则直接跳过排队）
   const [slotGranted, setSlotGranted] = useState(cached);
+
+  const resolvedPlaceholderColor = useMemo(() => {
+    if (placeholderColor && /^#[0-9a-fA-F]{6}$/.test(placeholderColor)) {
+      return placeholderColor;
+    }
+    return pickPlaceholderColor(src || alt);
+  }, [alt, placeholderColor, src]);
+
+  const blurDataURL = useMemo(
+    () => buildBlurDataURL(resolvedPlaceholderColor),
+    [resolvedPlaceholderColor],
+  );
+
+  const loadingBackdropStyle = useMemo(
+    () =>
+      ({
+        background: `linear-gradient(135deg, ${withAlpha(resolvedPlaceholderColor, 0.28)} 0%, ${withAlpha(resolvedPlaceholderColor, 0.14)} 100%)`,
+      }) as React.CSSProperties,
+    [resolvedPlaceholderColor],
+  );
 
   // src 变化时重置所有状态（包括释放旧 slot）
   useEffect(() => {
@@ -119,18 +222,17 @@ const CoverImage: React.FC<CoverImageProps> = memo(function CoverImage({
     const isCached = isImageCached(src);
     setLoaded(isCached);
     setSlotGranted(isCached);
-    // 缓存命中时也直接标记可见，跳过 IO 等待
-    if (isCached) setIsNearViewport(true);
+    setIsNearViewport(isCached || priority);
 
     // 释放旧 slot
     releaseSlotRef.current?.();
     releaseSlotRef.current = null;
-  }, [src]);
+  }, [priority, src]);
 
-  // 可见性检测：进入视口附近 200px 时才允许 acquire slot
+  // 可见性检测：进入视口附近一小段距离时就开始预加载
   // 避免首页横向滚动行中大量不可见卡片同时排队
   useEffect(() => {
-    if (isEmpty || isNearViewport) return;
+    if (isEmpty || isNearViewport || priority) return;
     const el = containerRef.current;
     if (!el) return;
 
@@ -141,11 +243,11 @@ const CoverImage: React.FC<CoverImageProps> = memo(function CoverImage({
           io.disconnect();
         }
       },
-      { rootMargin: '200px' },
+      { rootMargin: VIEWPORT_PRELOAD_MARGIN },
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [isEmpty, isNearViewport]);
+  }, [isEmpty, isNearViewport, priority]);
 
   // 请求并发 slot（可见 & 未缓存 & 未出错 & 尚未获得 slot 时排队）
   // 注意：不把 slotGranted 放在依赖中，避免获得 slot 后 cleanup 提前释放
@@ -223,8 +325,12 @@ const CoverImage: React.FC<CoverImageProps> = memo(function CoverImage({
   return (
     <div ref={containerRef} className='absolute inset-0'>
       {!loaded && (
-        <div className='pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-gray-200/60 dark:bg-gray-700/60'>
-          <div className='h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-gray-500 dark:border-gray-600 dark:border-t-gray-400' />
+        <div
+          className='pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg'
+          style={loadingBackdropStyle}
+        >
+          <div className='absolute inset-0 animate-pulse rounded-lg bg-white/10 dark:bg-white/5' />
+          <div className='relative h-5 w-5 animate-spin rounded-full border-2 border-white/35 border-t-white/80 dark:border-white/20 dark:border-t-white/60' />
         </div>
       )}
       {slotGranted && (
@@ -234,10 +340,13 @@ const CoverImage: React.FC<CoverImageProps> = memo(function CoverImage({
           alt={alt}
           fill
           sizes={sizes}
+          preload={priority}
           unoptimized={needsUnoptimized}
+          placeholder='blur'
+          blurDataURL={blurDataURL}
           className={`${fit === 'contain' ? 'object-contain' : 'object-cover'} transition-opacity duration-200 ${loaded ? 'opacity-100' : 'opacity-0'}`}
           referrerPolicy='no-referrer'
-          loading='lazy'
+          loading={priority ? 'eager' : 'lazy'}
           onLoad={handleLoad}
           onError={handleError}
           style={

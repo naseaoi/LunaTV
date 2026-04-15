@@ -120,12 +120,13 @@ export default function ContinueWatching({ className }: ContinueWatchingProps) {
                   <div className='relative aspect-[2/3] w-full animate-pulse overflow-hidden rounded-lg bg-gray-200 dark:bg-gray-800'>
                     <div className='absolute inset-0 bg-gray-300 dark:bg-gray-700'></div>
                   </div>
-                  <div className='mt-2 h-4 animate-pulse rounded bg-gray-200 dark:bg-gray-800'></div>
+                  <div className='mt-1 h-1 w-full animate-pulse rounded-full bg-gray-200 dark:bg-gray-800'></div>
+                  <div className='mt-2 h-5 animate-pulse rounded bg-gray-200 dark:bg-gray-800'></div>
                   <div className='mt-1 h-3 animate-pulse rounded bg-gray-200 dark:bg-gray-800'></div>
                 </div>
               ))
             : // 显示真实数据
-              playRecords.map((record) => {
+              playRecords.map((record, index) => {
                 const { source, id } = parseKey(record.key);
                 return (
                   <div
@@ -149,6 +150,7 @@ export default function ContinueWatching({ className }: ContinueWatchingProps) {
                           prev.filter((r) => r.key !== record.key),
                         )
                       }
+                      priority={index < 4}
                       type={record.total_episodes > 1 ? 'tv' : ''}
                     />
                   </div>

@@ -100,6 +100,24 @@ html.dark body {
   html[data-sidebar-collapsed='true'] .sidebar-offset {
     width: 4rem;
   }
+  /* 折叠态品牌链接内边距和间距，消除图标位置偏移 */
+  html[data-sidebar-collapsed='true'] [data-sidebar] [data-brand-link] {
+    padding-left: 2px;
+    padding-right: 2px;
+    gap: 0;
+  }
+  /* 折叠态隐藏文字标签 */
+  html[data-sidebar-collapsed='true'] [data-sidebar] [data-sidebar-label] {
+    max-width: 0;
+    opacity: 0;
+  }
+}
+
+/* 首次挂载前禁止侧栏过渡动画，消除 SSR→客户端折叠状态差异导致的视觉抖动 */
+[data-sidebar]:not([data-ready]),
+[data-sidebar]:not([data-ready]) *,
+[data-sidebar-offset]:not([data-ready]) {
+  transition-duration: 0s !important;
 }
 
 /* 隐藏移动端（<768px）垂直滚动条 */

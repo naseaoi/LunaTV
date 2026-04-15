@@ -550,8 +550,7 @@ function DoubanPageClient() {
   ]);
 
   // 设置滚动监听
-  // 依赖 isFullyRendered：哨兵元素的挂载条件包含 isFullyRendered，
-  // 必须在哨兵挂载后重新运行 effect 才能 observe 到它。
+  // 依赖 isFullyRendered：渐进渲染完成前不挂载 observer，避免新批次未渲染完就触发下一次加载。
   useEffect(() => {
     if (!hasMore || isLoadingMore || loading || !isFullyRendered) {
       return;
@@ -798,8 +797,10 @@ function DoubanPageClient() {
                   ))}
             </div>
 
-            {/* 加载更多指示器 */}
-            {hasMore && !loading && isFullyRendered && (
+            {/* 加载更多指示器 —— 不依赖 isFullyRendered 控制 DOM 存在，
+                避免渐进渲染期间哨兵卸载/重挂载导致页面高度突变引发全局抖动。
+                IntersectionObserver effect 内部已守卫 isFullyRendered，不会重复触发。 */}
+            {hasMore && !loading && (
               <div ref={loadingRef} className='mt-12 flex justify-center py-8'>
                 {isLoadingMore && (
                   <div className='flex items-center gap-2'>
