@@ -4,7 +4,12 @@ import {
   extractGirigiriEpisodeVariants,
   parseGirigiriVariantId,
 } from '@/lib/giri';
-import { getCachedSearchPage, setCachedSearchPage } from '@/lib/search-cache';
+import {
+  dedupeSearchLoad,
+  getCachedSearchPage,
+  peekCachedSearchPage,
+  setCachedSearchPage,
+} from '@/lib/search-cache';
 import { SearchResult } from '@/lib/types';
 import { cleanHtmlTags } from '@/lib/utils';
 
@@ -434,7 +439,7 @@ async function searchWithCache(
   url: string,
   timeoutMs = 8000,
 ): Promise<{ results: SearchResult[]; pageCount?: number }> {
-  // 先查缓存
+  // 1. fresh 命中直接返回
   const cached = getCachedSearchPage(apiSite.key, query, page);
   if (cached) {
     if (cached.status === 'ok') {
@@ -444,7 +449,36 @@ async function searchWithCache(
     }
   }
 
-  // 缓存未命中，发起网络请求
+  // 2. 软过期命中：立即返回旧值，同时后台刷新（若无同 key 请求在途）
+  const stale = peekCachedSearchPage(apiSite.key, query, page);
+  if (stale && !stale.fresh) {
+    dedupeSearchLoad(apiSite.key, query, page, () =>
+      fetchAndCacheSearchPage(apiSite, query, page, url, timeoutMs),
+    ).catch(() => {
+      /* 后台刷新失败保留旧值 */
+    });
+    if (stale.entry.status === 'ok') {
+      return { results: stale.entry.data, pageCount: stale.entry.pageCount };
+    }
+    return { results: [] };
+  }
+
+  // 3. 完全未命中：回源（同 key 并发合并）
+  return dedupeSearchLoad(apiSite.key, query, page, () =>
+    fetchAndCacheSearchPage(apiSite, query, page, url, timeoutMs),
+  );
+}
+
+/**
+ * 真正的回源逻辑，统一由 searchWithCache 调度，内部负责写入缓存。
+ */
+async function fetchAndCacheSearchPage(
+  apiSite: ApiSite,
+  query: string,
+  page: number,
+  url: string,
+  timeoutMs: number,
+): Promise<{ results: SearchResult[]; pageCount?: number }> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 

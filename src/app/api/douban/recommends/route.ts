@@ -2,7 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getCacheTime } from '@/lib/config';
 import { fetchDoubanData } from '@/lib/douban';
+import { createSwrCache } from '@/lib/server-cache';
 import { DoubanResult } from '@/lib/types';
+
+// 进程内 SWR 缓存：同参数请求合并回源 + 软过期后台刷新
+// 豆瓣推荐变化缓慢，新鲜 30 分钟、软过期再 30 分钟内返回旧值
+const recommendsCache = createSwrCache<DoubanResult>({
+  name: 'douban-recommends',
+  freshMs: 30 * 60 * 1000,
+  staleMs: 30 * 60 * 1000,
+  maxSize: 500,
+});
 
 interface DoubanRecommendApiResponse {
   total: number;
@@ -91,22 +101,26 @@ export async function GET(request: NextRequest) {
 
   const target = `${baseUrl}?${params.toString()}`;
   try {
-    const doubanData =
-      await fetchDoubanData<DoubanRecommendApiResponse>(target);
-    const list = doubanData.items
-      .filter((item) => item.type == 'movie' || item.type == 'tv')
-      .map((item) => ({
-        id: item.id,
-        title: item.title,
-        poster: item.pic?.normal || item.pic?.large || '',
-        rate: item.rating?.value ? item.rating.value.toFixed(1) : '',
-        year: item.year,
-      }));
-    const response: DoubanResult = {
-      code: 200,
-      message: '获取成功',
-      list: list,
-    };
+    // 以完整 target URL 作为缓存键，参数变体天然区分
+    const response = await recommendsCache.getOrLoad(target, async () => {
+      const doubanData =
+        await fetchDoubanData<DoubanRecommendApiResponse>(target);
+      const list = doubanData.items
+        .filter((item) => item.type == 'movie' || item.type == 'tv')
+        .map((item) => ({
+          id: item.id,
+          title: item.title,
+          poster: item.pic?.normal || item.pic?.large || '',
+          rate: item.rating?.value ? item.rating.value.toFixed(1) : '',
+          year: item.year,
+        }));
+      const payload: DoubanResult = {
+        code: 200,
+        message: '获取成功',
+        list: list,
+      };
+      return payload;
+    });
 
     const cacheTime = await getCacheTime();
     return NextResponse.json(response, {

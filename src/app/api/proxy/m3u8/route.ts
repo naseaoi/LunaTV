@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 
 import { getBaseUrl, resolveUrl } from '@/lib/live';
+import { createSwrCache } from '@/lib/server-cache';
+import {
+  isSourceCorsCapable,
+  markSourceCors,
+  responseAllowsCors,
+} from '@/lib/source-capability';
 import { validateProxyUrl } from '@/lib/url-guard';
 
 import { getProxySourceKey, resolveProxyUserAgent } from '../utils';
@@ -8,49 +14,78 @@ import { getProxySourceKey, resolveProxyUserAgent } from '../utils';
 export const runtime = 'nodejs';
 
 // ================================================================
-// VOD M3U8 清单缓存（减少重复请求上游源站）
+// VOD M3U8 清单缓存（SWR 软过期 + 请求合并）
+// - 只缓存 VOD / Master playlist，直播清单不缓存
+// - fresh 60s：期内直接返回
+// - stale 60s：返回旧内容同时后台刷新，并发同 URL 自动合并
 // ================================================================
 
 type M3U8CacheEntry = {
   content: string;
   contentType: string;
   finalUrl: string;
-  timestamp: number;
 };
 
-const m3u8Cache = new Map<string, M3U8CacheEntry>();
-const M3U8_CACHE_TTL_MS = 60_000;
-const M3U8_CACHE_MAX_SIZE = 200;
+const m3u8Cache = createSwrCache<M3U8CacheEntry>({
+  name: 'proxy-m3u8',
+  freshMs: 60_000,
+  staleMs: 60_000,
+  maxSize: 500,
+});
 
-function getM3U8Cache(url: string): M3U8CacheEntry | null {
-  const entry = m3u8Cache.get(url);
-  if (!entry) return null;
-  if (Date.now() - entry.timestamp > M3U8_CACHE_TTL_MS) {
-    m3u8Cache.delete(url);
-    return null;
-  }
-  // LRU：命中时刷新位置
-  m3u8Cache.delete(url);
-  m3u8Cache.set(url, entry);
-  return entry;
-}
+// 软过期后台刷新：同 URL 并发刷新请求合并，避免雷群
+const m3u8RefreshInflight = new Map<string, Promise<void>>();
 
-function setM3U8Cache(
+function refreshM3U8Cache(
   url: string,
-  content: string,
-  contentType: string,
-  finalUrl: string,
-): void {
-  if (m3u8Cache.size >= M3U8_CACHE_MAX_SIZE) {
-    const firstKey = m3u8Cache.keys().next().value;
-    if (firstKey) m3u8Cache.delete(firstKey);
-  }
-  m3u8Cache.set(url, {
-    content,
-    contentType,
-    finalUrl,
-    timestamp: Date.now(),
-  });
+  ua: string,
+  source: string | null,
+): Promise<void> {
+  const existing = m3u8RefreshInflight.get(url);
+  if (existing) return existing;
+
+  const task = (async () => {
+    try {
+      const response = await fetch(url, {
+        cache: 'no-cache',
+        redirect: 'follow',
+        credentials: 'same-origin',
+        headers: { 'User-Agent': ua },
+      });
+      if (!response.ok) return;
+      // 后台刷新时同样更新 CORS 能力记录
+      if (source) {
+        markSourceCors(source, responseAllowsCors(response.headers));
+      }
+      const contentType = response.headers.get('Content-Type') || '';
+      if (
+        !contentType.toLowerCase().includes('mpegurl') &&
+        !contentType.toLowerCase().includes('octet-stream')
+      ) {
+        return;
+      }
+      const content = await response.text();
+      // 仅对 VOD/Master 更新缓存
+      if (
+        !content.includes('#EXT-X-ENDLIST') &&
+        !content.includes('#EXT-X-STREAM-INF')
+      ) {
+        return;
+      }
+      m3u8Cache.set(url, {
+        content,
+        contentType,
+        finalUrl: response.url,
+      });
+    } catch {
+      /* 后台刷新失败保留旧值 */
+    } finally {
+      m3u8RefreshInflight.delete(url);
+    }
+  })();
+
+  m3u8RefreshInflight.set(url, task);
+  return task;
 }
 
 export async function GET(request: Request) {
@@ -58,6 +93,7 @@ export async function GET(request: Request) {
   const url = searchParams.get('url');
   const allowCORS = searchParams.get('allowCORS') === 'true';
   const source = getProxySourceKey(searchParams);
+  const isLive = searchParams.get('icetv-live') === '1';
   if (!url) {
     return NextResponse.json({ error: 'Missing url' }, { status: 400 });
   }
@@ -70,20 +106,26 @@ export async function GET(request: Request) {
   const ua = await resolveProxyUserAgent(source);
 
   try {
-    // 查询 VOD 清单缓存（避免重复请求上游源站）
-    const cached = getM3U8Cache(validation.url);
+    // 查询 VOD 清单缓存（fresh/stale 皆命中；stale 命中时触发后台刷新）
+    const cached = m3u8Cache.peek(validation.url);
     if (cached) {
-      const baseUrl = getBaseUrl(cached.finalUrl);
+      const { value, fresh } = cached;
+      if (!fresh) {
+        // 软过期：后台刷新，不阻塞当前响应
+        void refreshM3U8Cache(validation.url, ua, source);
+      }
+      const baseUrl = getBaseUrl(value.finalUrl);
       const modifiedContent = rewriteM3U8Content(
-        cached.content,
+        value.content,
         baseUrl,
         request,
         allowCORS,
         source,
+        isLive,
       );
 
       const headers = new Headers();
-      headers.set('Content-Type', cached.contentType);
+      headers.set('Content-Type', value.contentType);
       headers.set('Access-Control-Allow-Origin', '*');
       headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
       headers.set(
@@ -114,6 +156,12 @@ export async function GET(request: Request) {
       );
     }
 
+    // 源站 CORS 能力探测：观察 upstream 响应头
+    // 只在 source 已知时记录，保证 segment/key 重写能正确查表
+    if (source) {
+      markSourceCors(source, responseAllowsCors(response.headers));
+    }
+
     const contentType = response.headers.get('Content-Type') || '';
     if (
       contentType.toLowerCase().includes('mpegurl') ||
@@ -128,7 +176,11 @@ export async function GET(request: Request) {
         m3u8Content.includes('#EXT-X-ENDLIST') ||
         m3u8Content.includes('#EXT-X-STREAM-INF')
       ) {
-        setM3U8Cache(validation.url, m3u8Content, contentType, finalUrl);
+        m3u8Cache.set(validation.url, {
+          content: m3u8Content,
+          contentType,
+          finalUrl,
+        });
       }
 
       const modifiedContent = rewriteM3U8Content(
@@ -137,6 +189,7 @@ export async function GET(request: Request) {
         request,
         allowCORS,
         source,
+        isLive,
       );
 
       const headers = new Headers();
@@ -195,6 +248,7 @@ function rewriteM3U8Content(
   req: Request,
   allowCORS: boolean,
   source: string | null,
+  isLive: boolean,
 ) {
   const referer = req.headers.get('referer');
   let protocol = 'http';
@@ -209,6 +263,14 @@ function rewriteM3U8Content(
 
   const host = req.headers.get('host');
   const proxyBase = `${protocol}://${host}/api/proxy`;
+
+  // 源站 CORS 能力探测结果：若已确认支持，即便 admin 将其标为 server-proxy，
+  // 也把 segment / key URL 直接输出为源站原始 URL，省掉一跳服务端转发。
+  // m3u8（master/variant）仍走代理，避免递归嵌套与 CORS 复杂度。
+  // 直播场景跳过此优化：直播通常依赖服务端注入特定 UA / 处理鉴权，直连易失败。
+  const corsCapable =
+    !isLive && source ? isSourceCorsCapable(source) === true : false;
+  const effectiveAllowCors = allowCORS || corsCapable;
 
   const lines = content.split('\n');
   const rewrittenLines: string[] = [];
@@ -225,6 +287,9 @@ function rewriteM3U8Content(
     if (source) {
       params.set('icetv-source', source);
     }
+    if (isLive) {
+      params.set('icetv-live', '1');
+    }
     return `${proxyBase}/${path}?${params.toString()}`;
   };
 
@@ -233,7 +298,7 @@ function rewriteM3U8Content(
 
     if (line && !line.startsWith('#')) {
       const resolvedUrl = resolveUrl(baseUrl, line);
-      const proxyUrl = allowCORS
+      const proxyUrl = effectiveAllowCors
         ? resolvedUrl
         : buildProxyPath('segment', resolvedUrl);
       rewrittenLines.push(proxyUrl);
@@ -241,11 +306,25 @@ function rewriteM3U8Content(
     }
 
     if (line.startsWith('#EXT-X-MAP:')) {
-      line = rewriteMapUri(line, baseUrl, proxyBase, source);
+      line = rewriteMapUri(
+        line,
+        baseUrl,
+        proxyBase,
+        source,
+        effectiveAllowCors,
+        isLive,
+      );
     }
 
     if (line.startsWith('#EXT-X-KEY:')) {
-      line = rewriteKeyUri(line, baseUrl, proxyBase, source);
+      line = rewriteKeyUri(
+        line,
+        baseUrl,
+        proxyBase,
+        source,
+        effectiveAllowCors,
+        isLive,
+      );
     }
 
     if (line.startsWith('#EXT-X-STREAM-INF:')) {
@@ -275,14 +354,22 @@ function rewriteMapUri(
   baseUrl: string,
   proxyBase: string,
   source: string | null,
+  allowDirect: boolean,
+  isLive: boolean,
 ) {
   const uriMatch = line.match(/URI="([^"]+)"/);
   if (uriMatch) {
     const originalUri = uriMatch[1];
     const resolvedUrl = resolveUrl(baseUrl, originalUri);
+    if (allowDirect) {
+      return line.replace(uriMatch[0], `URI="${resolvedUrl}"`);
+    }
     const params = new URLSearchParams({ url: resolvedUrl });
     if (source) {
       params.set('icetv-source', source);
+    }
+    if (isLive) {
+      params.set('icetv-live', '1');
     }
     const proxyUrl = `${proxyBase}/segment?${params.toString()}`;
     return line.replace(uriMatch[0], `URI="${proxyUrl}"`);
@@ -295,14 +382,22 @@ function rewriteKeyUri(
   baseUrl: string,
   proxyBase: string,
   source: string | null,
+  allowDirect: boolean,
+  isLive: boolean,
 ) {
   const uriMatch = line.match(/URI="([^"]+)"/);
   if (uriMatch) {
     const originalUri = uriMatch[1];
     const resolvedUrl = resolveUrl(baseUrl, originalUri);
+    if (allowDirect) {
+      return line.replace(uriMatch[0], `URI="${resolvedUrl}"`);
+    }
     const params = new URLSearchParams({ url: resolvedUrl });
     if (source) {
       params.set('icetv-source', source);
+    }
+    if (isLive) {
+      params.set('icetv-live', '1');
     }
     const proxyUrl = `${proxyBase}/key?${params.toString()}`;
     return line.replace(uriMatch[0], `URI="${proxyUrl}"`);

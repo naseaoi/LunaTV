@@ -48,6 +48,10 @@ const nextConfig = {
   // Uncoment to add domain whitelist
   images: {
     unoptimized: false,
+    // 优先输出 AVIF/WebP，节省带宽；现代浏览器自动协商
+    formats: ['image/avif', 'image/webp'],
+    // 服务端最小缓存 TTL：封面内容变化极少，延长到 7 天降低重复优化开销
+    minimumCacheTTL: 7 * 24 * 60 * 60,
     deviceSizes: [640, 750, 828, 1080],
     imageSizes: [96, 128, 180, 256],
     remotePatterns: [

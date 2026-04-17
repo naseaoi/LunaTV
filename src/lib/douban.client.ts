@@ -1,41 +1,115 @@
 import { DoubanItem, DoubanResult } from './types';
 
 // ================================================================
-// 请求去重 + 短时缓存：避免切换筛选条件后重复请求相同数据
+// 请求去重 + SWR 缓存：避免切换筛选条件后重复请求相同数据
+// - fresh 期内命中：直接复用 Promise
+// - stale 期内命中：立即返回旧结果，同时后台刷新
+// - 超过 stale：视为未命中，重新回源
+// 淘汰策略：LRU（按最近命中时间）
 // ================================================================
 
-type CachedRequest = { promise: Promise<DoubanResult>; timestamp: number };
+interface CachedRequest {
+  // 最近一次成功结果快照；回源未完成前为 undefined
+  value?: DoubanResult;
+  // 正在进行中的请求（用于并发合并）
+  pending?: Promise<DoubanResult>;
+  // 新鲜截止
+  freshUntil: number;
+  // 软过期截止（超过后彻底丢弃）
+  staleUntil: number;
+  // 最近访问时间（用于 LRU 淘汰）
+  lastAccess: number;
+}
+
 const requestDedupCache = new Map<string, CachedRequest>();
-const DEDUP_CACHE_TTL = 2 * 60 * 1000;
+const DEDUP_FRESH_MS = 2 * 60 * 1000; // 2 分钟新鲜期
+const DEDUP_STALE_MS = 5 * 60 * 1000; // 再 5 分钟软过期窗口
+const DEDUP_MAX_SIZE = 200;
+
+// 超出上限时按 lastAccess 淘汰最老项
+function evictIfNeeded() {
+  if (requestDedupCache.size <= DEDUP_MAX_SIZE) return;
+  const toRemove = requestDedupCache.size - DEDUP_MAX_SIZE;
+  const entries = Array.from(requestDedupCache.entries()).sort(
+    (a, b) => a[1].lastAccess - b[1].lastAccess,
+  );
+  for (let i = 0; i < toRemove; i++) {
+    requestDedupCache.delete(entries[i][0]);
+  }
+}
+
+// 触发一次真正的回源，并在成功后写入缓存
+function triggerLoad(
+  key: string,
+  fn: () => Promise<DoubanResult>,
+): Promise<DoubanResult> {
+  const pending = fn()
+    .then((result) => {
+      const now = Date.now();
+      const entry = requestDedupCache.get(key);
+      if (entry) {
+        entry.value = result;
+        entry.freshUntil = now + DEDUP_FRESH_MS;
+        entry.staleUntil = now + DEDUP_FRESH_MS + DEDUP_STALE_MS;
+        entry.lastAccess = now;
+        entry.pending = undefined;
+      }
+      return result;
+    })
+    .catch((err) => {
+      // 失败：若已有旧值保留；否则彻底删除以便下次重试
+      const entry = requestDedupCache.get(key);
+      if (entry) {
+        entry.pending = undefined;
+        if (!entry.value) requestDedupCache.delete(key);
+      }
+      throw err;
+    });
+
+  const now = Date.now();
+  const existing = requestDedupCache.get(key);
+  if (existing) {
+    existing.pending = pending;
+    existing.lastAccess = now;
+  } else {
+    requestDedupCache.set(key, {
+      pending,
+      freshUntil: now,
+      staleUntil: now + DEDUP_FRESH_MS + DEDUP_STALE_MS,
+      lastAccess: now,
+    });
+  }
+  evictIfNeeded();
+  return pending;
+}
 
 function withRequestDedup(
   key: string,
   fn: () => Promise<DoubanResult>,
 ): Promise<DoubanResult> {
+  const now = Date.now();
   const cached = requestDedupCache.get(key);
-  if (cached && Date.now() - cached.timestamp < DEDUP_CACHE_TTL) {
-    return cached.promise;
+
+  if (cached) {
+    cached.lastAccess = now;
+    // 正在进行的请求直接复用
+    if (cached.pending) return cached.pending;
+    // fresh 命中：直接返回缓存值
+    if (cached.value && now < cached.freshUntil) {
+      return Promise.resolve(cached.value);
+    }
+    // stale 命中：返回旧值，同时后台刷新
+    if (cached.value && now < cached.staleUntil) {
+      triggerLoad(key, fn).catch(() => {
+        /* 后台刷新失败保留旧值 */
+      });
+      return Promise.resolve(cached.value);
+    }
+    // 彻底过期
+    requestDedupCache.delete(key);
   }
 
-  const promise = fn()
-    .then((result) => {
-      const entry = requestDedupCache.get(key);
-      if (entry?.promise === promise) entry.timestamp = Date.now();
-      return result;
-    })
-    .catch((err) => {
-      requestDedupCache.delete(key);
-      throw err;
-    });
-
-  requestDedupCache.set(key, { promise, timestamp: Date.now() });
-
-  if (requestDedupCache.size > 100) {
-    const firstKey = requestDedupCache.keys().next().value;
-    if (firstKey) requestDedupCache.delete(firstKey);
-  }
-
-  return promise;
+  return triggerLoad(key, fn);
 }
 
 interface DoubanCategoriesParams {

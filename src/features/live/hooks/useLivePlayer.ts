@@ -127,7 +127,7 @@ export function useLivePlayer({
           type = precheckResult.type;
         }
 
-        const targetUrl = `/api/proxy/m3u8?url=${encodeURIComponent(videoUrl)}&icetv-source=${currentSourceRef.current?.key || ''}`;
+        const targetUrl = `/api/proxy/m3u8?url=${encodeURIComponent(videoUrl)}&icetv-source=${currentSourceRef.current?.key || ''}&icetv-live=1`;
 
         if (type !== 'm3u8') {
           loadedUrlRef.current = '';

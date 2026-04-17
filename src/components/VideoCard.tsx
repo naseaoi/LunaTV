@@ -26,6 +26,7 @@ import {
 } from '@/lib/db.client';
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 import { SearchResult } from '@/lib/types';
+import { warmupForPlayback } from '@/lib/video-prefetch';
 import { useLongPress } from '@/hooks/useLongPress';
 
 import {
@@ -406,6 +407,15 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
       if (url) router.push(url);
     }, [router, buildPlayUrl]);
 
+    // hover / focus 预热：提前加载 detail 与播放器模块，进入播放页几乎无等待
+    // 仅对拥有 source+id 的普通卡片生效（聚合卡、豆瓣卡跳转路径不同，跳过）
+    const handlePrefetch = useCallback(() => {
+      if (origin === 'live') return;
+      if (from === 'douban') return;
+      if (isAggregate) return;
+      warmupForPlayback(actualSource, actualId);
+    }, [actualId, actualSource, from, isAggregate, origin]);
+
     // 新标签页播放处理函数
     const handlePlayInNewTab = useCallback(() => {
       const authInfo = getAuthInfoFromBrowserCookie();
@@ -727,6 +737,8 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
         <div
           className='group relative w-full cursor-pointer rounded-lg bg-transparent transition-[transform,opacity] duration-300 ease-in-out hover:z-[500] hover:scale-[1.05] active:scale-[0.97] active:opacity-80'
           onClick={handleClick}
+          onMouseEnter={handlePrefetch}
+          onFocus={handlePrefetch}
           {...longPressProps}
           style={
             {

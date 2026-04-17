@@ -11,6 +11,7 @@ import {
   prefetchM3U8,
   runManagedVideoCleanup,
 } from '@/lib/player-runtime';
+import { preconnectForUrl } from '@/lib/preconnect';
 import {
   ensureVideoSource,
   formatTime,
@@ -19,6 +20,8 @@ import {
   createArtPlayerConfig,
   configureArtplayerStatics,
   handleHlsFatalError,
+  HLS_START_LEVEL_STRATEGY,
+  pickStartLevelFromStrategy,
 } from '@/lib/player-utils';
 
 import { shouldDismissLoadingFromCanPlay } from '@/features/play/lib/playerLoading';
@@ -152,10 +155,34 @@ export function useArtPlayer(params: UseArtPlayerParams) {
         // 预取 m3u8 清单（与模块加载并行），填充服务端缓存
         const preSourceKey = detailRef.current?.source || '';
         const preUseProxy = isServerProxy(preSourceKey);
-        const preM3u8Url = preUseProxy
-          ? `/api/proxy/m3u8?url=${encodeURIComponent(videoUrl)}`
-          : `/api/proxy/m3u8?url=${encodeURIComponent(videoUrl)}&allowCORS=true`;
+        // 构建 m3u8 代理 URL；携带 icetv-source 以便服务端做 CORS 能力探测，
+        // 后续请求可自动将 segment/key 直连源站（若源支持 CORS）
+        const appendSource = (url: string) =>
+          preSourceKey
+            ? `${url}${url.includes('?') ? '&' : '?'}icetv-source=${encodeURIComponent(preSourceKey)}`
+            : url;
+        const buildProxyUrl = (rawUrl: string) => {
+          const base = preUseProxy
+            ? `/api/proxy/m3u8?url=${encodeURIComponent(rawUrl)}`
+            : `/api/proxy/m3u8?url=${encodeURIComponent(rawUrl)}&allowCORS=true`;
+          return appendSource(base);
+        };
+
+        const preM3u8Url = buildProxyUrl(videoUrl);
         prefetchM3U8(preM3u8Url);
+
+        // 源站 preconnect：
+        // - allowCORS 模式下 ts 分片直连源站，DNS+TLS 握手省 100~400ms
+        // - 即便走服务端代理，Node 进程回源时也受益于浏览器侧提前解析
+        preconnectForUrl(videoUrl);
+
+        // 下一集 m3u8 预取：切集瞬开（服务端 SWR 缓存 + 浏览器 HTTP 缓存双命中）
+        const nextEpisodeUrl =
+          detail?.episodes?.[currentEpisodeIndex + 1] ?? null;
+        if (nextEpisodeUrl) {
+          prefetchM3U8(buildProxyUrl(nextEpisodeUrl));
+          preconnectForUrl(nextEpisodeUrl);
+        }
 
         const { Artplayer, Hls } = await getPlayerModules();
         if (cancelled || !artRef.current) return;
@@ -248,9 +275,13 @@ export function useArtPlayer(params: UseArtPlayerParams) {
               // 根据源站流量路由配置决定是否走服务端代理
               const sourceKey = detailRef.current?.source || '';
               const useServerProxy = isServerProxy(sourceKey);
-              const targetUrl = useServerProxy
+              const baseTargetUrl = useServerProxy
                 ? `/api/proxy/m3u8?url=${encodeURIComponent(url)}`
                 : `/api/proxy/m3u8?url=${encodeURIComponent(url)}&allowCORS=true`;
+              // 透传 sourceKey 供服务端做 CORS 能力探测 / 下游路由决策
+              const targetUrl = sourceKey
+                ? `${baseTargetUrl}&icetv-source=${encodeURIComponent(sourceKey)}`
+                : baseTargetUrl;
 
               setRealtimeLoadSpeed('测速中...');
 
@@ -430,6 +461,24 @@ export function useArtPlayer(params: UseArtPlayerParams) {
 
               hls.on(Hls.Events.ERROR, onHlsError);
               hls.on(Hls.Events.FRAG_LOADED, onHlsFragLoaded);
+              // 根据网络带宽智能选择起播码率：宽带直接最高 / 次高等级，首帧即清晰
+              const onManifestParsed = (
+                _evt: unknown,
+                data: { levels?: unknown[] },
+              ) => {
+                const levelCount = Array.isArray(data?.levels)
+                  ? data.levels.length
+                  : 0;
+                const picked = pickStartLevelFromStrategy(
+                  HLS_START_LEVEL_STRATEGY,
+                  levelCount,
+                );
+                if (picked !== undefined) {
+                  hls.startLevel = picked;
+                  hls.nextLevel = picked;
+                }
+              };
+              hls.on(Hls.Events.MANIFEST_PARSED, onManifestParsed);
               // 保存处理器引用，复用时移除
               managedVideo.__icetvHlsHandlers = {
                 onError: onHlsError,
