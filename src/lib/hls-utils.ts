@@ -1,4 +1,8 @@
 import { formatBytesPerSecond } from '@/lib/player-utils';
+import {
+  clearSourceProxyOverride,
+  rememberSourceServerProxy,
+} from '@/lib/proxy-modes';
 
 type VideoProbeResult = {
   quality: string;
@@ -10,6 +14,21 @@ type MasterVariant = {
   url: string;
   width: number;
 };
+
+type PartialProbeResult = {
+  quality: string;
+  pingTime: number;
+};
+
+class ProbeError extends Error {
+  partial?: PartialProbeResult;
+
+  constructor(message: string, partial?: PartialProbeResult) {
+    super(message);
+    this.name = 'ProbeError';
+    this.partial = partial;
+  }
+}
 
 function withTimeout<T>(
   promise: Promise<T>,
@@ -83,53 +102,121 @@ function pickProbeVariant(variants: MasterVariant[]) {
   };
 }
 
+/**
+ * 从 master playlist 抽出所有 variant 的 CODECS 声明。
+ * 格式：#EXT-X-STREAM-INF:...,CODECS="avc1.64001f,mp4a.40.2",...
+ */
+function extractMasterCodecs(playlistContent: string): string[] {
+  return Array.from(
+    playlistContent.matchAll(/#EXT-X-STREAM-INF:[^\n]*CODECS="([^"]+)"/gi),
+  ).map((m) => m[1]);
+}
+
+/**
+ * 基于浏览器 MediaSource.isTypeSupported 判定 master playlist 里的 codec 是否可解码。
+ * 命中任何一个可播放的 variant 即算通过；全部不支持才抛错。
+ * 说明：
+ * - 仅对声明了 CODECS 的 master 生效。media playlist（单档 TS）通常不带 codec，留空放行，
+ *   让后续真实起播再暴露问题，避免把大量源误判为不可播放。
+ * - 服务端渲染或老浏览器无 MediaSource 时直接跳过，不影响探测流程。
+ */
+function ensureCodecsPlayable(playlistContent: string): void {
+  if (typeof window === 'undefined' || typeof MediaSource === 'undefined') {
+    return;
+  }
+
+  const codecsList = extractMasterCodecs(playlistContent);
+  if (codecsList.length === 0) return;
+
+  const anyPlayable = codecsList.some((codecs) => {
+    try {
+      return (
+        MediaSource.isTypeSupported(`video/mp4; codecs="${codecs}"`) ||
+        MediaSource.isTypeSupported(`video/mp2t; codecs="${codecs}"`)
+      );
+    } catch {
+      return false;
+    }
+  });
+
+  if (!anyPlayable) {
+    throw new Error(`Unsupported codec: ${codecsList.join(' | ')}`);
+  }
+}
+
 function getFirstSegmentUrl(content: string): string | null {
   return getNonCommentLines(content)[0] || null;
 }
 
-/**
- * 从 m3u8 地址获取视频质量等级和网络信息。
- * 改为直接请求 playlist 与首个分片，避免为每个源创建隐藏 video+hls 实例。
- *
- * 优化：variant playlist 与 first segment range 尝试并行发起，
- *      将原 3 段串行（HEAD+playlist → variant playlist → first segment）
- *      压缩到 ~2 轮 RTT。若 master 无 variants，退回单 playlist 链路。
- */
-export async function getVideoResolutionFromM3u8(
+function buildProxyUrl(
   m3u8Url: string,
-  useProxy = true,
+  useProxy: boolean,
+  sourceKey?: string,
+): string {
+  const params = new URLSearchParams({
+    url: m3u8Url,
+  });
+  if (!useProxy) {
+    params.set('allowCORS', 'true');
+  }
+  if (sourceKey) {
+    params.set('icetv-source', sourceKey);
+  }
+  return `/api/proxy/m3u8?${params.toString()}`;
+}
+
+function pickBestPartial(
+  primary?: PartialProbeResult,
+  fallback?: PartialProbeResult,
+): PartialProbeResult | undefined {
+  if (!primary) return fallback;
+  if (!fallback) return primary;
+  if (primary.quality !== '未知') return primary;
+  if (fallback.quality !== '未知') return fallback;
+  return primary.pingTime > 0 ? primary : fallback;
+}
+
+function normalizeProbeError(
+  error: unknown,
+  partial?: PartialProbeResult,
+): ProbeError {
+  if (error instanceof ProbeError) {
+    return error;
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return new ProbeError(message, partial);
+}
+
+async function probeWithMode(
+  m3u8Url: string,
+  useProxy: boolean,
+  sourceKey?: string,
 ): Promise<VideoProbeResult> {
+  const proxyUrl = buildProxyUrl(m3u8Url, useProxy, sourceKey);
+
+  const pingStart = performance.now();
+  const pingPromise = fetch(proxyUrl, { method: 'HEAD' })
+    .catch(() => null)
+    .then(() => Math.round(performance.now() - pingStart));
+
+  let partial: PartialProbeResult | undefined;
+
   try {
-    // useProxy=true 走服务端代理；false 走 allowCORS 模式（浏览器直连 ts 片段）
-    const proxyUrl = useProxy
-      ? `/api/proxy/m3u8?url=${encodeURIComponent(m3u8Url)}`
-      : `/api/proxy/m3u8?url=${encodeURIComponent(m3u8Url)}&allowCORS=true`;
-
-    const pingStart = performance.now();
-    const pingPromise = fetch(proxyUrl, { method: 'HEAD' })
-      .catch(() => null)
-      .then(() => Math.round(performance.now() - pingStart));
-
     const playlistResponse = await withTimeout(
       fetch(proxyUrl, { cache: 'no-store' }),
       8000,
       'Timeout loading playlist',
     );
     if (!playlistResponse.ok) {
-      throw new Error('Failed to load playlist');
+      throw new ProbeError('Failed to load playlist', partial);
     }
 
     const playlistContent = await playlistResponse.text();
+    ensureCodecsPlayable(playlistContent);
     const variants = parseMasterVariants(playlistContent);
     const pickedVariant = pickProbeVariant(variants);
     const quality = mapWidthToQuality(pickedVariant?.bestQualityWidth || 0);
 
-    // 若是 master playlist：并行发起 variant playlist + 乐观首片 range。
-    // 不少源站 master 的 variant playlist 首行就是分片 URL（相对路径），
-    // 但这里无法在取到 media playlist 前猜测分片 URL，因此只能并行
-    // 地把 variant playlist 和 "playlist 本身作为 media playlist 的 ts 探测" 作为互补方案。
-    // 实际收益：当 pickedVariant 不存在（非 master）时省一轮 RTT；
-    //         当是 master 时，variant playlist 与 ping 并行，省掉等待 ping 的时间窗口。
     let mediaPlaylistContent = playlistContent;
 
     if (pickedVariant?.probePlaylistUrl) {
@@ -139,33 +226,32 @@ export async function getVideoResolutionFromM3u8(
         'Timeout loading media playlist',
       );
       if (!mediaPlaylistResponse.ok) {
-        throw new Error('Failed to load media playlist');
+        throw new ProbeError('Failed to load media playlist', partial);
       }
       mediaPlaylistContent = await mediaPlaylistResponse.text();
     }
 
+    const pingTime = await pingPromise;
+    partial = { quality, pingTime };
+
     const firstSegmentUrl = getFirstSegmentUrl(mediaPlaylistContent);
     if (!firstSegmentUrl) {
-      throw new Error('Missing media segment url');
+      throw new ProbeError('Missing media segment url', partial);
     }
 
-    // 首片 range 与 ping 并行等待（ping 在函数开头已发起）
     const segmentStart = performance.now();
-    const [segmentResponse, pingTime] = await Promise.all([
-      withTimeout(
-        fetch(firstSegmentUrl, {
-          cache: 'no-store',
-          headers: {
-            Range: 'bytes=0-65535',
-          },
-        }),
-        8000,
-        'Timeout loading first segment',
-      ),
-      pingPromise,
-    ]);
+    const segmentResponse = await withTimeout(
+      fetch(firstSegmentUrl, {
+        cache: 'no-store',
+        headers: {
+          Range: 'bytes=0-8191',
+        },
+      }),
+      8000,
+      'Timeout loading first segment',
+    );
     if (!segmentResponse.ok) {
-      throw new Error('Failed to load first segment');
+      throw new ProbeError('Failed to load first segment', partial);
     }
 
     const segmentBuffer = await segmentResponse.arrayBuffer();
@@ -181,9 +267,67 @@ export async function getVideoResolutionFromM3u8(
       pingTime,
     };
   } catch (error) {
+    throw normalizeProbeError(error, partial);
+  }
+}
+
+/**
+ * 从 m3u8 地址获取视频质量等级和网络信息。
+ * 改为直接请求 playlist 与首个分片，避免为每个源创建隐藏 video+hls 实例。
+ *
+ * 优化：variant playlist 与 first segment range 尝试并行发起，
+ *      将原 3 段串行（HEAD+playlist → variant playlist → first segment）
+ *      压缩到 ~2 轮 RTT。若 master 无 variants，退回单 playlist 链路。
+ */
+export async function getVideoResolutionFromM3u8(
+  m3u8Url: string,
+  useProxy = true,
+  sourceKey = '',
+): Promise<VideoProbeResult> {
+  try {
+    const result = await probeWithMode(m3u8Url, useProxy, sourceKey);
+    if (!useProxy && sourceKey) {
+      clearSourceProxyOverride(sourceKey);
+    }
+    return result;
+  } catch (error) {
+    const firstError = normalizeProbeError(error);
+
+    if (!useProxy) {
+      try {
+        const fallbackResult = await probeWithMode(m3u8Url, true, sourceKey);
+        if (sourceKey) {
+          rememberSourceServerProxy(sourceKey);
+        }
+        return fallbackResult;
+      } catch (fallbackError) {
+        const normalizedFallbackError = normalizeProbeError(fallbackError);
+        const partial = pickBestPartial(
+          normalizedFallbackError.partial,
+          firstError.partial,
+        );
+        if (partial) {
+          return {
+            quality: partial.quality,
+            loadSpeed: '未知',
+            pingTime: partial.pingTime,
+          };
+        }
+        throw new Error(normalizedFallbackError.message);
+      }
+    }
+
+    if (firstError.partial) {
+      return {
+        quality: firstError.partial.quality,
+        loadSpeed: '未知',
+        pingTime: firstError.partial.pingTime,
+      };
+    }
+
     throw new Error(
       `Error getting video resolution: ${
-        error instanceof Error ? error.message : String(error)
+        firstError instanceof Error ? firstError.message : String(firstError)
       }`,
     );
   }

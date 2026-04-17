@@ -44,6 +44,8 @@ interface PlayMainContentProps {
   videoDoubanId: number;
   onSourceDetailFetched?: (updated: SearchResult) => void;
   onAddSources?: (newSources: SearchResult[]) => void;
+  /** 加载超时触发：由外层决定是否自动切到下一个候选源 */
+  onLoadingTimeout?: () => void;
 }
 
 const PLAYER_LOADING_TIMEOUT_MS = 15_000;
@@ -114,6 +116,7 @@ export function PlayMainContent(props: PlayMainContentProps) {
     videoDoubanId,
     onSourceDetailFetched,
     onAddSources,
+    onLoadingTimeout,
   } = props;
 
   // 根据 detail.type_name 选择标题图标和分类颜色
@@ -217,6 +220,11 @@ export function PlayMainContent(props: PlayMainContentProps) {
 
   // 视频加载超时检测（15秒）
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
+  // 把回调塞进 ref，避免父级 callback identity 抖动导致超时定时器反复重启。
+  const onLoadingTimeoutRef = useRef(onLoadingTimeout);
+  useEffect(() => {
+    onLoadingTimeoutRef.current = onLoadingTimeout;
+  }, [onLoadingTimeout]);
 
   useEffect(() => {
     // 每次发起新的加载轮次都重置超时计时，避免上一轮超时状态残留到下一次换源。
@@ -225,10 +233,11 @@ export function PlayMainContent(props: PlayMainContentProps) {
       return;
     }
     setLoadingTimedOut(false);
-    const timer = setTimeout(
-      () => setLoadingTimedOut(true),
-      PLAYER_LOADING_TIMEOUT_MS,
-    );
+    const timer = setTimeout(() => {
+      setLoadingTimedOut(true);
+      // 通知外层尝试自动切换到下一个候选源；若无可降级源则保持超时面板
+      onLoadingTimeoutRef.current?.();
+    }, PLAYER_LOADING_TIMEOUT_MS);
     return () => clearTimeout(timer);
   }, [isVideoLoading, videoLoadingStage, videoLoadingAttempt]);
 

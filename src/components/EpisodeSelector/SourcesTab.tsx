@@ -8,8 +8,9 @@ import React, {
 
 import { collapseSourcesForDisplay } from '@/lib/source-bundle';
 import { SearchResult } from '@/lib/types';
+import { isSourceCoolingDown } from '@/lib/failed-source-cooldown';
 import { getVideoResolutionFromM3u8 } from '@/lib/hls-utils';
-import { getProxyModes } from '@/lib/proxy-modes';
+import { getProxyModes, shouldUseServerProxy } from '@/lib/proxy-modes';
 import { normalizeTitleForSourceMatch } from '@/lib/source_match';
 
 interface VideoInfo {
@@ -214,8 +215,12 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
         }
 
         const proxyModes = await getProxyModes();
-        const useProxy = proxyModes[source.source] === 'server';
-        const probePromise = getVideoResolutionFromM3u8(episodeUrl, useProxy);
+        const useProxy = shouldUseServerProxy(source.source, proxyModes);
+        const probePromise = getVideoResolutionFromM3u8(
+          episodeUrl,
+          useProxy,
+          source.source,
+        );
         inFlightVideoInfo.set(sourceKey, probePromise);
 
         const info = await probePromise;
@@ -379,6 +384,17 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
     return 0;
   };
 
+  // 冷却中的源 key 集合：sessionStorage 里最近 5 分钟内 15s 超时过的源。
+  // useMemo 依赖列表里放 displaySources + isActive，保证 tab 每次进入时重算。
+  const coolingDownKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (const source of displaySources) {
+      const key = `${source.source}-${source.id}`;
+      if (isSourceCoolingDown(key)) set.add(key);
+    }
+    return set;
+  }, [displaySources, isActive]);
+
   const sortedSources = useMemo(() => {
     return displaySources
       .map((source, index) => {
@@ -401,9 +417,14 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
               ? measuredVideoInfo.pingTime
               : Number.MAX_SAFE_INTEGER,
           hasMeasuredInfo,
+          coolingDown: coolingDownKeys.has(sourceKey),
         };
       })
       .sort((a, b) => {
+        // 近期 15s 超时的源一律下沉，避免再次踩坑；冷却过期后自动归位
+        if (a.coolingDown !== b.coolingDown) {
+          return a.coolingDown ? 1 : -1;
+        }
         // 有有效数据的源优先于无数据的，但测速失败的不过度降权
         if (a.hasMeasuredInfo !== b.hasMeasuredInfo) {
           return a.hasMeasuredInfo ? -1 : 1;
@@ -424,7 +445,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
         return a.index - b.index;
       })
       .map((item) => item.source);
-  }, [displaySources, videoInfoMap]);
+  }, [displaySources, videoInfoMap, coolingDownKeys]);
 
   useEffect(() => {
     if (!isActive) return;
@@ -507,6 +528,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
           const sourceKey = `${source.source}-${source.id}`;
           const videoInfo = videoInfoMap.get(sourceKey);
           const isTesting = videoInfo?.loadSpeed === '测量中...';
+          const isCoolingDown = coolingDownKeys.has(sourceKey);
           const episodeCount = Math.max(
             source.episodes.length,
             source.episodes_titles?.length || 0,
@@ -525,8 +547,11 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
                   ${
                     isCurrentSource
                       ? 'bg-green-50 ring-1 ring-green-500/30 dark:bg-green-500/10'
-                      : 'cursor-pointer bg-gray-50/80 ring-1 ring-gray-200/60 hover:bg-gray-100/80 hover:ring-gray-300/60 dark:bg-white/[0.04] dark:ring-white/[0.06] dark:hover:bg-white/[0.08] dark:hover:ring-white/[0.1]'
+                      : isCoolingDown
+                        ? 'cursor-pointer bg-gray-50/80 opacity-60 ring-1 ring-gray-200/60 hover:bg-gray-100/80 hover:opacity-100 hover:ring-gray-300/60 dark:bg-white/[0.04] dark:ring-white/[0.06] dark:hover:bg-white/[0.08] dark:hover:ring-white/[0.1]'
+                        : 'cursor-pointer bg-gray-50/80 ring-1 ring-gray-200/60 hover:bg-gray-100/80 hover:ring-gray-300/60 dark:bg-white/[0.04] dark:ring-white/[0.06] dark:hover:bg-white/[0.08] dark:hover:ring-white/[0.1]'
                   }`.trim()}
+              title={isCoolingDown ? '该源最近加载超时，已暂时降权' : undefined}
             >
               {/* 标题行 */}
               <div className='flex min-w-0 items-center justify-between gap-1'>
@@ -581,10 +606,16 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
                 <span className='truncate rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-white/[0.08] dark:text-gray-400'>
                   {source.source_name}
                 </span>
-                {episodeCount > 1 && (
-                  <span className='flex-shrink-0 text-[10px] text-gray-400 dark:text-gray-500'>
-                    {episodeCount}集
+                {isCoolingDown ? (
+                  <span className='flex-shrink-0 text-[10px] font-medium text-red-400 dark:text-red-400/80'>
+                    近期失败
                   </span>
+                ) : (
+                  episodeCount > 1 && (
+                    <span className='flex-shrink-0 text-[10px] text-gray-400 dark:text-gray-500'>
+                      {episodeCount}集
+                    </span>
+                  )
                 )}
               </div>
 

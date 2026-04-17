@@ -34,6 +34,8 @@ try {
 const nextConfig = {
   output: 'standalone',
   reactStrictMode: false,
+  // dev server 允许的访问来源，避免 Next.js 未来版本在跨源访问 /_next/* 时拦截 HMR/静态资源
+  allowedDevOrigins: ['127.0.0.1', 'localhost'],
   compiler: {
     removeConsole:
       process.env.NODE_ENV === 'production'

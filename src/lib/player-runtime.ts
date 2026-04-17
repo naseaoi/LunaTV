@@ -30,6 +30,10 @@ export type ManagedVideoElement = HTMLVideoElement & {
     onError: (...args: unknown[]) => void;
     onFragLoaded: (...args: unknown[]) => void;
   } | null;
+  /** 当前会话内该 video 实际使用的流量路由，供起播成功后清理短期兜底记忆。 */
+  __icetvUsingServerProxy?: boolean;
+  /** browser 起播失败时，挂给外层事件复用的同源 server 回退入口。 */
+  __icetvSwitchToServerProxy?: ((reason: string) => boolean) | null;
 };
 
 let playerModulesPromise: Promise<PlayerModules> | null = null;

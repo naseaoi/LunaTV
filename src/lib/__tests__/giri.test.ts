@@ -1,5 +1,6 @@
 import {
   buildGirigiriVariantId,
+  countGirigiriVariantTabs,
   extractGirigiriEpisodeEntries,
   extractGirigiriEpisodeVariants,
   parseGirigiriVariantId,
@@ -136,5 +137,59 @@ describe('extractGirigiriEpisodeVariants', () => {
     expect(
       extractGirigiriEpisodeVariants(html).map((item) => item.label),
     ).toEqual(['简中 10', '繁中 11']);
+  });
+
+  it('tab 条里嵌套 swiper-slide div 时仍能提取每个版本的标签', () => {
+    const html = `
+      <div class="anthology">
+        <div class="anthology-tab swiper-container">
+          <div class="swiper-wrapper">
+            <div class="swiper-slide"><a>繁中</a></div>
+            <div class="swiper-slide"><a>简中</a></div>
+            <div class="swiper-slide"><a>日语</a></div>
+          </div>
+        </div>
+        <div class="anthology-list-box none">
+          <ul class="anthology-list-play size">
+            <li><a href="/playGV123-1-1/">01</a></li>
+          </ul>
+        </div>
+        <div class="anthology-list-box none">
+          <ul class="anthology-list-play size">
+            <li><a href="/playGV123-2-1/">01</a></li>
+          </ul>
+        </div>
+        <div class="anthology-list-box none">
+          <ul class="anthology-list-play size">
+            <li><a href="/playGV123-3-1/">01</a></li>
+          </ul>
+        </div>
+      </div>
+    `;
+
+    expect(
+      extractGirigiriEpisodeVariants(html).map((item) => item.label),
+    ).toEqual(['繁中', '简中', '日语']);
+  });
+});
+
+describe('countGirigiriVariantTabs', () => {
+  it('无 tab 条时返回 0', () => {
+    expect(countGirigiriVariantTabs('<div>other</div>')).toBe(0);
+  });
+
+  it('能数出嵌套 swiper-slide 中的 tab 数量', () => {
+    const html = `
+      <div class="anthology">
+        <div class="anthology-tab swiper-container">
+          <div class="swiper-wrapper">
+            <div class="swiper-slide"><a>繁中</a></div>
+            <div class="swiper-slide"><a>简中</a></div>
+          </div>
+        </div>
+        <div class="anthology-list-box none"></div>
+      </div>
+    `;
+    expect(countGirigiriVariantTabs(html)).toBe(2);
   });
 });

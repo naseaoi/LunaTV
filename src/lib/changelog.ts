@@ -11,6 +11,22 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '0.3.3',
+    date: '2026-04-18',
+    added: ['新增源站失败冷却与会话级代理回退记忆'],
+    changed: [
+      '优化浏览器直连播放链路，失败时自动切服务端重试',
+      '优化测速策略，浏览器测速失败后自动回退服务端并放宽失败判定',
+      '优化 giri 多版本解析，版本列表不全时补抓播放页恢复完整选集',
+      '优化签名 m3u8 缓存与开发环境跨源访问设置',
+    ],
+    fixed: [
+      '修复 variant playlist 未透传 `allowCORS` 导致路由不一致',
+      '修复源站 CORS 能力被 m3u8 响应头误判的问题',
+      '修复部分 giri 版本 tab 嵌套时识别不全的问题',
+    ],
+  },
+  {
     version: '0.3.2',
     date: '2026-04-17',
     added: ['新增通用 SWR 服务端缓存、源站 CORS 能力记录与播放预热工具'],

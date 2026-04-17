@@ -4,7 +4,8 @@ import { filterSourcesForPlayback } from '@/lib/source_match';
 import { mergeSourceBundle } from '@/lib/source-bundle';
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8 } from '@/lib/hls-utils';
-import { getProxyModes } from '@/lib/proxy-modes';
+import { prefetchM3U8 } from '@/lib/player-runtime';
+import { getProxyModes, shouldUseServerProxy } from '@/lib/proxy-modes';
 
 import { calculateSourceScore } from '@/features/play/lib/playUtils';
 
@@ -138,6 +139,17 @@ export async function preferBestSource(
         score: calculateSourceScore(r.testResult, maxSpeed, minPing, maxPing),
       }));
       scored.sort((a, b) => b.score - a.score);
+
+      // 预热运行 up：把排名第二的源的 m3u8 打进服务端 SWR 缓存，
+      // 一旦首选起播失败自动降级时能省掉一次回源 RTT。
+      // 忽略带签名 token 的 URL（proxy 缓存已跳过签名 URL，这里预取也没意义）
+      const runnerUpEpisode = scored[1]?.source.episodes?.[0];
+      if (runnerUpEpisode) {
+        prefetchM3U8(
+          `/api/proxy/m3u8?url=${encodeURIComponent(runnerUpEpisode)}`,
+        );
+      }
+
       resolveMain(scored[0].source);
     };
 
@@ -149,8 +161,8 @@ export async function preferBestSource(
         if (pendingCount === 0) finalize();
         continue;
       }
-      const useProxy = proxyModes[source.source] === 'server';
-      getVideoResolutionFromM3u8(source.episodes[0], useProxy)
+      const useProxy = shouldUseServerProxy(source.source, proxyModes);
+      getVideoResolutionFromM3u8(source.episodes[0], useProxy, source.source)
         .then((testResult) => {
           if (settled) return;
           collectedResults.push({ source, testResult });

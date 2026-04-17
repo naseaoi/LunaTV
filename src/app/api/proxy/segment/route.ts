@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { markSourceCors, responseAllowsCors } from '@/lib/source-capability';
 import { validateProxyUrl } from '@/lib/url-guard';
 
 import { getProxySourceKey, resolveProxyUserAgent } from '../utils';
@@ -40,6 +41,11 @@ export async function GET(request: Request) {
         { error: 'Failed to fetch segment' },
         { status: response.status },
       );
+    }
+
+    // 只用真实 segment 响应学习跨域能力，避免被 m3u8 响应头误导。
+    if (source) {
+      markSourceCors(source, responseAllowsCors(response.headers));
     }
 
     const responseHeaders = new Headers();

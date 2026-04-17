@@ -2,11 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { getBaseUrl, resolveUrl } from '@/lib/live';
 import { createSwrCache } from '@/lib/server-cache';
-import {
-  isSourceCorsCapable,
-  markSourceCors,
-  responseAllowsCors,
-} from '@/lib/source-capability';
+import { isSourceCorsCapable } from '@/lib/source-capability';
 import { validateProxyUrl } from '@/lib/url-guard';
 
 import { getProxySourceKey, resolveProxyUserAgent } from '../utils';
@@ -33,6 +29,18 @@ const m3u8Cache = createSwrCache<M3U8CacheEntry>({
   maxSize: 500,
 });
 
+// 识别带 token/签名的短时效 URL：命中后跳过本地 SWR 缓存，
+// 避免缓存把过期 token 沉淀下来导致 hls.js 拉 ts 直接 403。
+// 只匹配 query 中的明显签名字段；保守一点漏判好过误判。
+const SIGNED_URL_PARAM_RE =
+  /[?&](sign|signature|auth_key|auth|token|expires?|expire|hmac|x-amz-signature|security_token|oss_expires|wssecret|wstime|ccode|ksign)=/i;
+
+function isSignedM3U8Url(rawUrl: string): boolean {
+  if (!rawUrl) return false;
+  if (!rawUrl.includes('?')) return false;
+  return SIGNED_URL_PARAM_RE.test(rawUrl);
+}
+
 // 软过期后台刷新：同 URL 并发刷新请求合并，避免雷群
 const m3u8RefreshInflight = new Map<string, Promise<void>>();
 
@@ -53,10 +61,6 @@ function refreshM3U8Cache(
         headers: { 'User-Agent': ua },
       });
       if (!response.ok) return;
-      // 后台刷新时同样更新 CORS 能力记录
-      if (source) {
-        markSourceCors(source, responseAllowsCors(response.headers));
-      }
       const contentType = response.headers.get('Content-Type') || '';
       if (
         !contentType.toLowerCase().includes('mpegurl') &&
@@ -104,10 +108,11 @@ export async function GET(request: Request) {
   }
 
   const ua = await resolveProxyUserAgent(source);
+  const skipCache = isSignedM3U8Url(validation.url);
 
   try {
     // 查询 VOD 清单缓存（fresh/stale 皆命中；stale 命中时触发后台刷新）
-    const cached = m3u8Cache.peek(validation.url);
+    const cached = skipCache ? null : m3u8Cache.peek(validation.url);
     if (cached) {
       const { value, fresh } = cached;
       if (!fresh) {
@@ -156,12 +161,6 @@ export async function GET(request: Request) {
       );
     }
 
-    // 源站 CORS 能力探测：观察 upstream 响应头
-    // 只在 source 已知时记录，保证 segment/key 重写能正确查表
-    if (source) {
-      markSourceCors(source, responseAllowsCors(response.headers));
-    }
-
     const contentType = response.headers.get('Content-Type') || '';
     if (
       contentType.toLowerCase().includes('mpegurl') ||
@@ -171,10 +170,11 @@ export async function GET(request: Request) {
       const m3u8Content = await response.text();
       const baseUrl = getBaseUrl(finalUrl);
 
-      // VOD / Master playlist 写入缓存（直播清单不缓存）
+      // VOD / Master playlist 写入缓存（直播清单不缓存；带签名 token 的短时效 URL 也跳过）
       if (
-        m3u8Content.includes('#EXT-X-ENDLIST') ||
-        m3u8Content.includes('#EXT-X-STREAM-INF')
+        !skipCache &&
+        (m3u8Content.includes('#EXT-X-ENDLIST') ||
+          m3u8Content.includes('#EXT-X-STREAM-INF'))
       ) {
         m3u8Cache.set(validation.url, {
           content: m3u8Content,
@@ -334,7 +334,11 @@ function rewriteM3U8Content(
         const nextLine = lines[i].trim();
         if (nextLine && !nextLine.startsWith('#')) {
           const resolvedUrl = resolveUrl(baseUrl, nextLine);
-          const proxyUrl = buildProxyPath('m3u8', resolvedUrl);
+          const proxyUrl = buildProxyPath(
+            'm3u8',
+            resolvedUrl,
+            allowCORS ? { allowCORS: 'true' } : {},
+          );
           rewrittenLines.push(proxyUrl);
         } else {
           rewrittenLines.push(nextLine);

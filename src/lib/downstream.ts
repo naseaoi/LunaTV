@@ -1,7 +1,9 @@
 import { API_CONFIG, ApiSite, getConfig } from '@/lib/config';
 import {
   buildGirigiriVariantId,
+  countGirigiriVariantTabs,
   extractGirigiriEpisodeVariants,
+  type GiriEpisodeVariant,
   parseGirigiriVariantId,
 } from '@/lib/giri';
 import {
@@ -268,6 +270,40 @@ async function searchFromGirigiri(
   }
 }
 
+/**
+ * 解析 giri 详情页的多版本选集列表。
+ * 详情页常只 SSR 默认 tab 的 anthology-list-box，切换其他 tab 依赖前端 AJAX；
+ * 此时仅靠详情页解析只能拿到 1 个版本。若检测到 tab 条宣告的版本数多于已解析
+ * 到的版本数，则补抓默认播放页 HTML（通常把全部 tab 的列表都渲染在 DOM 中），
+ * 以取回完整的版本清单。
+ */
+async function resolveGirigiriEpisodeVariants(
+  origin: string,
+  videoId: string,
+  detailHtml: string,
+): Promise<GiriEpisodeVariant[]> {
+  const fromDetail = extractGirigiriEpisodeVariants(detailHtml);
+  const tabCount = countGirigiriVariantTabs(detailHtml);
+
+  // tab 条暗示版本数 <= 已解析版本数，或根本没有多 tab，直接返回
+  if (tabCount <= fromDetail.length || tabCount < 2) {
+    return fromDetail;
+  }
+
+  const probeGroupId = fromDetail[0]?.groupId || '1';
+  const probePlayPath =
+    fromDetail[0]?.episodes[0]?.playPath ||
+    `/playGV${videoId}-${probeGroupId}-1/`;
+  const probeUrl = toAbsoluteUrl(probePlayPath, origin);
+  const probeHtml = await fetchGiriHtml(probeUrl);
+  if (!probeHtml) {
+    return fromDetail;
+  }
+
+  const fromProbe = extractGirigiriEpisodeVariants(probeHtml);
+  return fromProbe.length > fromDetail.length ? fromProbe : fromDetail;
+}
+
 async function getDetailFromGirigiri(
   apiSite: ApiSite,
   id: string,
@@ -303,7 +339,11 @@ async function getDetailFromGirigiri(
     '';
   const poster = toAbsoluteUrl(posterRaw, origin);
 
-  const episodeVariants = extractGirigiriEpisodeVariants(html);
+  const episodeVariants = await resolveGirigiriEpisodeVariants(
+    origin,
+    videoId,
+    html,
+  );
   if (episodeVariants.length === 0) {
     throw new Error('详情页未提取到可播放剧集');
   }

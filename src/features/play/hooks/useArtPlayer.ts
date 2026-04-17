@@ -1,7 +1,11 @@
 import { Dispatch, MutableRefObject, SetStateAction, useEffect } from 'react';
 
 import { SearchResult } from '@/lib/types';
-import { isServerProxy } from '@/lib/proxy-modes';
+import {
+  clearSourceProxyOverride,
+  isServerProxy,
+  rememberSourceServerProxy,
+} from '@/lib/proxy-modes';
 import {
   assignManagedVideoCleanup,
   createHlsLoaderClass,
@@ -72,6 +76,8 @@ export interface UseArtPlayerParams {
   releaseWakeLock: () => Promise<void>;
   cleanupPlayer: () => void;
   onPlaybackStarted?: () => void;
+  /** 当前源从 browser 回退到 server 前触发，用于重置同源重试超时窗口。 */
+  onSourceProxyFallbackStarted?: () => void;
   /** 播放器收集到当前源的测速数据后回调（速度+分辨率+延迟） */
   onCurrentSourceVideoInfo?: (info: {
     quality: string;
@@ -118,6 +124,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
     releaseWakeLock,
     cleanupPlayer,
     onPlaybackStarted,
+    onSourceProxyFallbackStarted,
     onCurrentSourceVideoInfo,
   } = params;
 
@@ -265,6 +272,17 @@ export function useArtPlayer(params: UseArtPlayerParams) {
                     maxMaxBufferLength: 120,
                     backBufferLength: 30,
                   }),
+                  // VOD 场景快速失败：避免 hls.js 默认的多轮长重试吃掉
+                  // 外层 15s 换源超时预算，换源失败要能迅速走自动降级
+                  manifestLoadingTimeOut: 6000,
+                  manifestLoadingMaxRetry: 1,
+                  manifestLoadingRetryDelay: 500,
+                  levelLoadingTimeOut: 6000,
+                  levelLoadingMaxRetry: 1,
+                  levelLoadingRetryDelay: 500,
+                  fragLoadingTimeOut: 8000,
+                  fragLoadingMaxRetry: 2,
+                  fragLoadingRetryDelay: 500,
                   loader: currentBlockAd
                     ? (AdBlockingHlsLoader as unknown as typeof Hls.DefaultConfig.loader)
                     : Hls.DefaultConfig.loader,
@@ -272,16 +290,23 @@ export function useArtPlayer(params: UseArtPlayerParams) {
               }
               managedVideo.__icetvBlockAd = currentBlockAd;
 
-              // 根据源站流量路由配置决定是否走服务端代理
+              // 根据 admin 路由 + 会话期失败记忆决定是否直连；
+              // 若 browser 模式起播失败，会在当前源内自动切到 server 再试一次。
               const sourceKey = detailRef.current?.source || '';
-              const useServerProxy = isServerProxy(sourceKey);
-              const baseTargetUrl = useServerProxy
-                ? `/api/proxy/m3u8?url=${encodeURIComponent(url)}`
-                : `/api/proxy/m3u8?url=${encodeURIComponent(url)}&allowCORS=true`;
-              // 透传 sourceKey 供服务端做 CORS 能力探测 / 下游路由决策
-              const targetUrl = sourceKey
-                ? `${baseTargetUrl}&icetv-source=${encodeURIComponent(sourceKey)}`
-                : baseTargetUrl;
+              const buildTargetUrl = (
+                rawUrl: string,
+                useServerProxy: boolean,
+              ) => {
+                const baseTargetUrl = useServerProxy
+                  ? `/api/proxy/m3u8?url=${encodeURIComponent(rawUrl)}`
+                  : `/api/proxy/m3u8?url=${encodeURIComponent(rawUrl)}&allowCORS=true`;
+                return sourceKey
+                  ? `${baseTargetUrl}&icetv-source=${encodeURIComponent(sourceKey)}`
+                  : baseTargetUrl;
+              };
+              let currentUseServerProxy = isServerProxy(sourceKey);
+              let targetUrl = buildTargetUrl(url, currentUseServerProxy);
+              managedVideo.__icetvUsingServerProxy = currentUseServerProxy;
 
               setRealtimeLoadSpeed('测速中...');
 
@@ -289,15 +314,61 @@ export function useArtPlayer(params: UseArtPlayerParams) {
               let firstFragSpeed = '';
               let firstFragPing = 0;
               let videoInfoReported = false;
-              const fragLoadStart = performance.now();
+              let fragLoadStart = performance.now();
 
-              const speedFallbackTimer = setTimeout(() => {
-                setRealtimeLoadSpeed((prev) =>
-                  prev === '测速中...' ? '0 KB/s' : prev,
-                );
-              }, 5000);
+              let speedFallbackTimer: ReturnType<typeof setTimeout> | null =
+                null;
+              const resetSpeedFallbackTimer = () => {
+                if (speedFallbackTimer) {
+                  clearTimeout(speedFallbackTimer);
+                }
+                speedFallbackTimer = setTimeout(() => {
+                  setRealtimeLoadSpeed((prev) =>
+                    prev === '测速中...' ? '0 KB/s' : prev,
+                  );
+                }, 5000);
+              };
+              resetSpeedFallbackTimer();
 
               let lastStallRecoveryAt = 0;
+
+              const switchToServerProxy = (reason: string) => {
+                if (currentUseServerProxy) {
+                  return false;
+                }
+
+                const fallbackTargetUrl = buildTargetUrl(url, true);
+                console.warn('浏览器直连起播失败，切换服务端代理重试', {
+                  sourceKey,
+                  reason,
+                });
+
+                try {
+                  if (sourceKey) {
+                    rememberSourceServerProxy(sourceKey);
+                  }
+                  currentUseServerProxy = true;
+                  targetUrl = fallbackTargetUrl;
+                  managedVideo.__icetvUsingServerProxy = true;
+                  firstFragSpeed = '';
+                  firstFragPing = 0;
+                  videoInfoReported = false;
+                  fragLoadStart = performance.now();
+                  setRealtimeLoadSpeed('测速中...');
+                  resetSpeedFallbackTimer();
+                  onSourceProxyFallbackStarted?.();
+                  if (typeof hls.stopLoad === 'function') {
+                    hls.stopLoad();
+                  }
+                  hls.loadSource(fallbackTargetUrl);
+                  ensureVideoSource(video, fallbackTargetUrl);
+                  return true;
+                } catch (error) {
+                  console.error('切换服务端代理失败:', error);
+                  return false;
+                }
+              };
+              managedVideo.__icetvSwitchToServerProxy = switchToServerProxy;
 
               const getBufferedRanges = () => {
                 const ranges: Array<[number, number]> = [];
@@ -379,7 +450,9 @@ export function useArtPlayer(params: UseArtPlayerParams) {
               const cleanupVideoRuntime = () => {
                 if (videoRuntimeCleaned) return;
                 videoRuntimeCleaned = true;
-                clearTimeout(speedFallbackTimer);
+                if (speedFallbackTimer) {
+                  clearTimeout(speedFallbackTimer);
+                }
                 video.removeEventListener('waiting', onWaiting);
                 video.removeEventListener('stalled', onStalled);
                 video.removeEventListener('loadeddata', tryReportVideoInfo);
@@ -417,6 +490,16 @@ export function useArtPlayer(params: UseArtPlayerParams) {
               const onHlsError = function (_event: unknown, data: any) {
                 console.error('HLS Error:', _event, data);
                 if (data.fatal) {
+                  const errorDetails = String(data?.details || '');
+                  if (
+                    data.type === Hls.ErrorTypes.NETWORK_ERROR &&
+                    switchToServerProxy(
+                      `${String(data?.type || 'unknown')}:${errorDetails || 'fatal'}`,
+                    )
+                  ) {
+                    return;
+                  }
+
                   handleHlsFatalError(
                     {
                       startLoad: () => hls.startLoad(),
@@ -436,7 +519,10 @@ export function useArtPlayer(params: UseArtPlayerParams) {
                 }
               };
               const onHlsFragLoaded = function (_: unknown, data: any) {
-                clearTimeout(speedFallbackTimer);
+                if (speedFallbackTimer) {
+                  clearTimeout(speedFallbackTimer);
+                  speedFallbackTimer = null;
+                }
                 const stats = data.frag.stats;
                 const loadedBytes = stats.loaded ?? stats.total ?? 0;
                 const startTime = stats.loading.first ?? 0;
@@ -606,6 +692,18 @@ export function useArtPlayer(params: UseArtPlayerParams) {
           return;
         }
 
+        const notifyPlayerPlaybackStarted = () => {
+          const activeVideo = player.video as HTMLVideoElement | undefined;
+          const activeSourceKey = detailRef.current?.source || '';
+          if (activeVideo && activeSourceKey) {
+            const activeManagedVideo = getManagedVideo(activeVideo);
+            if (activeManagedVideo.__icetvUsingServerProxy === false) {
+              clearSourceProxyOverride(activeSourceKey);
+            }
+          }
+          onPlaybackStarted?.();
+        };
+
         // --- 播放器事件 ---
 
         player.on('ready', () => {
@@ -625,7 +723,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
         player.on('video:playing', () => {
           setIsVideoLoading(false);
           setRealtimeLoadSpeed('');
-          onPlaybackStarted?.();
+          notifyPlayerPlaybackStarted();
         });
 
         player.on('pause', () => {
@@ -690,7 +788,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
           if (shouldDismissLoadingFromCanPlay(player.video)) {
             setIsVideoLoading(false);
             setRealtimeLoadSpeed('');
-            onPlaybackStarted?.();
+            notifyPlayerPlaybackStarted();
           }
         });
 
@@ -733,6 +831,17 @@ export function useArtPlayer(params: UseArtPlayerParams) {
         player.on('error', (err: Error) => {
           console.error('播放器错误:', err);
           if (player.currentTime > 0) return;
+          const activeVideo = player.video as HTMLVideoElement | undefined;
+          const activeManagedVideo = activeVideo
+            ? getManagedVideo(activeVideo)
+            : null;
+          if (
+            activeManagedVideo?.__icetvSwitchToServerProxy?.(
+              err.message || 'player-error',
+            )
+          ) {
+            return;
+          }
         });
 
         // 自动播放下一集
@@ -768,5 +877,11 @@ export function useArtPlayer(params: UseArtPlayerParams) {
     return () => {
       cancelled = true;
     };
-  }, [videoUrl, loading, blockAdEnabled, onPlaybackStarted]);
+  }, [
+    videoUrl,
+    loading,
+    blockAdEnabled,
+    onPlaybackStarted,
+    onSourceProxyFallbackStarted,
+  ]);
 }

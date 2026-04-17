@@ -18,6 +18,10 @@ import {
 import { mergeSourceBundle } from '@/lib/source-bundle';
 import { SearchResult, SkipConfig } from '@/lib/types';
 import { preloadProxyModes } from '@/lib/proxy-modes';
+import {
+  clearSourceFailure,
+  markSourceFailed,
+} from '@/lib/failed-source-cooldown';
 
 import { PlayMainContent } from '@/features/play/components/PlayMainContent';
 import {
@@ -167,6 +171,12 @@ function PlayPageClient() {
   const pendingSourceSwitchCleanupRef = useRef<SourceSwitchCleanupTask | null>(
     null,
   );
+  // 15s 加载超时后已尝试过的源（格式 `${source}-${id}`）；
+  // 用户手动换源或成功起播后清空，避免永久屏蔽某个源。
+  const failedSourcesRef = useRef<Set<string>>(new Set());
+  // 自动降级正在进行中时为 true，用于区分是否为用户主动换源——
+  // 主动换源要清空 failedSourcesRef，自动降级不能清，否则陷入死循环。
+  const autoFallbackInProgressRef = useRef(false);
 
   const [optimizationEnabled] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -572,6 +582,17 @@ function PlayPageClient() {
       return;
     }
 
+    // 用户主动换源时清空失败记录，让之前 15s 超时被降级掉的源可以重新尝试。
+    // 自动降级自己调用本函数时会先置位 autoFallbackInProgressRef，跳过这步。
+    if (!autoFallbackInProgressRef.current) {
+      failedSourcesRef.current = new Set();
+      // 用户手动选择该源 = 明确想再试一次，同步清掉 sessionStorage 冷却记录
+      clearSourceFailure(`${newSource}-${newId}`);
+    }
+    // 置位仅用于一次 handleSourceChange 调用，消费后立即复位，
+    // 保证后续任何 **用户主动** 点击都能正确清空失败记录。
+    autoFallbackInProgressRef.current = false;
+
     const targetSource = availableSources.find(
       (source) => source.source === newSource && source.id === newId,
     );
@@ -609,28 +630,27 @@ function PlayPageClient() {
 
       let newDetail = targetSource;
 
-      // episodes 为空（如 giri 搜索阶段的残缺数据），补调 detail 获取完整信息
-      if (!newDetail.episodes || newDetail.episodes.length === 0) {
-        try {
-          const detailRes = await fetch(
-            `/api/detail?source=${newSource}&id=${newId}`,
-          );
-          if (currentRequestId !== sourceChangeRequestIdRef.current) {
-            return;
-          }
-          if (detailRes.ok) {
-            const fullDetail = (await detailRes.json()) as SearchResult;
-            if (fullDetail.episodes && fullDetail.episodes.length > 0) {
-              newDetail = fullDetail;
-              // giri 多版本详情会携带 sibling 版本，一起并回源列表。
-              setAvailableSources((prev) =>
-                mergeSourceBundle(prev, fullDetail),
-              );
-            }
-          }
-        } catch (err) {
-          console.error('换源补全详情失败:', err);
+      // 切源前始终走一次 /api/detail 重取最新的 episodes 列表。
+      // 列表里的播放地址来自搜索阶段的残留数据，可能是几分钟前甚至更久之前拉到的；
+      // 部分源（尤其是 giri、带签名 token 的 CDN）过几分钟就过期，直接复用会触发
+      // 15s 加载超时。/api/detail 自身有 SWR 缓存保护，实际回源压力可控。
+      try {
+        const detailRes = await fetch(
+          `/api/detail?source=${newSource}&id=${newId}`,
+        );
+        if (currentRequestId !== sourceChangeRequestIdRef.current) {
+          return;
         }
+        if (detailRes.ok) {
+          const fullDetail = (await detailRes.json()) as SearchResult;
+          if (fullDetail.episodes && fullDetail.episodes.length > 0) {
+            newDetail = fullDetail;
+            // giri 多版本详情会携带 sibling 版本，一起并回源列表。
+            setAvailableSources((prev) => mergeSourceBundle(prev, fullDetail));
+          }
+        }
+      } catch (err) {
+        console.error('换源刷新详情失败:', err);
       }
 
       if (currentRequestId !== sourceChangeRequestIdRef.current) {
@@ -714,6 +734,56 @@ function PlayPageClient() {
     });
   }, []);
 
+  // 把 "1.2MB/s" / "800KB/s" / "4Mbps" 统一成 KB/s 数值，供候选源排序
+  const parseLoadSpeedKBps = (speed?: string): number => {
+    if (!speed) return 0;
+    const match = speed.match(/^([\d.]+)\s*(Mbps|Mb\/s|KB\/s|MB\/s)$/);
+    if (!match) return 0;
+    const value = Number.parseFloat(match[1]);
+    if (!Number.isFinite(value) || value <= 0) return 0;
+    const unit = match[2];
+    if (unit === 'Mbps' || unit === 'Mb/s') return (value * 1024) / 8;
+    if (unit === 'MB/s') return value * 1024;
+    return value;
+  };
+
+  // 15s 加载超时时自动换到下一个候选源：
+  // 1. 把当前源加入失败集合；
+  // 2. 在 availableSources 中挑选一个不在失败集合里、已测速成功的最优源；
+  // 3. 复用 handleSourceChange（置 autoFallbackInProgressRef 标志，避免清空失败集合）。
+  const handleLoadingTimeout = useCallback(() => {
+    const curSource = currentSourceRef.current;
+    const curId = currentIdRef.current;
+    if (!curSource || !curId) return;
+
+    const curKey = `${curSource}-${curId}`;
+    failedSourcesRef.current.add(curKey);
+    // 同步写入 sessionStorage，SourcesTab 排序时据此降权
+    markSourceFailed(curKey);
+
+    const candidates = availableSources.filter((s) => {
+      const key = `${s.source}-${s.id}`;
+      if (key === curKey) return false;
+      if (failedSourcesRef.current.has(key)) return false;
+      return true;
+    });
+    if (candidates.length === 0) return;
+
+    // 优先测速过且速度有效的，其次按已有排序顺序
+    const ranked = [...candidates].sort((a, b) => {
+      const aInfo = precomputedVideoInfo.get(`${a.source}-${a.id}`);
+      const bInfo = precomputedVideoInfo.get(`${b.source}-${b.id}`);
+      const aSpeed = parseLoadSpeedKBps(aInfo?.loadSpeed);
+      const bSpeed = parseLoadSpeedKBps(bInfo?.loadSpeed);
+      return bSpeed - aSpeed;
+    });
+    const next = ranked[0];
+    if (!next) return;
+
+    autoFallbackInProgressRef.current = true;
+    void handleSourceChange(next.source, next.id, next.title);
+  }, [availableSources, precomputedVideoInfo]);
+
   // ---------------------------------------------------------------------------
   // Artplayer hook
   // ---------------------------------------------------------------------------
@@ -751,12 +821,21 @@ function PlayPageClient() {
     requestWakeLock,
     releaseWakeLock,
     cleanupPlayer,
+    onSourceProxyFallbackStarted: useCallback(() => {
+      // 同源从 browser 切到 server 时，重置 15s 超时窗口，避免尚未重试就被判超时换源。
+      setVideoLoadingAttempt((prev) => prev + 1);
+    }, []),
     onPlaybackStarted: useCallback(() => {
       const activeSource = currentSourceRef.current;
       const activeId = currentIdRef.current;
       if (!activeSource || !activeId) {
         return;
       }
+
+      // 成功起播：结束自动降级链路，清空失败记录，避免用户下次换源时继续绕开历史源
+      autoFallbackInProgressRef.current = false;
+      failedSourcesRef.current = new Set();
+      clearSourceFailure(`${activeSource}-${activeId}`);
 
       void finalizePendingSourceSwitchCleanup(activeSource, activeId);
     }, [finalizePendingSourceSwitchCleanup]),
@@ -835,6 +914,7 @@ function PlayPageClient() {
       videoDoubanId={videoDoubanId}
       onSourceDetailFetched={handleSourceDetailFetched}
       onAddSources={handleAddSources}
+      onLoadingTimeout={handleLoadingTimeout}
     />
   );
 }

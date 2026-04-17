@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { markSourceCors, responseAllowsCors } from '@/lib/source-capability';
 import { validateProxyUrl } from '@/lib/url-guard';
 
 import { getProxySourceKey, resolveProxyUserAgent } from '../utils';
@@ -32,6 +33,10 @@ export async function GET(request: Request) {
         { error: 'Failed to fetch key' },
         { status: 500 },
       );
+    }
+    // key 与 segment 一样属于真实媒体资源，请求成功后可作为跨域能力依据。
+    if (source) {
+      markSourceCors(source, responseAllowsCors(response.headers));
     }
     const keyData = await response.arrayBuffer();
     return new Response(keyData, {

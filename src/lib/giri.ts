@@ -40,15 +40,38 @@ function buildEpisodeEntries(matches: RegExpMatchArray[]): GiriEpisodeEntry[] {
   return entries;
 }
 
+// 截取 anthology-tab 区块内容；该区块常含嵌套 swiper-slide 的 div，
+// 直接用懒惰匹配 `</div>` 会过早结束，因此按下一个已知兄弟块（anthology-list-box
+// 或 anthology-list）作为结束标记。
+function sliceAnthologyTabSection(html: string): string {
+  const startMatch = html.match(/<div class="anthology-tab[^"]*">/);
+  if (!startMatch || startMatch.index === undefined) {
+    return '';
+  }
+
+  const startIdx = startMatch.index + startMatch[0].length;
+  const rest = html.slice(startIdx);
+  const endMatch = rest.search(
+    /<div class="anthology-list(?:-box)?[^"]*"|<\/div>\s*<\/div>\s*<div class="anthology/,
+  );
+
+  return endMatch >= 0 ? rest.slice(0, endMatch) : rest;
+}
+
 function extractVariantLabels(html: string): string[] {
-  const tabContent =
-    html.match(
-      /<div class="anthology-tab[^"]*">[\s\S]*?<div class="swiper-wrapper">([\s\S]*?)<\/div>[\s\S]*?<\/div>/,
-    )?.[1] || '';
+  const tabContent = sliceAnthologyTabSection(html);
+  if (!tabContent) {
+    return [];
+  }
 
   return Array.from(tabContent.matchAll(/<a[^>]*>([\s\S]*?)<\/a>/g)).map(
     (match, index) => cleanText(match[1] || '') || `版本${index + 1}`,
   );
+}
+
+/** 统计源站详情页 tab 条里的版本数量（用于判断是否需要补抓其他版本的选集） */
+export function countGirigiriVariantTabs(html: string): number {
+  return extractVariantLabels(html).length;
 }
 
 export function parseGirigiriVariantId(rawId: string): {
