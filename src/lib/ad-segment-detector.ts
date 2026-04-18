@@ -85,7 +85,7 @@ function computeDurationMode(segments: DiscontSegment[]): number | null {
     const key = Math.round(s.duration * 10) / 10;
     buckets.set(key, (buckets.get(key) || 0) + 1);
   }
-  const sorted = [...buckets.entries()].sort((a, b) => b[1] - a[1]);
+  const sorted = Array.from(buckets.entries()).sort((a, b) => b[1] - a[1]);
   const [modeKey, modeCount] = sorted[0];
 
   // 众数覆盖率 < 60% → 切分不规整，算法不适用
@@ -174,9 +174,9 @@ function rebuildM3U8(
 
   // 收集所有要删除的行号
   const dropLines = new Set<number>();
-  for (const idx of adIndices) {
+  adIndices.forEach((idx) => {
     for (const li of segments[idx].lineIndices) dropLines.add(li);
-  }
+  });
 
   // 仅保留非广告行；DISCONTINUITY 原本就是段之间的分隔符，删广告段后
   // 相邻两个正片段间仍保留一条 DISCONTINUITY，无需额外处理。
