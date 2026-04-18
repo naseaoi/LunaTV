@@ -10,6 +10,7 @@ import { ThemeToggle } from './ThemeToggle';
 import { UserMenu } from './UserMenu';
 
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
+import { useSmartHomeNav } from '@/hooks/useSmartHomeNav';
 
 interface MobileHeaderProps {
   showBackButton?: boolean;
@@ -18,6 +19,7 @@ interface MobileHeaderProps {
 const MobileHeader = ({ showBackButton = false }: MobileHeaderProps) => {
   const { siteName } = useSite();
   const router = useRouter();
+  const goHome = useSmartHomeNav();
 
   useEffect(() => {
     router.prefetch('/search');
@@ -68,6 +70,10 @@ const MobileHeader = ({ showBackButton = false }: MobileHeaderProps) => {
       <div className='absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2'>
         <Link
           href='/'
+          onClick={(e) => {
+            e.preventDefault();
+            goHome();
+          }}
           className='text-2xl font-bold tracking-tight text-green-600 transition-opacity hover:opacity-80'
         >
           {siteName}

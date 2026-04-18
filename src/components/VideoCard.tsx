@@ -1061,7 +1061,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
             )}
           </div>
 
-          {/* 标题与来源 */}
+          {/* 标题与来源：保留在文档流中，让卡片高度稳定参与布局，避免首页区块间距被压缩。 */}
           <div
             className='mt-2 text-center'
             style={noSelectStyle}

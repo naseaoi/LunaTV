@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 
-let appVersion = '0.2.8';
+let appVersion = '0.3.4';
 
 function extractLatestVersionFromChangelog(content) {
   const match = content.match(/^## \[([\d.]+)\] - \d{4}-\d{2}-\d{2}/m);
@@ -43,6 +43,15 @@ const nextConfig = {
         : false,
   },
   serverExternalPackages: ['better-sqlite3'],
+  // 客户端 Router Cache：页面段在内存中保留 5 分钟，
+  // 与首页 ISR revalidate=300 对齐，首页 → 搜索页 → 首页可复用组件树，
+  // 避免 HomeClient 重挂载导致的状态、滚动位置丢失。
+  experimental: {
+    staleTimes: {
+      dynamic: 300,
+      static: 300,
+    },
+  },
   env: {
     NEXT_PUBLIC_APP_VERSION: appVersion,
   },

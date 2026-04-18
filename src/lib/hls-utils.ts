@@ -13,6 +13,7 @@ type VideoProbeResult = {
 type MasterVariant = {
   url: string;
   width: number;
+  bandwidth: number;
 };
 
 type PartialProbeResult = {
@@ -81,9 +82,14 @@ function parseMasterVariants(content: string): MasterVariant[] {
 
     const resolutionMatch = line.match(/RESOLUTION=(\d+)x(\d+)/i);
     const width = resolutionMatch ? Number.parseInt(resolutionMatch[1], 10) : 0;
+    const bandwidthMatch = line.match(/[,:]BANDWIDTH=(\d+)/i);
+    const bandwidth = bandwidthMatch
+      ? Number.parseInt(bandwidthMatch[1], 10)
+      : 0;
     variants.push({
       url: nextLine,
       width,
+      bandwidth,
     });
   }
 
@@ -95,8 +101,30 @@ function pickProbeVariant(variants: MasterVariant[]) {
 
   const bestVariant = [...variants].sort((a, b) => b.width - a.width)[0];
 
+  // 判定 master 声明的 RESOLUTION 是否可信。
+  // 源站常见的虚标情形：
+  // 1) 混合声明：部分 variant 有 RESOLUTION，部分没有 —— 缺失者可能才是真实高清轨；
+  // 2) 统一虚标：所有 variant 的 RESOLUTION 完全相同，但 BANDWIDTH 差距 >2x，
+  //    正常情况下带宽翻倍通常伴随分辨率提升，同分辨率带宽剧变多为占位元数据。
+  // 命中任一情形时视为不可信，后续 quality 直接标"未知"，避免误导用户。
+  const hasMissingResolution = variants.some((v) => v.width <= 0);
+  let suspiciousBandwidth = false;
+  if (!hasMissingResolution && variants.length >= 2) {
+    const allSameWidth = variants.every((v) => v.width === variants[0].width);
+    const bandwidths = variants.map((v) => v.bandwidth).filter((bw) => bw > 0);
+    if (allSameWidth && bandwidths.length >= 2) {
+      const maxBw = Math.max(...bandwidths);
+      const minBw = Math.min(...bandwidths);
+      if (minBw > 0 && maxBw / minBw > 2) {
+        suspiciousBandwidth = true;
+      }
+    }
+  }
+  const resolutionTrusted = !hasMissingResolution && !suspiciousBandwidth;
+
   return {
     bestQualityWidth: bestVariant?.width || 0,
+    resolutionTrusted,
     // 测速优先选择首个变体，尽量贴近实际起播路径。
     probePlaylistUrl: variants[0].url,
   };
@@ -215,7 +243,10 @@ async function probeWithMode(
     ensureCodecsPlayable(playlistContent);
     const variants = parseMasterVariants(playlistContent);
     const pickedVariant = pickProbeVariant(variants);
-    const quality = mapWidthToQuality(pickedVariant?.bestQualityWidth || 0);
+    const quality =
+      pickedVariant && pickedVariant.resolutionTrusted
+        ? mapWidthToQuality(pickedVariant.bestQualityWidth)
+        : '未知';
 
     let mediaPlaylistContent = playlistContent;
 

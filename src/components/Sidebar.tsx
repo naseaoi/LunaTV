@@ -28,6 +28,7 @@ import { ThemeToggle } from './ThemeToggle';
 import { UserMenu } from './UserMenu';
 
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
+import { useSmartHomeNav } from '@/hooks/useSmartHomeNav';
 
 interface SidebarContextType {
   isCollapsed: boolean;
@@ -98,6 +99,7 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const { siteName } = useSite();
+  const goHome = useSmartHomeNav();
   // 若同一次 SPA 会话中已经读取过折叠状态，则直接复用，避免闪烁
   const [isCollapsed, setIsCollapsed] = useState<boolean>(
     getInitialSidebarCollapsed,
@@ -292,6 +294,10 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
               <Link
                 href='/'
                 data-brand-link
+                onClick={(e) => {
+                  e.preventDefault();
+                  goHome();
+                }}
                 className={`flex min-h-[40px] w-full select-none items-center justify-start overflow-hidden rounded-lg py-2 transition-[padding,gap] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] hover:opacity-90 ${
                   isCollapsed ? 'gap-0 px-[2px]' : 'gap-3 px-2'
                 }`}
@@ -318,7 +324,11 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
             <nav className='mt-4 space-y-1 px-2'>
               <Link
                 href='/'
-                onClick={() => setActive('/')}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setActive('/');
+                  goHome();
+                }}
                 data-active={active === '/'}
                 className={`group flex min-h-[40px] items-center rounded-lg px-2 py-2 pl-4 font-medium text-gray-700 transition-colors duration-200 hover:bg-gray-100/30 hover:text-green-600 data-[active=true]:bg-green-500/20 data-[active=true]:text-green-700 dark:text-gray-300 dark:hover:text-green-400 dark:data-[active=true]:bg-green-500/10 dark:data-[active=true]:text-green-400 ${
                   isCollapsed ? 'mx-0 w-full max-w-none' : 'mx-0'

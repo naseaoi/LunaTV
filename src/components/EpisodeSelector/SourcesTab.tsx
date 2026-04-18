@@ -67,6 +67,15 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
   const testingSourcesRef = useRef<Set<string>>(new Set());
   const currentItemRef = useRef<HTMLDivElement | null>(null);
   const listContainerRef = useRef<HTMLDivElement | null>(null);
+  // 用户正在手动滚动时置 true，抑制程序化"自动对齐当前源"造成的视口回弹。
+  const userScrollingRef = useRef(false);
+  // 程序化 scrollTo 期间置 true，滚动事件触发时忽略，避免把自身滚动误判为用户滚动。
+  const programmaticScrollRef = useRef(false);
+  const userScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const programmaticScrollTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  const [isCurrentInView, setIsCurrentInView] = useState(true);
 
   useEffect(() => {
     attemptedSourcesRef.current = attemptedSources;
@@ -447,8 +456,8 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
       .map((item) => item.source);
   }, [displaySources, videoInfoMap, coolingDownKeys]);
 
-  useEffect(() => {
-    if (!isActive) return;
+  // 将当前源滚动到视口中央。仅在满足条件时调用，避免与用户手动滚动冲突。
+  const scrollCurrentIntoView = useCallback((smooth = true) => {
     const listContainer = listContainerRef.current;
     const currentItem = currentItemRef.current;
     if (!listContainer || !currentItem) return;
@@ -469,12 +478,80 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
         Math.min(targetScrollTop, maxScrollTop),
       );
 
+      // 标记接下来是程序化滚动，屏蔽"用户滚动"误判。
+      programmaticScrollRef.current = true;
+      if (programmaticScrollTimerRef.current) {
+        clearTimeout(programmaticScrollTimerRef.current);
+      }
+      programmaticScrollTimerRef.current = setTimeout(() => {
+        programmaticScrollRef.current = false;
+      }, 800);
+
       listContainer.scrollTo({
         top: nextScrollTop,
-        behavior: 'smooth',
+        behavior: smooth ? 'smooth' : 'auto',
       });
     });
-  }, [isActive, currentSource, currentId, sortedSources]);
+  }, []);
+
+  // 仅在 Tab 激活或当前源主动切换时自动对齐；sortedSources 变化（测速回填导致重排序）
+  // 不触发对齐，避免打断用户滚动。
+  useEffect(() => {
+    if (!isActive) return;
+    // 切换当前源视为明确的"回到当前"语义，重置用户滚动态。
+    userScrollingRef.current = false;
+    if (userScrollTimerRef.current) {
+      clearTimeout(userScrollTimerRef.current);
+      userScrollTimerRef.current = null;
+    }
+    scrollCurrentIntoView(true);
+  }, [isActive, currentSource, currentId, scrollCurrentIntoView]);
+
+  // 监听滚动，更新"用户正在滚动"标记 + 当前源是否在视口内（控制"回到当前源"按钮）。
+  useEffect(() => {
+    const listContainer = listContainerRef.current;
+    if (!listContainer) return;
+
+    const handleScroll = () => {
+      if (!programmaticScrollRef.current) {
+        userScrollingRef.current = true;
+        if (userScrollTimerRef.current) {
+          clearTimeout(userScrollTimerRef.current);
+        }
+        // 停止滚动 2s 后清除标记，期间不做任何自动对齐。
+        userScrollTimerRef.current = setTimeout(() => {
+          userScrollingRef.current = false;
+        }, 2000);
+      }
+
+      const currentItem = currentItemRef.current;
+      if (!currentItem) {
+        setIsCurrentInView(true);
+        return;
+      }
+      const containerRect = listContainer.getBoundingClientRect();
+      const itemRect = currentItem.getBoundingClientRect();
+      const inView =
+        itemRect.bottom > containerRect.top &&
+        itemRect.top < containerRect.bottom;
+      setIsCurrentInView(inView);
+    };
+
+    listContainer.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      listContainer.removeEventListener('scroll', handleScroll);
+    };
+  }, [sortedSources.length]);
+
+  // 卸载时清理定时器。
+  useEffect(() => {
+    return () => {
+      if (userScrollTimerRef.current) clearTimeout(userScrollTimerRef.current);
+      if (programmaticScrollTimerRef.current) {
+        clearTimeout(programmaticScrollTimerRef.current);
+      }
+    };
+  }, []);
 
   if (sourceSearchLoading) {
     return (
@@ -516,34 +593,35 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
   }
 
   return (
-    <div
-      ref={listContainerRef}
-      className='flex-1 overflow-y-auto p-5 pb-20 sm:p-6'
-    >
-      <div className='grid grid-cols-2 gap-2'>
-        {sortedSources.map((source, index) => {
-          const isCurrentSource =
-            source.source?.toString() === currentSource?.toString() &&
-            source.id?.toString() === currentId?.toString();
-          const sourceKey = `${source.source}-${source.id}`;
-          const videoInfo = videoInfoMap.get(sourceKey);
-          const isTesting = videoInfo?.loadSpeed === '测量中...';
-          const isCoolingDown = coolingDownKeys.has(sourceKey);
-          const episodeCount = Math.max(
-            source.episodes.length,
-            source.episodes_titles?.length || 0,
-          );
+    <div className='relative flex min-h-0 flex-1'>
+      <div
+        ref={listContainerRef}
+        className='flex-1 overflow-y-auto p-5 pb-20 sm:p-6'
+      >
+        <div className='grid grid-cols-2 gap-2'>
+          {sortedSources.map((source, index) => {
+            const isCurrentSource =
+              source.source?.toString() === currentSource?.toString() &&
+              source.id?.toString() === currentId?.toString();
+            const sourceKey = `${source.source}-${source.id}`;
+            const videoInfo = videoInfoMap.get(sourceKey);
+            const isTesting = videoInfo?.loadSpeed === '测量中...';
+            const isCoolingDown = coolingDownKeys.has(sourceKey);
+            const episodeCount = Math.max(
+              source.episodes.length,
+              source.episodes_titles?.length || 0,
+            );
 
-          return (
-            <div
-              key={sourceKey}
-              ref={isCurrentSource ? currentItemRef : null}
-              onClick={() => {
-                if (!isCurrentSource) {
-                  handleSourceClick(source);
-                }
-              }}
-              className={`relative flex select-none flex-col gap-1.5 rounded-lg px-2.5 py-2 transition-all duration-150
+            return (
+              <div
+                key={sourceKey}
+                ref={isCurrentSource ? currentItemRef : null}
+                onClick={() => {
+                  if (!isCurrentSource) {
+                    handleSourceClick(source);
+                  }
+                }}
+                className={`relative flex select-none flex-col gap-1.5 rounded-lg px-2.5 py-2 transition-all duration-150
                   ${
                     isCurrentSource
                       ? 'bg-green-50 ring-1 ring-green-500/30 dark:bg-green-500/10'
@@ -551,238 +629,273 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
                         ? 'cursor-pointer bg-gray-50/80 opacity-60 ring-1 ring-gray-200/60 hover:bg-gray-100/80 hover:opacity-100 hover:ring-gray-300/60 dark:bg-white/[0.04] dark:ring-white/[0.06] dark:hover:bg-white/[0.08] dark:hover:ring-white/[0.1]'
                         : 'cursor-pointer bg-gray-50/80 ring-1 ring-gray-200/60 hover:bg-gray-100/80 hover:ring-gray-300/60 dark:bg-white/[0.04] dark:ring-white/[0.06] dark:hover:bg-white/[0.08] dark:hover:ring-white/[0.1]'
                   }`.trim()}
-              title={isCoolingDown ? '该源最近加载超时，已暂时降权' : undefined}
-            >
-              {/* 标题行 */}
-              <div className='flex min-w-0 items-center justify-between gap-1'>
-                <div className='group/title relative min-w-0 flex-1'>
-                  <h3 className='truncate text-xs font-medium leading-tight text-gray-900 dark:text-gray-100'>
-                    {source.title}
-                  </h3>
-                  {index !== 0 && (
-                    <div className='pointer-events-none invisible absolute bottom-full left-1/2 z-[500] mb-2 -translate-x-1/2 transform whitespace-nowrap rounded-md bg-gray-800 px-3 py-1 text-xs text-white opacity-0 shadow-lg transition-all delay-100 duration-200 ease-out group-hover/title:visible group-hover/title:opacity-100'>
+                title={
+                  isCoolingDown ? '该源最近加载超时，已暂时降权' : undefined
+                }
+              >
+                {/* 标题行 */}
+                <div className='flex min-w-0 items-center justify-between gap-1'>
+                  <div className='group/title relative min-w-0 flex-1'>
+                    <h3 className='truncate text-xs font-medium leading-tight text-gray-900 dark:text-gray-100'>
                       {source.title}
-                      <div className='absolute left-1/2 top-full h-0 w-0 -translate-x-1/2 transform border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800'></div>
-                    </div>
-                  )}
+                    </h3>
+                    {index !== 0 && (
+                      <div className='pointer-events-none invisible absolute bottom-full left-1/2 z-[500] mb-2 -translate-x-1/2 transform whitespace-nowrap rounded-md bg-gray-800 px-3 py-1 text-xs text-white opacity-0 shadow-lg transition-all delay-100 duration-200 ease-out group-hover/title:visible group-hover/title:opacity-100'>
+                        {source.title}
+                        <div className='absolute left-1/2 top-full h-0 w-0 -translate-x-1/2 transform border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800'></div>
+                      </div>
+                    )}
+                  </div>
+                  {/* 分辨率徽章（含占位，保持高度一致） */}
+                  {videoInfo && videoInfo.quality !== '未知' ? (
+                    videoInfo.hasError ? (
+                      <span className='inline-flex flex-shrink-0 items-center rounded bg-red-50 px-1 py-0.5 text-[9px] font-medium text-red-500 dark:bg-red-900/20 dark:text-red-400'>
+                        失败
+                      </span>
+                    ) : (
+                      (() => {
+                        const isUltraHigh = ['4K', '2K'].includes(
+                          videoInfo.quality,
+                        );
+                        const isHigh = ['1080p', '720p'].includes(
+                          videoInfo.quality,
+                        );
+                        const colorClasses = isUltraHigh
+                          ? 'bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400'
+                          : isHigh
+                            ? 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400'
+                            : 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400';
+                        return (
+                          <span
+                            className={`inline-flex flex-shrink-0 items-center rounded px-1 py-0.5 text-[9px] font-semibold ${colorClasses}`}
+                          >
+                            {videoInfo.quality}
+                          </span>
+                        );
+                      })()
+                    )
+                  ) : optimizationEnabled ? (
+                    <span className='inline-flex flex-shrink-0 items-center rounded px-1 py-0.5 text-[9px] font-medium text-transparent'>
+                      --
+                    </span>
+                  ) : null}
                 </div>
-                {/* 分辨率徽章（含占位，保持高度一致） */}
-                {videoInfo && videoInfo.quality !== '未知' ? (
-                  videoInfo.hasError ? (
-                    <span className='inline-flex flex-shrink-0 items-center rounded bg-red-50 px-1 py-0.5 text-[9px] font-medium text-red-500 dark:bg-red-900/20 dark:text-red-400'>
-                      失败
+
+                {/* 源名称 + 集数 */}
+                <div className='flex items-center justify-between gap-1'>
+                  <span className='truncate rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-white/[0.08] dark:text-gray-400'>
+                    {source.source_name}
+                  </span>
+                  {isCoolingDown ? (
+                    <span className='flex-shrink-0 text-[10px] font-medium text-red-400 dark:text-red-400/80'>
+                      近期失败
                     </span>
                   ) : (
-                    (() => {
-                      const isUltraHigh = ['4K', '2K'].includes(
-                        videoInfo.quality,
-                      );
-                      const isHigh = ['1080p', '720p'].includes(
-                        videoInfo.quality,
-                      );
-                      const colorClasses = isUltraHigh
-                        ? 'bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400'
-                        : isHigh
-                          ? 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400'
-                          : 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400';
-                      return (
-                        <span
-                          className={`inline-flex flex-shrink-0 items-center rounded px-1 py-0.5 text-[9px] font-semibold ${colorClasses}`}
-                        >
-                          {videoInfo.quality}
-                        </span>
-                      );
-                    })()
-                  )
-                ) : optimizationEnabled ? (
-                  <span className='inline-flex flex-shrink-0 items-center rounded px-1 py-0.5 text-[9px] font-medium text-transparent'>
-                    --
-                  </span>
-                ) : null}
-              </div>
+                    episodeCount > 1 && (
+                      <span className='flex-shrink-0 text-[10px] text-gray-400 dark:text-gray-500'>
+                        {episodeCount}集
+                      </span>
+                    )
+                  )}
+                </div>
 
-              {/* 源名称 + 集数 */}
-              <div className='flex items-center justify-between gap-1'>
-                <span className='truncate rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-white/[0.08] dark:text-gray-400'>
-                  {source.source_name}
-                </span>
-                {isCoolingDown ? (
-                  <span className='flex-shrink-0 text-[10px] font-medium text-red-400 dark:text-red-400/80'>
-                    近期失败
-                  </span>
-                ) : (
-                  episodeCount > 1 && (
-                    <span className='flex-shrink-0 text-[10px] text-gray-400 dark:text-gray-500'>
-                      {episodeCount}集
+                {/* 网络信息（固定占位，避免测速前后高度跳变） */}
+                <div className='flex min-h-[16px] items-center gap-2'>
+                  {videoInfo && isTesting ? (
+                    <div className='flex items-center gap-1.5 text-[10px] font-medium text-gray-500 dark:text-gray-400'>
+                      <span className='inline-block h-3 w-3 animate-spin rounded-full border-2 border-gray-300 border-t-green-500 dark:border-gray-700 dark:border-t-green-400' />
+                      检测中
+                    </div>
+                  ) : videoInfo && !videoInfo.hasError ? (
+                    <div className='flex items-center gap-1.5 text-[10px]'>
+                      <span className='font-medium text-green-600 dark:text-green-400'>
+                        {videoInfo.loadSpeed}
+                      </span>
+                      <span className='font-medium text-orange-500 dark:text-orange-400'>
+                        {videoInfo.pingTime}ms
+                      </span>
+                    </div>
+                  ) : videoInfo && videoInfo.hasError ? (
+                    <span
+                      className='cursor-pointer text-[10px] text-blue-400 hover:underline dark:text-blue-400'
+                      onClick={(e) => {
+                        e.stopPropagation();
+
+                        // 先给用户即时反馈：进入检测中态
+                        setVideoInfoMap((prev) => {
+                          const newMap = new Map(prev);
+                          newMap.set(sourceKey, {
+                            quality: '未知',
+                            loadSpeed: '测量中...',
+                            pingTime: 0,
+                            hasError: true,
+                          });
+                          return newMap;
+                        });
+                        getVideoInfo(source, { force: true });
+                      }}
+                    >
+                      {videoInfo.quality === '错误'
+                        ? '检测失败 · 重试'
+                        : '开始测速'}
                     </span>
-                  )
+                  ) : optimizationEnabled ? (
+                    <div className='flex items-center gap-1.5 text-[10px]'>
+                      <span className='font-medium text-gray-300 dark:text-gray-600'>
+                        --
+                      </span>
+                      <span className='font-medium text-gray-300 dark:text-gray-600'>
+                        --
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* 当前源标记 */}
+                {isCurrentSource && (
+                  <div className='absolute right-1.5 top-1.5'>
+                    <div className='h-1.5 w-1.5 rounded-full bg-green-500'></div>
+                  </div>
                 )}
               </div>
+            );
+          })}
+        </div>
 
-              {/* 网络信息（固定占位，避免测速前后高度跳变） */}
-              <div className='flex min-h-[16px] items-center gap-2'>
-                {videoInfo && isTesting ? (
-                  <div className='flex items-center gap-1.5 text-[10px] font-medium text-gray-500 dark:text-gray-400'>
-                    <span className='inline-block h-3 w-3 animate-spin rounded-full border-2 border-gray-300 border-t-green-500 dark:border-gray-700 dark:border-t-green-400' />
-                    检测中
-                  </div>
-                ) : videoInfo && !videoInfo.hasError ? (
-                  <div className='flex items-center gap-1.5 text-[10px]'>
-                    <span className='font-medium text-green-600 dark:text-green-400'>
-                      {videoInfo.loadSpeed}
-                    </span>
-                    <span className='font-medium text-orange-500 dark:text-orange-400'>
-                      {videoInfo.pingTime}ms
-                    </span>
-                  </div>
-                ) : videoInfo && videoInfo.hasError ? (
-                  <span
-                    className='cursor-pointer text-[10px] text-blue-400 hover:underline dark:text-blue-400'
-                    onClick={(e) => {
-                      e.stopPropagation();
-
-                      // 先给用户即时反馈：进入检测中态
-                      setVideoInfoMap((prev) => {
-                        const newMap = new Map(prev);
-                        newMap.set(sourceKey, {
-                          quality: '未知',
-                          loadSpeed: '测量中...',
-                          pingTime: 0,
-                          hasError: true,
-                        });
-                        return newMap;
-                      });
-                      getVideoInfo(source, { force: true });
-                    }}
-                  >
-                    {videoInfo.quality === '错误'
-                      ? '检测失败 · 重试'
-                      : '开始测速'}
-                  </span>
-                ) : optimizationEnabled ? (
-                  <div className='flex items-center gap-1.5 text-[10px]'>
-                    <span className='font-medium text-gray-300 dark:text-gray-600'>
-                      --
-                    </span>
-                    <span className='font-medium text-gray-300 dark:text-gray-600'>
-                      --
-                    </span>
-                  </div>
-                ) : null}
-              </div>
-
-              {/* 当前源标记 */}
-              {isCurrentSource && (
-                <div className='absolute right-1.5 top-1.5'>
-                  <div className='h-1.5 w-1.5 rounded-full bg-green-500'></div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      <div className='mt-6 flex-shrink-0 border-t border-gray-100 pt-4 dark:border-white/[0.06]'>
-        <div className='flex gap-2'>
-          <button
-            disabled={isRetestingAll}
-            onClick={async () => {
-              setIsRetestingAll(true);
-              // 清除所有缓存和已尝试标记
-              for (const source of displaySources) {
-                const key = `${source.source}-${source.id}`;
-                videoInfoCache.delete(key);
-                attemptedSourcesRef.current.delete(key);
-              }
-              setAttemptedSources(new Set());
-              setVideoInfoMap(new Map());
-
-              // 当前播放源标记为"播放中"
-              const curKey =
-                currentSource && currentId
-                  ? `${currentSource}-${currentId}`
-                  : '';
-              if (curKey) {
-                const playingInfo: VideoInfo = {
-                  quality: '播放中',
-                  loadSpeed: '播放中',
-                  pingTime: 0,
-                };
-                videoInfoCache.set(curKey, {
-                  info: playingInfo,
-                  ts: Date.now(),
-                });
-                setVideoInfoMap((prev) =>
-                  new Map(prev).set(curKey, playingInfo),
-                );
-                setAttemptedSources((prev) => new Set(prev).add(curKey));
-                attemptedSourcesRef.current.add(curKey);
-              }
-
-              // 逐批重测（排除当前源）
-              const toTest = displaySources.filter((s) => {
-                const key = `${s.source}-${s.id}`;
-                return key !== curKey;
-              });
-              await probeSourcesInBatches(toTest, { force: true });
-              setIsRetestingAll(false);
-            }}
-            className='flex-1 rounded-lg py-2 text-center text-xs font-medium text-gray-500 ring-1 ring-gray-200/60 transition-colors hover:text-green-600 hover:ring-green-300 disabled:opacity-50 dark:text-gray-400 dark:ring-white/[0.08] dark:hover:text-green-400 dark:hover:ring-green-500/30'
-          >
-            {isRetestingAll ? '检验中...' : '检验全部'}
-          </button>
-          <button
-            disabled={isSearchingMore}
-            onClick={async () => {
-              if (!videoTitle) return;
-              setIsSearchingMore(true);
-              setSearchMoreDone(false);
-              try {
-                // 搜索时用 searchKeyword 扩大范围（如聚合搜索的原始关键词），
-                // 过滤时始终用 videoTitle 精确匹配，避免混入同系列其他作品
-                const query = searchKeyword || videoTitle;
-                const res = await fetch(
-                  `/api/search?q=${encodeURIComponent(query.trim())}`,
-                );
-                if (!res.ok) throw new Error('搜索失败');
-                const data = await res.json();
-                if (Array.isArray(data.results)) {
-                  const existingKeys = new Set(
-                    availableSources.map((s) => `${s.source}-${s.id}`),
-                  );
-                  const normalizedTitle = normalizeTitleForSourceMatch(
-                    videoTitle || '',
-                  );
-                  const newSources = (data.results as SearchResult[]).filter(
-                    (s) => {
-                      if (existingKeys.has(`${s.source}-${s.id}`)) return false;
-                      // 标题匹配过滤，避免追加无关结果
-                      if (!normalizedTitle) return true;
-                      const t = normalizeTitleForSourceMatch(s.title);
-                      return t.length > 0 && t === normalizedTitle;
-                    },
-                  );
-                  if (newSources.length > 0) {
-                    onAddSources?.(newSources);
-                  }
-                  setSearchMoreDone(true);
+        <div className='mt-6 flex-shrink-0 border-t border-gray-100 pt-4 dark:border-white/[0.06]'>
+          <div className='flex gap-2'>
+            <button
+              disabled={isRetestingAll}
+              onClick={async () => {
+                setIsRetestingAll(true);
+                // 清除所有缓存和已尝试标记
+                for (const source of displaySources) {
+                  const key = `${source.source}-${source.id}`;
+                  videoInfoCache.delete(key);
+                  attemptedSourcesRef.current.delete(key);
                 }
-              } catch {
-                // 静默失败
-              } finally {
-                setIsSearchingMore(false);
-              }
-            }}
-            className='flex-1 rounded-lg py-2 text-center text-xs font-medium text-gray-500 ring-1 ring-gray-200/60 transition-colors hover:text-green-600 hover:ring-green-300 disabled:opacity-50 dark:text-gray-400 dark:ring-white/[0.08] dark:hover:text-green-400 dark:hover:ring-green-500/30'
-          >
-            {isSearchingMore
-              ? '搜索中...'
-              : searchMoreDone
-                ? '搜索完成'
-                : '搜索更多源站'}
-          </button>
+                setAttemptedSources(new Set());
+                setVideoInfoMap(new Map());
+
+                // 当前播放源标记为"播放中"
+                const curKey =
+                  currentSource && currentId
+                    ? `${currentSource}-${currentId}`
+                    : '';
+                if (curKey) {
+                  const playingInfo: VideoInfo = {
+                    quality: '播放中',
+                    loadSpeed: '播放中',
+                    pingTime: 0,
+                  };
+                  videoInfoCache.set(curKey, {
+                    info: playingInfo,
+                    ts: Date.now(),
+                  });
+                  setVideoInfoMap((prev) =>
+                    new Map(prev).set(curKey, playingInfo),
+                  );
+                  setAttemptedSources((prev) => new Set(prev).add(curKey));
+                  attemptedSourcesRef.current.add(curKey);
+                }
+
+                // 逐批重测（排除当前源）
+                const toTest = displaySources.filter((s) => {
+                  const key = `${s.source}-${s.id}`;
+                  return key !== curKey;
+                });
+                await probeSourcesInBatches(toTest, { force: true });
+                setIsRetestingAll(false);
+              }}
+              className='flex-1 rounded-lg py-2 text-center text-xs font-medium text-gray-500 ring-1 ring-gray-200/60 transition-colors hover:text-green-600 hover:ring-green-300 disabled:opacity-50 dark:text-gray-400 dark:ring-white/[0.08] dark:hover:text-green-400 dark:hover:ring-green-500/30'
+            >
+              {isRetestingAll ? '检验中...' : '检验全部'}
+            </button>
+            <button
+              disabled={isSearchingMore}
+              onClick={async () => {
+                if (!videoTitle) return;
+                setIsSearchingMore(true);
+                setSearchMoreDone(false);
+                try {
+                  // 搜索时用 searchKeyword 扩大范围（如聚合搜索的原始关键词），
+                  // 过滤时始终用 videoTitle 精确匹配，避免混入同系列其他作品
+                  const query = searchKeyword || videoTitle;
+                  const res = await fetch(
+                    `/api/search?q=${encodeURIComponent(query.trim())}`,
+                  );
+                  if (!res.ok) throw new Error('搜索失败');
+                  const data = await res.json();
+                  if (Array.isArray(data.results)) {
+                    const existingKeys = new Set(
+                      availableSources.map((s) => `${s.source}-${s.id}`),
+                    );
+                    const normalizedTitle = normalizeTitleForSourceMatch(
+                      videoTitle || '',
+                    );
+                    const newSources = (data.results as SearchResult[]).filter(
+                      (s) => {
+                        if (existingKeys.has(`${s.source}-${s.id}`))
+                          return false;
+                        // 标题匹配过滤，避免追加无关结果
+                        if (!normalizedTitle) return true;
+                        const t = normalizeTitleForSourceMatch(s.title);
+                        return t.length > 0 && t === normalizedTitle;
+                      },
+                    );
+                    if (newSources.length > 0) {
+                      onAddSources?.(newSources);
+                    }
+                    setSearchMoreDone(true);
+                  }
+                } catch {
+                  // 静默失败
+                } finally {
+                  setIsSearchingMore(false);
+                }
+              }}
+              className='flex-1 rounded-lg py-2 text-center text-xs font-medium text-gray-500 ring-1 ring-gray-200/60 transition-colors hover:text-green-600 hover:ring-green-300 disabled:opacity-50 dark:text-gray-400 dark:ring-white/[0.08] dark:hover:text-green-400 dark:hover:ring-green-500/30'
+            >
+              {isSearchingMore
+                ? '搜索中...'
+                : searchMoreDone
+                  ? '搜索完成'
+                  : '搜索更多源站'}
+            </button>
+          </div>
         </div>
       </div>
+      {!isCurrentInView && currentSource && currentId && (
+        <button
+          type='button'
+          onClick={() => {
+            userScrollingRef.current = false;
+            if (userScrollTimerRef.current) {
+              clearTimeout(userScrollTimerRef.current);
+              userScrollTimerRef.current = null;
+            }
+            scrollCurrentIntoView(true);
+          }}
+          className='absolute bottom-6 right-6 z-10 flex items-center gap-1 rounded-full bg-green-500 px-3 py-2 text-xs font-medium text-white shadow-lg transition-all hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-500'
+          aria-label='回到当前源'
+        >
+          <svg
+            xmlns='http://www.w3.org/2000/svg'
+            width='14'
+            height='14'
+            viewBox='0 0 24 24'
+            fill='none'
+            stroke='currentColor'
+            strokeWidth='2.5'
+            strokeLinecap='round'
+            strokeLinejoin='round'
+          >
+            <polyline points='7 13 12 18 17 13' />
+            <polyline points='7 6 12 11 17 6' />
+          </svg>
+          回到当前源
+        </button>
+      )}
     </div>
   );
 };
