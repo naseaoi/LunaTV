@@ -24,6 +24,7 @@ import {
 } from '@/lib/failed-source-cooldown';
 
 import { PlayMainContent } from '@/features/play/components/PlayMainContent';
+import { writePlayerInfo } from '@/features/play/lib/sourceProbeStore';
 import {
   PlayErrorView,
   PlayLoadingView,
@@ -845,6 +846,8 @@ function PlayPageClient() {
         const id = currentIdRef.current;
         if (!src || !id) return;
         const key = `${src}-${id}`;
+        // 播放器实时带宽（hls.js bwEstimate）比探针准确，写入共享 store 优先展示
+        writePlayerInfo(key, info);
         setPrecomputedVideoInfo((prev) => {
           const next = new Map(prev);
           next.set(key, info);

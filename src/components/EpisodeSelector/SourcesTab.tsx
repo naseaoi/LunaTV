@@ -4,26 +4,25 @@ import React, {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from 'react';
 
-import { collapseSourcesForDisplay } from '@/lib/source-bundle';
-import { SearchResult } from '@/lib/types';
 import { isSourceCoolingDown } from '@/lib/failed-source-cooldown';
-import { getVideoResolutionFromM3u8 } from '@/lib/hls-utils';
-import { getProxyModes, shouldUseServerProxy } from '@/lib/proxy-modes';
+import { collapseSourcesForDisplay } from '@/lib/source-bundle';
 import { normalizeTitleForSourceMatch } from '@/lib/source_match';
+import { SearchResult } from '@/lib/types';
 
-interface VideoInfo {
-  quality: string;
-  loadSpeed: string;
-  pingTime: number;
-  hasError?: boolean;
-}
+import {
+  getOrProbe,
+  getSnapshot,
+  invalidateProbe,
+  resetProbes,
+  seedProbeResults,
+  subscribe,
+  type VideoInfo,
+} from '@/features/play/lib/sourceProbeStore';
 
-const VIDEO_INFO_TTL_MS = 10 * 60_000;
 const VIDEO_INFO_BATCH_SIZE = 3;
-const videoInfoCache = new Map<string, { info: VideoInfo; ts: number }>();
-const inFlightVideoInfo = new Map<string, Promise<VideoInfo>>();
 
 interface SourcesTabProps {
   availableSources: SearchResult[];
@@ -57,14 +56,13 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
   onSourceDetailFetched,
   onAddSources,
 }) => {
-  const [videoInfoMap, setVideoInfoMap] = useState<Map<string, VideoInfo>>(
-    new Map(),
+  // 订阅共享测速 store，任何来源的写入都会驱动重渲染
+  const probeSnapshot = useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    getSnapshot,
   );
-  const [attemptedSources, setAttemptedSources] = useState<Set<string>>(
-    new Set(),
-  );
-  const attemptedSourcesRef = useRef<Set<string>>(new Set());
-  const testingSourcesRef = useRef<Set<string>>(new Set());
+
   const currentItemRef = useRef<HTMLDivElement | null>(null);
   const listContainerRef = useRef<HTMLDivElement | null>(null);
   // 用户正在手动滚动时置 true，抑制程序化"自动对齐当前源"造成的视口回弹。
@@ -76,10 +74,6 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
     typeof setTimeout
   > | null>(null);
   const [isCurrentInView, setIsCurrentInView] = useState(true);
-
-  useEffect(() => {
-    attemptedSourcesRef.current = attemptedSources;
-  }, [attemptedSources]);
 
   const [optimizationEnabled] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -106,155 +100,11 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
   // 检验全部
   const [isRetestingAll, setIsRetestingAll] = useState(false);
 
-  // 进入换源 Tab 时：用缓存快速回填，确保立即显示已有测速结果
+  // 把父组件透传的 precomputedVideoInfo 灌入 store（聚合优选的历史结果）
   useEffect(() => {
-    if (!isActive || displaySources.length === 0) return;
-
-    const now = Date.now();
-    const cachedEntries: Array<[string, VideoInfo]> = [];
-    const cachedKeys = new Set<string>();
-
-    for (const source of displaySources) {
-      const sourceKey = `${source.source}-${source.id}`;
-      const cached = videoInfoCache.get(sourceKey);
-      if (cached && now - cached.ts < VIDEO_INFO_TTL_MS) {
-        cachedEntries.push([sourceKey, cached.info]);
-        cachedKeys.add(sourceKey);
-      }
-    }
-
-    if (cachedEntries.length === 0) return;
-
-    setVideoInfoMap((prev) => {
-      const next = new Map(prev);
-      for (const [k, v] of cachedEntries) next.set(k, v);
-      return next;
-    });
-    setAttemptedSources((prev) => {
-      const next = new Set(prev);
-      cachedKeys.forEach((k) => next.add(k));
-      return next;
-    });
-    cachedKeys.forEach((k) => attemptedSourcesRef.current.add(k));
-  }, [displaySources, isActive]);
-
-  const getVideoInfo = useCallback(
-    async (source: SearchResult, options?: { force?: boolean }) => {
-      const sourceKey = `${source.source}-${source.id}`;
-      const force = options?.force === true;
-
-      if (force) {
-        videoInfoCache.delete(sourceKey);
-        attemptedSourcesRef.current.delete(sourceKey);
-        setAttemptedSources((prev) => {
-          const next = new Set(prev);
-          next.delete(sourceKey);
-          return next;
-        });
-      }
-
-      const now = Date.now();
-      const cached = force ? undefined : videoInfoCache.get(sourceKey);
-      if (cached && now - cached.ts < VIDEO_INFO_TTL_MS) {
-        setVideoInfoMap((prev) => new Map(prev).set(sourceKey, cached.info));
-        setAttemptedSources((prev) => new Set(prev).add(sourceKey));
-        attemptedSourcesRef.current.add(sourceKey);
-        return;
-      }
-
-      if (!force && attemptedSourcesRef.current.has(sourceKey)) return;
-      if (testingSourcesRef.current.has(sourceKey)) return;
-
-      testingSourcesRef.current.add(sourceKey);
-
-      // 立即写入"测量中..."临时状态，让 UI 显示"检测中"
-      setVideoInfoMap((prev) =>
-        new Map(prev).set(sourceKey, {
-          quality: '未知',
-          loadSpeed: '测量中...',
-          pingTime: 0,
-        }),
-      );
-
-      // episodes 为空（如 giri 搜索阶段的残缺数据），先调 detail 补全
-      let resolvedSource = source;
-      if (!source.episodes || source.episodes.length === 0) {
-        try {
-          const res = await fetch(
-            `/api/detail?source=${source.source}&id=${source.id}`,
-          );
-          if (res.ok) {
-            const full = (await res.json()) as SearchResult;
-            if (full.episodes && full.episodes.length > 0) {
-              resolvedSource = full;
-              onSourceDetailFetched?.(full);
-            }
-          }
-        } catch {
-          // 补全失败
-        }
-        if (!resolvedSource.episodes || resolvedSource.episodes.length === 0) {
-          // detail 补全失败，标记为已尝试并写入错误状态
-          const info: VideoInfo = {
-            quality: '未知',
-            loadSpeed: '未知',
-            pingTime: 0,
-            hasError: true,
-          };
-          videoInfoCache.set(sourceKey, { info, ts: Date.now() });
-          setVideoInfoMap((prev) => new Map(prev).set(sourceKey, info));
-          setAttemptedSources((prev) => new Set(prev).add(sourceKey));
-          attemptedSourcesRef.current.add(sourceKey);
-          testingSourcesRef.current.delete(sourceKey);
-          return;
-        }
-      }
-
-      const episodeUrl = resolvedSource.episodes[0];
-
-      try {
-        const inflight = inFlightVideoInfo.get(sourceKey);
-        if (inflight) {
-          const info = await inflight;
-          videoInfoCache.set(sourceKey, { info, ts: Date.now() });
-          setVideoInfoMap((prev) => new Map(prev).set(sourceKey, info));
-          setAttemptedSources((prev) => new Set(prev).add(sourceKey));
-          attemptedSourcesRef.current.add(sourceKey);
-          return;
-        }
-
-        const proxyModes = await getProxyModes();
-        const useProxy = shouldUseServerProxy(source.source, proxyModes);
-        const probePromise = getVideoResolutionFromM3u8(
-          episodeUrl,
-          useProxy,
-          source.source,
-        );
-        inFlightVideoInfo.set(sourceKey, probePromise);
-
-        const info = await probePromise;
-        videoInfoCache.set(sourceKey, { info, ts: Date.now() });
-        setVideoInfoMap((prev) => new Map(prev).set(sourceKey, info));
-        setAttemptedSources((prev) => new Set(prev).add(sourceKey));
-        attemptedSourcesRef.current.add(sourceKey);
-      } catch {
-        const info: VideoInfo = {
-          quality: '错误',
-          loadSpeed: '未知',
-          pingTime: 0,
-          hasError: true,
-        };
-        videoInfoCache.set(sourceKey, { info, ts: Date.now() });
-        setVideoInfoMap((prev) => new Map(prev).set(sourceKey, info));
-        setAttemptedSources((prev) => new Set(prev).add(sourceKey));
-        attemptedSourcesRef.current.add(sourceKey);
-      } finally {
-        inFlightVideoInfo.delete(sourceKey);
-        testingSourcesRef.current.delete(sourceKey);
-      }
-    },
-    [onSourceDetailFetched],
-  );
+    if (!precomputedVideoInfo || precomputedVideoInfo.size === 0) return;
+    seedProbeResults(precomputedVideoInfo.entries());
+  }, [precomputedVideoInfo]);
 
   const probeSourcesInBatches = useCallback(
     async (sources: SearchResult[], options?: { force?: boolean }) => {
@@ -264,78 +114,47 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
         start += VIDEO_INFO_BATCH_SIZE
       ) {
         const batch = sources.slice(start, start + VIDEO_INFO_BATCH_SIZE);
-        await Promise.all(batch.map((source) => getVideoInfo(source, options)));
+        await Promise.all(
+          batch.map((source) =>
+            getOrProbe(source, {
+              force: options?.force,
+              onDetailFetched: onSourceDetailFetched,
+            }),
+          ),
+        );
       }
     },
-    [getVideoInfo],
+    [onSourceDetailFetched],
   );
 
+  // 排序判定：真实的 probe/player 成功结果才参与
   const isSortingReadyVideoInfo = (videoInfo?: VideoInfo): boolean => {
     if (!videoInfo || videoInfo.hasError) return false;
-
     return (
       videoInfo.loadSpeed !== '测量中...' &&
-      videoInfo.loadSpeed !== '播放中' &&
-      videoInfo.quality !== '播放中'
+      videoInfo.loadSpeed !== '未知' &&
+      videoInfo.loadSpeed !== '播放中'
     );
   };
 
-  // 合并预计算结果
+  // 后台测速：进入/刷新 Tab 时，对未测过的源分批 probe。
+  // 当前播放源跳过 probe（播放器会通过 writePlayerInfo 回填真实带宽）。
   useEffect(() => {
-    if (precomputedVideoInfo && precomputedVideoInfo.size > 0) {
-      setVideoInfoMap((prev) => {
-        const newMap = new Map(prev);
-        precomputedVideoInfo.forEach((v, k) => {
-          newMap.set(k, v);
-          videoInfoCache.set(k, { info: v, ts: Date.now() });
-        });
-        return newMap;
-      });
-      // 只把测速成功的标记为已尝试；hasError 的不标记，让后台测速 effect 自动重测
-      setAttemptedSources((prev) => {
-        const newSet = new Set(prev);
-        precomputedVideoInfo.forEach((v, key) => {
-          if (!v.hasError) {
-            newSet.add(key);
-            attemptedSourcesRef.current.add(key);
-          }
-        });
-        return newSet;
-      });
-    }
-  }, [precomputedVideoInfo]);
-
-  // 异步获取视频信息（后台预检测，不依赖 Tab 是否激活）
-  useEffect(() => {
-    const fetchVideoInfosInBatches = async () => {
-      if (displaySources.length === 0) return;
-
-      const now = Date.now();
-      for (const source of displaySources) {
-        const sourceKey = `${source.source}-${source.id}`;
-        const cached = videoInfoCache.get(sourceKey);
-        if (cached && now - cached.ts < VIDEO_INFO_TTL_MS) {
-          attemptedSourcesRef.current.add(sourceKey);
-        }
-      }
-
-      // 当前正在播放的源跳过后台测速（播放器会通过 precomputedVideoInfo 回填真实数据）
-      const currentKey =
-        currentSource && currentId ? `${currentSource}-${currentId}` : '';
-      if (currentKey) {
-        attemptedSourcesRef.current.add(currentKey);
-      }
-
-      const pendingSources = displaySources.filter((source) => {
-        const sourceKey = `${source.source}-${source.id}`;
-        return !attemptedSourcesRef.current.has(sourceKey);
-      });
-      if (pendingSources.length === 0) return;
-
-      await probeSourcesInBatches(pendingSources);
-    };
-    fetchVideoInfosInBatches();
-  }, [displaySources, probeSourcesInBatches, currentSource, currentId]);
+    if (displaySources.length === 0) return;
+    const currentKey =
+      currentSource && currentId ? `${currentSource}-${currentId}` : '';
+    const pending = displaySources.filter((s) => {
+      const key = `${s.source}-${s.id}`;
+      if (key === currentKey) return false;
+      const entry = probeSnapshot.get(key);
+      if (!entry) return true;
+      // 失败过的源不自动重试，等用户点击"重试"
+      if (entry.info.hasError) return false;
+      return false;
+    });
+    if (pending.length === 0) return;
+    void probeSourcesInBatches(pending);
+  }, [displaySources, currentSource, currentId, probeSourcesInBatches]);
 
   const handleSourceClick = useCallback(
     (source: SearchResult) => {
@@ -394,7 +213,6 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
   };
 
   // 冷却中的源 key 集合：sessionStorage 里最近 5 分钟内 15s 超时过的源。
-  // useMemo 依赖列表里放 displaySources + isActive，保证 tab 每次进入时重算。
   const coolingDownKeys = useMemo(() => {
     const set = new Set<string>();
     for (const source of displaySources) {
@@ -408,7 +226,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
     return displaySources
       .map((source, index) => {
         const sourceKey = `${source.source}-${source.id}`;
-        const videoInfo = videoInfoMap.get(sourceKey);
+        const videoInfo = probeSnapshot.get(sourceKey)?.info;
         const hasMeasuredInfo = isSortingReadyVideoInfo(videoInfo);
         const measuredVideoInfo = hasMeasuredInfo ? videoInfo : undefined;
 
@@ -430,15 +248,12 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
         };
       })
       .sort((a, b) => {
-        // 近期 15s 超时的源一律下沉，避免再次踩坑；冷却过期后自动归位
         if (a.coolingDown !== b.coolingDown) {
           return a.coolingDown ? 1 : -1;
         }
-        // 有有效数据的源优先于无数据的，但测速失败的不过度降权
         if (a.hasMeasuredInfo !== b.hasMeasuredInfo) {
           return a.hasMeasuredInfo ? -1 : 1;
         }
-        // 同为有效数据时，按速度 > 延迟 > 分辨率排序
         if (a.hasMeasuredInfo && b.hasMeasuredInfo) {
           if (a.speedKBps !== b.speedKBps) {
             return b.speedKBps - a.speedKBps;
@@ -450,11 +265,10 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
             return b.qualityRank - a.qualityRank;
           }
         }
-        // 同组内保持原始顺序
         return a.index - b.index;
       })
       .map((item) => item.source);
-  }, [displaySources, videoInfoMap, coolingDownKeys]);
+  }, [displaySources, probeSnapshot, coolingDownKeys]);
 
   // 将当前源滚动到视口中央。仅在满足条件时调用，避免与用户手动滚动冲突。
   const scrollCurrentIntoView = useCallback((smooth = true) => {
@@ -478,7 +292,6 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
         Math.min(targetScrollTop, maxScrollTop),
       );
 
-      // 标记接下来是程序化滚动，屏蔽"用户滚动"误判。
       programmaticScrollRef.current = true;
       if (programmaticScrollTimerRef.current) {
         clearTimeout(programmaticScrollTimerRef.current);
@@ -494,11 +307,8 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
     });
   }, []);
 
-  // 仅在 Tab 激活或当前源主动切换时自动对齐；sortedSources 变化（测速回填导致重排序）
-  // 不触发对齐，避免打断用户滚动。
   useEffect(() => {
     if (!isActive) return;
-    // 切换当前源视为明确的"回到当前"语义，重置用户滚动态。
     userScrollingRef.current = false;
     if (userScrollTimerRef.current) {
       clearTimeout(userScrollTimerRef.current);
@@ -507,7 +317,6 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
     scrollCurrentIntoView(true);
   }, [isActive, currentSource, currentId, scrollCurrentIntoView]);
 
-  // 监听滚动，更新"用户正在滚动"标记 + 当前源是否在视口内（控制"回到当前源"按钮）。
   useEffect(() => {
     const listContainer = listContainerRef.current;
     if (!listContainer) return;
@@ -518,7 +327,6 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
         if (userScrollTimerRef.current) {
           clearTimeout(userScrollTimerRef.current);
         }
-        // 停止滚动 2s 后清除标记，期间不做任何自动对齐。
         userScrollTimerRef.current = setTimeout(() => {
           userScrollingRef.current = false;
         }, 2000);
@@ -543,7 +351,6 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
     };
   }, [sortedSources.length]);
 
-  // 卸载时清理定时器。
   useEffect(() => {
     return () => {
       if (userScrollTimerRef.current) clearTimeout(userScrollTimerRef.current);
@@ -604,7 +411,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
               source.source?.toString() === currentSource?.toString() &&
               source.id?.toString() === currentId?.toString();
             const sourceKey = `${source.source}-${source.id}`;
-            const videoInfo = videoInfoMap.get(sourceKey);
+            const videoInfo = probeSnapshot.get(sourceKey)?.info;
             const isTesting = videoInfo?.loadSpeed === '测量中...';
             const isCoolingDown = coolingDownKeys.has(sourceKey);
             const episodeCount = Math.max(
@@ -720,19 +527,12 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
                       className='cursor-pointer text-[10px] text-blue-400 hover:underline dark:text-blue-400'
                       onClick={(e) => {
                         e.stopPropagation();
-
-                        // 先给用户即时反馈：进入检测中态
-                        setVideoInfoMap((prev) => {
-                          const newMap = new Map(prev);
-                          newMap.set(sourceKey, {
-                            quality: '未知',
-                            loadSpeed: '测量中...',
-                            pingTime: 0,
-                            hasError: true,
-                          });
-                          return newMap;
+                        // 立即清掉失败态，交给 store 重新驱动"检测中"
+                        invalidateProbe(sourceKey);
+                        void getOrProbe(source, {
+                          force: true,
+                          onDetailFetched: onSourceDetailFetched,
                         });
-                        getVideoInfo(source, { force: true });
                       }}
                     >
                       {videoInfo.quality === '错误'
@@ -768,38 +568,13 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
               disabled={isRetestingAll}
               onClick={async () => {
                 setIsRetestingAll(true);
-                // 清除所有缓存和已尝试标记
-                for (const source of displaySources) {
-                  const key = `${source.source}-${source.id}`;
-                  videoInfoCache.delete(key);
-                  attemptedSourcesRef.current.delete(key);
-                }
-                setAttemptedSources(new Set());
-                setVideoInfoMap(new Map());
-
-                // 当前播放源标记为"播放中"
                 const curKey =
                   currentSource && currentId
                     ? `${currentSource}-${currentId}`
                     : '';
-                if (curKey) {
-                  const playingInfo: VideoInfo = {
-                    quality: '播放中',
-                    loadSpeed: '播放中',
-                    pingTime: 0,
-                  };
-                  videoInfoCache.set(curKey, {
-                    info: playingInfo,
-                    ts: Date.now(),
-                  });
-                  setVideoInfoMap((prev) =>
-                    new Map(prev).set(curKey, playingInfo),
-                  );
-                  setAttemptedSources((prev) => new Set(prev).add(curKey));
-                  attemptedSourcesRef.current.add(curKey);
-                }
+                // 保留当前播放源的 player 真实带宽，其余全部重测
+                resetProbes(curKey ? [curKey] : []);
 
-                // 逐批重测（排除当前源）
                 const toTest = displaySources.filter((s) => {
                   const key = `${s.source}-${s.id}`;
                   return key !== curKey;
@@ -818,8 +593,6 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
                 setIsSearchingMore(true);
                 setSearchMoreDone(false);
                 try {
-                  // 搜索时用 searchKeyword 扩大范围（如聚合搜索的原始关键词），
-                  // 过滤时始终用 videoTitle 精确匹配，避免混入同系列其他作品
                   const query = searchKeyword || videoTitle;
                   const res = await fetch(
                     `/api/search?q=${encodeURIComponent(query.trim())}`,
@@ -837,7 +610,6 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
                       (s) => {
                         if (existingKeys.has(`${s.source}-${s.id}`))
                           return false;
-                        // 标题匹配过滤，避免追加无关结果
                         if (!normalizedTitle) return true;
                         const t = normalizeTitleForSourceMatch(s.title);
                         return t.length > 0 && t === normalizedTitle;
@@ -876,24 +648,30 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
             }
             scrollCurrentIntoView(true);
           }}
-          className='absolute bottom-6 right-6 z-10 flex items-center gap-1 rounded-full bg-green-500 px-3 py-2 text-xs font-medium text-white shadow-lg transition-all hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-500'
+          // 上移至 bottom-20，避免与底部"检验全部/搜索更多源站"按钮重叠
+          className='absolute bottom-20 right-5 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-green-500 text-white shadow-lg transition-all hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-500'
           aria-label='回到当前源'
+          title='回到当前源'
         >
+          {/* 瞄准（crosshair）图标 */}
           <svg
             xmlns='http://www.w3.org/2000/svg'
-            width='14'
-            height='14'
+            width='18'
+            height='18'
             viewBox='0 0 24 24'
             fill='none'
             stroke='currentColor'
-            strokeWidth='2.5'
+            strokeWidth='2'
             strokeLinecap='round'
             strokeLinejoin='round'
           >
-            <polyline points='7 13 12 18 17 13' />
-            <polyline points='7 6 12 11 17 6' />
+            <circle cx='12' cy='12' r='8' />
+            <circle cx='12' cy='12' r='2.5' />
+            <line x1='12' y1='2' x2='12' y2='5' />
+            <line x1='12' y1='19' x2='12' y2='22' />
+            <line x1='2' y1='12' x2='5' y2='12' />
+            <line x1='19' y1='12' x2='22' y2='12' />
           </svg>
-          回到当前源
         </button>
       )}
     </div>

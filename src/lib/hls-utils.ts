@@ -176,6 +176,89 @@ function getFirstSegmentUrl(content: string): string | null {
   return getNonCommentLines(content)[0] || null;
 }
 
+/** 带宽测量目标样本量（字节）。达到后提前中断，避免长尾拖慢测速。 */
+const BANDWIDTH_SAMPLE_TARGET_BYTES = 512 * 1024;
+/** 带宽测量请求的 Range 上限（字节）。1MB 够大，单次 TS 切片通常也不会超过。 */
+const BANDWIDTH_SAMPLE_MAX_BYTES = 1024 * 1024;
+/** 带宽测量整体超时（毫秒），超过则视为失败。外层还有 15s 兜底。 */
+const BANDWIDTH_PROBE_TIMEOUT_MS = 12_000;
+/** 低于该样本量的测速视为可信度不足，统一返回"未知"。 */
+const BANDWIDTH_MIN_VALID_BYTES = 64 * 1024;
+
+/**
+ * 下载首个 segment 样本并基于"首字节到达 → 达标字节"的时间窗计算带宽。
+ * 忽略 TCP/TLS 握手阶段，避免把连接建立开销摊到速度里。
+ */
+async function measureSegmentBandwidth(segmentUrl: string): Promise<string> {
+  const controller = new AbortController();
+  const timeoutTimer = setTimeout(
+    () => controller.abort(),
+    BANDWIDTH_PROBE_TIMEOUT_MS,
+  );
+  try {
+    const response = await fetch(segmentUrl, {
+      cache: 'no-store',
+      signal: controller.signal,
+      headers: {
+        Range: `bytes=0-${BANDWIDTH_SAMPLE_MAX_BYTES - 1}`,
+      },
+    });
+    if (!response.ok && response.status !== 206) {
+      throw new Error('Failed to load first segment');
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      // 老浏览器无 ReadableStream，退回到一次性下载（精度会差但能跑）
+      const buf = await response.arrayBuffer();
+      if (buf.byteLength < BANDWIDTH_MIN_VALID_BYTES) return '未知';
+      // 没有首字节时间，只能用响应总耗时粗算，偏保守
+      return formatBytesPerSecond(buf.byteLength / 0.5);
+    }
+
+    let bytes = 0;
+    let firstByteAt = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      if (firstByteAt === 0) {
+        firstByteAt = performance.now();
+      }
+      bytes += value.byteLength;
+      if (bytes >= BANDWIDTH_SAMPLE_TARGET_BYTES) {
+        // 主动中止：达到目标样本即可，避免长尾拖慢测速
+        try {
+          await reader.cancel();
+        } catch {
+          /* 忽略 */
+        }
+        break;
+      }
+    }
+
+    if (bytes < BANDWIDTH_MIN_VALID_BYTES || firstByteAt === 0) {
+      return '未知';
+    }
+
+    const elapsed = performance.now() - firstByteAt;
+    if (elapsed <= 0) return '未知';
+
+    return formatBytesPerSecond(bytes / (elapsed / 1000));
+  } catch (err) {
+    if ((err as Error)?.name === 'AbortError') {
+      throw new Error('Timeout loading first segment');
+    }
+    throw err instanceof Error
+      ? err
+      : new Error(
+          (err as { message?: string })?.message || 'Segment probe failed',
+        );
+  } finally {
+    clearTimeout(timeoutTimer);
+  }
+}
+
 function buildProxyUrl(
   m3u8Url: string,
   useProxy: boolean,
@@ -270,27 +353,13 @@ async function probeWithMode(
       throw new ProbeError('Missing media segment url', partial);
     }
 
-    const segmentStart = performance.now();
-    const segmentResponse = await withTimeout(
-      fetch(firstSegmentUrl, {
-        cache: 'no-store',
-        headers: {
-          Range: 'bytes=0-8191',
-        },
-      }),
-      8000,
-      'Timeout loading first segment',
-    );
-    if (!segmentResponse.ok) {
-      throw new ProbeError('Failed to load first segment', partial);
-    }
-
-    const segmentBuffer = await segmentResponse.arrayBuffer();
-    const elapsedMs = performance.now() - segmentStart;
-    const loadSpeed =
-      segmentBuffer.byteLength > 0 && elapsedMs > 0
-        ? formatBytesPerSecond(segmentBuffer.byteLength / (elapsedMs / 1000))
-        : '未知';
+    // 下载首个分片样本做带宽估算。
+    // 策略要点：
+    //   1) 样本尽量大：请求 1MB 区间（Range: bytes=0-1048575）。样本过小（<64KB）时
+    //      TCP 慢启动 + TLS/代理首包延迟占据耗时主导，算出的 KB/s 会严重偏低。
+    //   2) 排除握手开销：从「首字节到达」开始计时，而非 fetch 发起时刻。
+    //   3) 滑动达标：累计到 ≥ 512KB 或流结束即停止，避免长尾请求拖长总时长。
+    const loadSpeed = await measureSegmentBandwidth(firstSegmentUrl);
 
     return {
       quality,
