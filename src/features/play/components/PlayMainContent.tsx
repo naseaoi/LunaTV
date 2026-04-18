@@ -46,6 +46,8 @@ interface PlayMainContentProps {
   onAddSources?: (newSources: SearchResult[]) => void;
   /** 加载超时触发：由外层决定是否自动切到下一个候选源 */
   onLoadingTimeout?: () => void;
+  /** URL 的 stype 参数（movie/tv/anime），用于在 type_name 不可靠时强制分类 */
+  searchType?: string;
 }
 
 const PLAYER_LOADING_TIMEOUT_MS = 15_000;
@@ -117,6 +119,7 @@ export function PlayMainContent(props: PlayMainContentProps) {
     onSourceDetailFetched,
     onAddSources,
     onLoadingTimeout,
+    searchType,
   } = props;
 
   // 根据 detail.type_name 选择标题图标和分类颜色
@@ -153,6 +156,13 @@ export function PlayMainContent(props: PlayMainContentProps) {
         auroraLight: ['196,181,253', '221,214,254'],
       },
     };
+    // URL 里 stype 是豆瓣列表/搜索页带入的强信号，优先于源站返回的 type_name：
+    // 部分源站 type_name 为空或只给 "剧情片/动作片" 等三级分类，正则命中率低，
+    // 易被兜底判成 Tv（多版本电影被当剧集处理）。
+    if (searchType === 'movie')
+      return { TitleIcon: Film, categoryColor: colors.film };
+    if (searchType === 'anime')
+      return { TitleIcon: Cat, categoryColor: colors.anime };
     if (/电影|Movie/i.test(typeName))
       return { TitleIcon: Film, categoryColor: colors.film };
     if (/电视|连续剧|剧集|[国韩美日泰港台]剧|TV|Drama/i.test(typeName))
@@ -164,7 +174,7 @@ export function PlayMainContent(props: PlayMainContentProps) {
     if (totalEpisodes <= 1)
       return { TitleIcon: Film, categoryColor: colors.film };
     return { TitleIcon: Tv, categoryColor: colors.tv };
-  }, [detail?.type_name, totalEpisodes]);
+  }, [detail?.type_name, totalEpisodes, searchType]);
 
   const currentSourceMeta = useMemo(() => {
     return availableSources.find(

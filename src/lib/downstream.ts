@@ -259,7 +259,7 @@ async function searchFromGirigiri(
           class: '',
           year: 'unknown',
           desc: '',
-          type_name: '',
+          type_name: '动漫',
           douban_id: 0,
         } as SearchResult;
       })
@@ -409,7 +409,7 @@ async function getDetailFromGirigiri(
           class: '',
           year: finalYear,
           desc: finalDesc,
-          type_name: '',
+          type_name: '动漫',
           douban_id: 0,
         }) satisfies SearchResult,
     );
@@ -430,7 +430,7 @@ async function getDetailFromGirigiri(
     class: '',
     year: finalYear,
     desc: finalDesc,
-    type_name: '',
+    type_name: '动漫',
     douban_id: 0,
     related_sources: relatedSources,
   };

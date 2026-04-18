@@ -10,10 +10,16 @@ export type AdRange = {
   reason: string;
 };
 
+// 广告 URL 关键词：覆盖常见命名（ad/ads/promo），以及第三方广告 SDK
+// （vast/vmap/ima/doubleclick）和常见广告位命名（banner/sponsor/bumper）。
+// 用 (^|分隔符) 边界限定，避免误伤 "advance/header" 等正常词。
 export const AD_KEYWORD_RE =
-  /(^|[\/_.?=&-])(ad|ads|adbreak|advert|commercial|promo|preroll|midroll)($|[\/_.?=&-])/i;
+  /(^|[\/_.?=&-])(ad|ads|adbreak|advert|commercial|promo|preroll|midroll|postroll|bumper|banner|sponsor|vast|vmap|ima|doubleclick|splash)($|[\/_.?=&-])/i;
+// 广告 HLS 标签：除 HLS 标准 SCTE-35 / CUE-OUT / DATERANGE 外，
+// 补充 Adobe/部分国内 CDN 常用的 OATCLS-SCTE35、SPLICEPOINT-SCTE35、
+// 以及非标的 ASSET / BREAK / AD-START / AD-END / TYPE=AD。
 export const AD_TAG_RE =
-  /#EXT-X-CUE-OUT|#EXT-X-DATERANGE|SCTE35|X-ASSET-LIST|CLASS="ad"|CLASS=ad/i;
+  /#EXT-X-CUE-OUT|#EXT-X-DATERANGE|#EXT-OATCLS-SCTE35|#EXT-X-SPLICEPOINT-SCTE35|#EXT-X-ASSET|#EXT-X-BREAK|#EXT-X-AD-(?:START|END|SIGNAL)|SCTE35|X-ASSET-LIST|CLASS="?ad"?|TYPE="?AD"?/i;
 
 export function calculateSourceScore(
   testResult: SourceTestResult,
@@ -211,8 +217,8 @@ function isShortEdgeAdCandidate(
 ) {
   return (
     segment.duration > 0 &&
-    segment.duration < 120 &&
-    segment.duration < maxDuration * 0.2
+    segment.duration < 150 &&
+    segment.duration < maxDuration * 0.25
   );
 }
 
@@ -229,10 +235,11 @@ function isShortMidrollAdCandidate(
   if (!prev || !next) return false;
 
   // 中插广告通常表现为“很短的一段”夹在两段明显更长的正片之间。
+  // 阈值放宽到 60s / 20%，覆盖 20-60s 的常见广告位（不少源站会插 30s 广告）。
   const isVeryShortMidroll =
     segment.duration > 0 &&
-    segment.duration <= 45 &&
-    segment.duration < maxDuration * 0.15;
+    segment.duration <= 60 &&
+    segment.duration < maxDuration * 0.2;
   if (!isVeryShortMidroll) return false;
 
   const neighborThreshold = Math.max(segment.duration * 3, 90);
@@ -284,11 +291,12 @@ function isAdSegment(
  *
  * 判定策略（保守）：
  * 1. 最长区间一定是正片，绝不删除
- * 2. 短区间（时长 < 最长区间的 20% 且 < 120s）标记为疑似广告
+ * 2. 短区间（时长 < 最长区间的 25% 且 < 150s）标记为疑似广告
  * 3. 区间内片段 URL 命中广告关键词 → 强判定为广告
- * 4. 区间内存在 CUE-OUT / SCTE35 等广告标签 → 强判定为广告
- * 5. 无标签短区间默认只删除首尾；若中间区间非常短且两侧明显更长，
- *    则视为中插广告一并删除
+ * 4. 区间内存在 CUE-OUT / SCTE35 / OATCLS / SPLICEPOINT / ASSET / BREAK
+ *    等广告标签 → 强判定为广告
+ * 5. 无标签短区间默认只删除首尾；若中间区间不超过 60s 且 < 20% 最大时长、
+ *    两侧明显更长，则视为中插广告一并删除
  *
  * 返回过滤后的 M3U8 文本。如果无法识别任何广告区间，退化为仅删除
  * DISCONTINUITY 标签（与旧逻辑一致，保证不会比原来更差）。

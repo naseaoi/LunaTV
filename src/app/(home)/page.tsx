@@ -1,8 +1,8 @@
 import HomeClient from '@/components/home/HomeClient';
 import { getHomeInitialData } from '@/lib/home.server';
 
-/** 首页推荐数据 5 分钟 ISR 缓存，避免每次导航都阻塞等待外部 API */
-export const revalidate = 300;
+/** 首页推荐数据 6 小时 ISR 缓存：豆瓣热门榜按日更新，短 TTL 无收益 */
+export const revalidate = 21600;
 
 export default async function Home() {
   const initialData = await getHomeInitialData();

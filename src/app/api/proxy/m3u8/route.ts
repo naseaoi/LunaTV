@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 
+import {
+  shouldRunAdDetection,
+  stripAdSegmentsByPhysicalSignal,
+} from '@/lib/ad-segment-detector';
 import { getBaseUrl, resolveUrl } from '@/lib/live';
 import { createSwrCache } from '@/lib/server-cache';
 import { isSourceCorsCapable } from '@/lib/source-capability';
@@ -68,13 +72,25 @@ function refreshM3U8Cache(
       ) {
         return;
       }
-      const content = await response.text();
+      let content = await response.text();
       // 仅对 VOD/Master 更新缓存
       if (
         !content.includes('#EXT-X-ENDLIST') &&
         !content.includes('#EXT-X-STREAM-INF')
       ) {
         return;
+      }
+      // 针对特定源站尝试剔除广告段；失败或无信号时原样返回
+      if (shouldRunAdDetection(source)) {
+        try {
+          content = await stripAdSegmentsByPhysicalSignal(
+            content,
+            response.url,
+            ua,
+          );
+        } catch {
+          /* 识别失败不影响缓存刷新 */
+        }
       }
       m3u8Cache.set(url, {
         content,
@@ -167,8 +183,22 @@ export async function GET(request: Request) {
       contentType.toLowerCase().includes('octet-stream')
     ) {
       const finalUrl = response.url;
-      const m3u8Content = await response.text();
+      let m3u8Content = await response.text();
       const baseUrl = getBaseUrl(finalUrl);
+
+      // 特定源站广告段剔除（基于时长众数 + 段均码率双信号）。
+      // 直播不走此路径；识别失败则降级为原始内容。
+      if (!isLive && shouldRunAdDetection(source)) {
+        try {
+          m3u8Content = await stripAdSegmentsByPhysicalSignal(
+            m3u8Content,
+            finalUrl,
+            ua,
+          );
+        } catch {
+          /* 识别失败不影响主流程 */
+        }
+      }
 
       // VOD / Master playlist 写入缓存（直播清单不缓存；带签名 token 的短时效 URL 也跳过）
       if (

@@ -918,6 +918,7 @@ function PlayPageClient() {
       onSourceDetailFetched={handleSourceDetailFetched}
       onAddSources={handleAddSources}
       onLoadingTimeout={handleLoadingTimeout}
+      searchType={searchType}
     />
   );
 }
