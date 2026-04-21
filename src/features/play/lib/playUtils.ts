@@ -146,6 +146,15 @@ type ParsedDiscontinuitySegment = {
   duration: number;
   hasAdTag: boolean;
   hasAdUri: boolean;
+  tsDurations: number[];
+};
+
+type SegmentAnalysis = {
+  maxDuration: number;
+  integerRatios: number[];
+  coarseRatios: number[];
+  coarseBaseline: number;
+  roundedModeShares: number[];
 };
 
 function parseDiscontinuitySegments(
@@ -158,6 +167,7 @@ function parseDiscontinuitySegments(
     duration: 0,
     hasAdTag: false,
     hasAdUri: false,
+    tsDurations: [],
   };
   let pendingDuration = 0;
   let cueOutActive = false;
@@ -169,7 +179,13 @@ function parseDiscontinuitySegments(
     if (line === '#EXT-X-DISCONTINUITY') {
       if (current.lines.length > 0) {
         segments.push(current);
-        current = { lines: [], duration: 0, hasAdTag: false, hasAdUri: false };
+        current = {
+          lines: [],
+          duration: 0,
+          hasAdTag: false,
+          hasAdUri: false,
+          tsDurations: [],
+        };
       }
       cueOutActive = false;
       continue;
@@ -194,6 +210,7 @@ function parseDiscontinuitySegments(
 
     if (pendingDuration > 0) {
       current.duration += pendingDuration;
+      current.tsDurations.push(pendingDuration);
       pendingDuration = 0;
     }
     if (cueOutActive) {
@@ -209,6 +226,72 @@ function parseDiscontinuitySegments(
   }
 
   return segments;
+}
+
+function isNearInteger(value: number): boolean {
+  if (value <= 0) return false;
+  return Math.abs(value - Math.round(value)) < 0.01;
+}
+
+function isNearGrid(value: number, step: number): boolean {
+  if (value <= 0 || step <= 0) return false;
+  const snapped = Math.round(value / step) * step;
+  return Math.abs(value - snapped) < 0.01;
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid];
+}
+
+function calculateRoundedModeShare(values: number[], digits: number): number {
+  if (!values.length) return 0;
+  const scale = 10 ** digits;
+  const counts = new Map<number, number>();
+  values.forEach((value) => {
+    const rounded = Math.round(value * scale) / scale;
+    counts.set(rounded, (counts.get(rounded) || 0) + 1);
+  });
+
+  let topCount = 0;
+  counts.forEach((count) => {
+    if (count > topCount) topCount = count;
+  });
+  return topCount / values.length;
+}
+
+function analyzeSegments(
+  segments: ParsedDiscontinuitySegment[],
+): SegmentAnalysis {
+  const integerRatios = segments.map((segment) => {
+    if (!segment.tsDurations.length) return 0;
+    return (
+      segment.tsDurations.filter((duration) => isNearInteger(duration)).length /
+      segment.tsDurations.length
+    );
+  });
+
+  const coarseRatios = segments.map((segment) => {
+    if (!segment.tsDurations.length) return 0;
+    return (
+      segment.tsDurations.filter((duration) => isNearGrid(duration, 0.04))
+        .length / segment.tsDurations.length
+    );
+  });
+
+  return {
+    maxDuration: Math.max(...segments.map((segment) => segment.duration)),
+    integerRatios,
+    coarseRatios,
+    coarseBaseline: median(coarseRatios),
+    roundedModeShares: segments.map((segment) =>
+      calculateRoundedModeShare(segment.tsDurations, 2),
+    ),
+  };
 }
 
 function isShortEdgeAdCandidate(
@@ -248,18 +331,45 @@ function isShortMidrollAdCandidate(
   );
 }
 
+function isCoarseFingerprintAdCandidate(
+  segments: ParsedDiscontinuitySegment[],
+  analysis: SegmentAnalysis,
+  index: number,
+) {
+  if (segments.length < 4) return false;
+
+  const segment = segments[index];
+  if (segment.tsDurations.length < 4) return false;
+
+  const coarseRatio = analysis.coarseRatios[index];
+  if (coarseRatio < 0.85) return false;
+
+  if (analysis.roundedModeShares[index] < 0.5) return false;
+  if (analysis.integerRatios[index] < 0.45) return false;
+
+  const baseline = analysis.coarseBaseline;
+  if (baseline >= 0.35 && coarseRatio - baseline < 0.5) {
+    return false;
+  }
+
+  return true;
+}
+
 function getSegmentAdReason(
   segments: ParsedDiscontinuitySegment[],
+  analysis: SegmentAnalysis,
   index: number,
-  maxDuration: number,
 ) {
   const segment = segments[index];
   if (segment.hasAdTag) return 'tag';
   if (segment.hasAdUri) return 'uri';
-  if (isShortMidrollAdCandidate(segments, index, maxDuration)) {
+  if (isCoarseFingerprintAdCandidate(segments, analysis, index)) {
+    return 'duration-grid';
+  }
+  if (isShortMidrollAdCandidate(segments, index, analysis.maxDuration)) {
     return 'midroll-short';
   }
-  if (isShortEdgeAdCandidate(segment, maxDuration)) {
+  if (isShortEdgeAdCandidate(segment, analysis.maxDuration)) {
     return 'edge-short';
   }
   return 'unknown';
@@ -267,22 +377,25 @@ function getSegmentAdReason(
 
 function isAdSegment(
   segments: ParsedDiscontinuitySegment[],
+  analysis: SegmentAnalysis,
   index: number,
-  maxDuration: number,
 ): boolean {
   const segment = segments[index];
 
   // 强信号：广告标签或广告 URL，直接判定为广告。
   if (segment.hasAdTag || segment.hasAdUri) return true;
 
+  // 量化步进指纹：覆盖 4.00 / 5.48 / 3.24 / 0.28 这类广告切片。
+  if (isCoarseFingerprintAdCandidate(segments, analysis, index)) return true;
+
   // 首尾短区间沿用旧策略，优先清理片头片尾广告。
   const isEdge = index === 0 || index === segments.length - 1;
-  if (isEdge && isShortEdgeAdCandidate(segment, maxDuration)) {
+  if (isEdge && isShortEdgeAdCandidate(segment, analysis.maxDuration)) {
     return true;
   }
 
   // 补充中插广告场景：很多源站不会打广告标签，但会用一个很短的中间区间插播广告。
-  return isShortMidrollAdCandidate(segments, index, maxDuration);
+  return isShortMidrollAdCandidate(segments, index, analysis.maxDuration);
 }
 
 /**
@@ -297,6 +410,8 @@ function isAdSegment(
  *    等广告标签 → 强判定为广告
  * 5. 无标签短区间默认只删除首尾；若中间区间不超过 60s 且 < 20% 最大时长、
  *    两侧明显更长，则视为中插广告一并删除
+ * 6. 命中 40ms 粗粒度步进指纹（如 4.00 / 5.48 / 3.24 / 0.28），
+ *    且显著偏离全局基线时，视为中插广告一并删除
  *
  * 返回过滤后的 M3U8 文本。如果无法识别任何广告区间，退化为仅删除
  * DISCONTINUITY 标签（与旧逻辑一致，保证不会比原来更差）。
@@ -312,9 +427,9 @@ export function filterAdsFromM3U8(m3u8Content: string): string {
   if (segments.length <= 1) return m3u8Content;
 
   // --- 第二步：识别广告区间 ---
-  const maxDuration = Math.max(...segments.map((s) => s.duration));
+  const analysis = analyzeSegments(segments);
   const adFlags = segments.map((_segment, index) =>
-    isAdSegment(segments, index, maxDuration),
+    isAdSegment(segments, analysis, index),
   );
   const hasAnyAd = adFlags.some(Boolean);
 
@@ -351,9 +466,7 @@ export function collectAdRangesFromM3U8(m3u8Content: string): AdRange[] {
     const segments = parseDiscontinuitySegments(m3u8Content);
     if (!segments.length) return [];
 
-    const maxDuration = Math.max(
-      ...segments.map((segment) => segment.duration),
-    );
+    const analysis = analyzeSegments(segments);
     const ranges: AdRange[] = [];
     let timeline = 0;
 
@@ -362,11 +475,11 @@ export function collectAdRangesFromM3U8(m3u8Content: string): AdRange[] {
       const start = timeline;
       const end = timeline + segment.duration;
 
-      if (segment.duration > 0 && isAdSegment(segments, i, maxDuration)) {
+      if (segment.duration > 0 && isAdSegment(segments, analysis, i)) {
         ranges.push({
           start,
           end,
-          reason: getSegmentAdReason(segments, i, maxDuration),
+          reason: getSegmentAdReason(segments, analysis, i),
         });
       }
 

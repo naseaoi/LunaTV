@@ -4,11 +4,12 @@
  *
  * 识别信号按成本由低到高分三路：
  *
- *  信号 A - EXTINF 整数规律（纯本地、零开销）：
+ *  信号 A - EXTINF 量化规律（纯本地、零开销）：
  *    正片由原始转码切片，EXTINF 时长为微秒级浮点（4.170833, 3.628622）；
- *    广告素材多为独立编码 + ffmpeg segment 切片，segment_time 为整秒，
- *    EXTINF 近似为整数且存在同值重复（4.0 × N + 尾帧）。
- *    整片段的整数率远高于正片基线时判广告。
+ *    广告素材多为独立编码 + ffmpeg segment 切片，常见两类指纹：
+ *      A1. 整秒/近整秒切片：4.0 × N + 尾帧；
+ *      A2. 25fps 粗粒度步进：4.00 / 5.48 / 3.24 / 0.28 这类 40ms 网格时长。
+ *    当整片段的量化特征显著高于正片基线时判广告。
  *
  *  信号 B - TS Host 异常（纯本地、零开销）：
  *    正片 TS 从主 CDN host 下发；部分源站将广告 TS 硬编码为 absolute URL
@@ -101,7 +102,7 @@ function parseSegments(m3u8Content: string): {
 }
 
 // ============================================================
-// 信号 A：EXTINF 整数规律（本地、零开销）
+// 信号 A：EXTINF 量化规律（本地、零开销）
 // ============================================================
 
 /** 判定浮点数是否近似整数秒（误差 < 10ms） */
@@ -110,11 +111,42 @@ function isNearInteger(d: number): boolean {
   return Math.abs(d - Math.round(d)) < 0.01;
 }
 
+/** 判定时长是否贴近固定步进网格（默认 40ms，对应常见 25fps 广告切片） */
+function isNearGrid(d: number, step: number): boolean {
+  if (d <= 0 || step <= 0) return false;
+  const snapped = Math.round(d / step) * step;
+  return Math.abs(d - snapped) < 0.01;
+}
+
 /** 计算段内 TS 时长的"整数率"（0~1） */
 function integerRatioOfSegment(seg: DiscontSegment): number {
   if (seg.tsDurations.length === 0) return 0;
   const hits = seg.tsDurations.filter(isNearInteger).length;
   return hits / seg.tsDurations.length;
+}
+
+/** 计算段内 TS 时长的 40ms 网格命中率（0~1） */
+function coarseGridRatioOfSegment(seg: DiscontSegment): number {
+  if (seg.tsDurations.length === 0) return 0;
+  const hits = seg.tsDurations.filter((d) => isNearGrid(d, 0.04)).length;
+  return hits / seg.tsDurations.length;
+}
+
+/** 段内将时长按指定精度量化后的众数占比 */
+function roundedModeShare(seg: DiscontSegment, digits: number): number {
+  if (seg.tsDurations.length === 0) return 0;
+  const scale = 10 ** digits;
+  const counts = new Map<number, number>();
+  for (const d of seg.tsDurations) {
+    const k = Math.round(d * scale) / scale;
+    counts.set(k, (counts.get(k) || 0) + 1);
+  }
+
+  let topCount = 0;
+  counts.forEach((v) => {
+    if (v > topCount) topCount = v;
+  });
+  return topCount / seg.tsDurations.length;
 }
 
 /** 中位数（数组会被拷贝排序） */
@@ -128,30 +160,39 @@ function median(values: number[]): number {
 }
 
 /**
- * 检测 EXTINF 整数规律异常段。
+ * 检测 EXTINF 量化规律异常段。
  *
- * 判定规则（必须全部满足）：
+ * A1. 整秒规律（必须全部满足）：
  *   1. 段内 TS 数 ≥ 3（样本太少易误判）；
  *   2. 段内整数率 ≥ 0.85（允许 1~2 个非整数尾帧）；
  *   3. 主值重复：段内整数化后 round(d) 的众数占比 ≥ 0.5；
  *   4. 与全局基线显著差异：基线（全体段整数率的中位数）< 0.4，
  *      或本段整数率比基线高 0.5 以上。
  *
- * 条件 4 防止"整片都是整数切片的源站"被整体误判。
+ * A2. 粗粒度步进规律（必须全部满足）：
+ *   1. 段内 TS 数 ≥ 4；
+ *   2. 40ms 网格命中率 ≥ 0.85；
+ *   3. 2 位小数量化后的众数占比 ≥ 0.5（典型为 4.00 重复多次）；
+ *   4. 近整数率 ≥ 0.45（保守要求至少半段是 4.00 / 5.00 / 3.00 这类整秒片）；
+ *   5. 与全局基线显著差异：全体段 40ms 网格命中率中位数 < 0.35，
+ *      或本段比基线高 0.5 以上。
+ *
+ * 条件 4/5 用于防止"整片都是粗粒度切片的源站"被整体误判。
  */
 function detectByExtinfIntegerPattern(segments: DiscontSegment[]): Set<number> {
   const result = new Set<number>();
   if (segments.length < 3) return result;
 
   const ratios = segments.map(integerRatioOfSegment);
-  const baseline = median(ratios);
+  const integerBaseline = median(ratios);
+  const coarseRatios = segments.map(coarseGridRatioOfSegment);
+  const coarseBaseline = median(coarseRatios);
 
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i];
     if (seg.tsDurations.length < 3) continue;
 
     const ratio = ratios[i];
-    if (ratio < 0.85) continue;
 
     // 主值重复度：段内整数化后的最高频次 / 段内 TS 数
     const counts = new Map<number, number>();
@@ -165,12 +206,25 @@ function detectByExtinfIntegerPattern(segments: DiscontSegment[]): Set<number> {
       if (v > topCount) topCount = v;
     });
     const topShare = topCount / seg.tsDurations.length;
-    if (topShare < 0.5) continue;
 
-    // 与基线对比：整片都是整数的源站不误判
-    if (baseline >= 0.4 && ratio - baseline < 0.5) continue;
+    const coarseRatio = coarseRatios[i];
+    const coarseModeShare = roundedModeShare(seg, 2);
 
-    result.add(i);
+    const matchedIntegerPattern =
+      ratio >= 0.85 &&
+      topShare >= 0.5 &&
+      !(integerBaseline >= 0.4 && ratio - integerBaseline < 0.5);
+
+    const matchedCoarseGridPattern =
+      seg.tsDurations.length >= 4 &&
+      coarseRatio >= 0.85 &&
+      coarseModeShare >= 0.5 &&
+      ratio >= 0.45 &&
+      !(coarseBaseline >= 0.35 && coarseRatio - coarseBaseline < 0.5);
+
+    if (matchedIntegerPattern || matchedCoarseGridPattern) {
+      result.add(i);
+    }
   }
 
   return result;

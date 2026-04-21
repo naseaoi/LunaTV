@@ -106,6 +106,31 @@ describe('stripAdSegmentsByPhysicalSignal', () => {
     expect(result).toMatch(/normal_7_5\.ts/);
   });
 
+  test('EXTINF 40ms 粗粒度步进段被识别并剔除', async () => {
+    const lines = ['#EXTM3U', '#EXT-X-VERSION:3', '#EXT-X-TARGETDURATION:8'];
+    for (let i = 0; i < 4; i++) lines.push(...buildNormalSegment(i));
+
+    lines.push('#EXT-X-DISCONTINUITY');
+    [4.0, 5.48, 4.0, 3.24, 4.0, 0.28].forEach((d, i) => {
+      lines.push(`#EXTINF:${d.toFixed(6)},`);
+      lines.push(`coarse_ad_${i}.ts`);
+    });
+
+    for (let i = 4; i < 8; i++) lines.push(...buildNormalSegment(i));
+    lines.push('#EXT-X-ENDLIST');
+    const m3u8 = lines.join('\n');
+
+    const result = await stripAdSegmentsByPhysicalSignal(
+      m3u8,
+      'https://cdn.example.com/x/index.m3u8',
+      'ua',
+    );
+
+    expect(result).not.toMatch(/coarse_ad_\d+\.ts/);
+    expect(result).toMatch(/normal_0_0\.ts/);
+    expect(result).toMatch(/normal_7_5\.ts/);
+  });
+
   test('整片都是整数切片的源站不被误判', async () => {
     // 所有段 EXTINF 都是 4.0，基线整数率 = 1.0，差异 = 0 → 不判
     const lines = ['#EXTM3U'];

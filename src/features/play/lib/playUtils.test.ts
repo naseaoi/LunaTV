@@ -64,4 +64,35 @@ describe('filterAdsFromM3U8', () => {
     expect(output).not.toContain('midroll/ad-2.ts');
     expect(output).toContain('main-b.ts');
   });
+
+  it('会移除粗粒度步进的中插广告区间', () => {
+    const input = createPlaylist([
+      ['#EXTINF:4.170833,', 'main-a-1.ts', '#EXTINF:3.628622,', 'main-a-2.ts'],
+      ['#EXT-X-DISCONTINUITY', '#EXTINF:4.170833,', 'main-b-1.ts'],
+      [
+        '#EXT-X-DISCONTINUITY',
+        '#EXTINF:4.000000,',
+        'grid-ad-1.ts',
+        '#EXTINF:5.480000,',
+        'grid-ad-2.ts',
+        '#EXTINF:4.000000,',
+        'grid-ad-3.ts',
+        '#EXTINF:3.240000,',
+        'grid-ad-4.ts',
+        '#EXTINF:4.000000,',
+        'grid-ad-5.ts',
+        '#EXTINF:0.280000,',
+        'grid-ad-6.ts',
+      ],
+      ['#EXT-X-DISCONTINUITY', '#EXTINF:4.170833,', 'main-c-1.ts'],
+      ['#EXT-X-DISCONTINUITY', '#EXTINF:5.130122,', 'main-d-1.ts'],
+    ]);
+
+    const output = filterAdsFromM3U8(input);
+
+    expect(output).not.toContain('grid-ad-1.ts');
+    expect(output).not.toContain('grid-ad-6.ts');
+    expect(output).toContain('main-a-1.ts');
+    expect(output).toContain('main-d-1.ts');
+  });
 });

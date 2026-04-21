@@ -24,20 +24,21 @@ import {
 } from '@/lib/failed-source-cooldown';
 
 import { PlayMainContent } from '@/features/play/components/PlayMainContent';
+import { useArtPlayer } from '@/features/play/hooks/useArtPlayer';
+import { usePlayFavorite } from '@/features/play/hooks/usePlayFavorite';
+import { usePlayInit, updateVideoUrl } from '@/features/play/hooks/usePlayInit';
 import { writePlayerInfo } from '@/features/play/lib/sourceProbeStore';
 import {
   PlayErrorView,
   PlayLoadingView,
 } from '@/features/play/components/PlayStateViews';
-import { useArtPlayer } from '@/features/play/hooks/useArtPlayer';
 import { usePlayerKeyboard } from '@/hooks/usePlayerKeyboard';
-import { usePlayFavorite } from '@/features/play/hooks/usePlayFavorite';
-import { usePlayInit, updateVideoUrl } from '@/features/play/hooks/usePlayInit';
 import { resolveEpisodeTargetIndex } from '@/features/play/lib/episodeMapping';
 import {
   PlayProgressSaveState,
   usePlayProgress,
 } from '@/features/play/hooks/usePlayProgress';
+import type { ResumeMode } from '@/features/play/lib/resumePlayback';
 import {
   finalizeSourceSwitchCleanup,
   shouldFinalizeSourceSwitchCleanup,
@@ -159,8 +160,16 @@ function PlayPageClient() {
 
   // 播放恢复相关
   const resumeTimeRef = useRef<number | null>(null);
+  const resumeModeRef = useRef<ResumeMode>(null);
+  const allowAutoResumeRef = useRef(true);
   const lastVolumeRef = useRef<number>(0.7);
   const lastPlaybackRateRef = useRef<number>(1.0);
+
+  useEffect(() => {
+    // 新的一集/新源开始加载时重新打开自动恢复窗口；
+    // 超过前几秒后会由播放器侧主动关闭，避免后续 canplay 再次误套用旧进度。
+    allowAutoResumeRef.current = true;
+  }, [currentSource, currentId, currentEpisodeIndex]);
 
   // 换源相关状态
   const [availableSources, setAvailableSources] = useState<SearchResult[]>([]);
@@ -443,6 +452,8 @@ function PlayPageClient() {
     detailRef,
     currentEpisodeIndexRef,
     resumeTimeRef,
+    resumeModeRef,
+    allowAutoResumeRef,
     saveStateRef: playProgressSaveStateRef,
     lastSaveTimeRef,
     saveIntervalRef,
@@ -675,8 +686,10 @@ function PlayPageClient() {
 
       if (preserveProgress && currentPlayTime > 1) {
         resumeTimeRef.current = currentPlayTime;
+        resumeModeRef.current = 'forced';
       } else {
         resumeTimeRef.current = 0;
+        resumeModeRef.current = null;
       }
 
       const newUrl = new URL(window.location.href);
@@ -803,6 +816,8 @@ function PlayPageClient() {
     blockAdEnabledRef,
     skipConfigRef,
     resumeTimeRef,
+    resumeModeRef,
+    allowAutoResumeRef,
     lastVolumeRef,
     lastPlaybackRateRef,
     lastSkipCheckRef,

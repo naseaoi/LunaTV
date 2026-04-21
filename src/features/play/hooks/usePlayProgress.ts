@@ -18,6 +18,11 @@ import {
   SessionLostReason,
   WakeLockSentinel,
 } from '@/features/play/lib/playTypes';
+import {
+  applyResumeTime,
+  isWithinAutoResumeWindow,
+} from '@/features/play/lib/resumePlayback';
+import type { ResumeMode } from '@/features/play/lib/resumePlayback';
 
 // ---------------------------------------------------------------------------
 // Checkpoint: 保存/恢复
@@ -60,6 +65,7 @@ export function restorePlaybackCheckpoint(
   currentIdRef: MutableRefObject<string>,
   setCurrentEpisodeIndex: Dispatch<SetStateAction<number>>,
   resumeTimeRef: MutableRefObject<number | null>,
+  resumeModeRef: MutableRefObject<ResumeMode>,
 ): boolean {
   if (typeof window === 'undefined') return false;
 
@@ -95,6 +101,7 @@ export function restorePlaybackCheckpoint(
     }
     if (checkpoint.currentTime > 0) {
       resumeTimeRef.current = checkpoint.currentTime;
+      resumeModeRef.current = 'forced';
     }
 
     sessionStorage.removeItem(PLAY_CHECKPOINT_KEY);
@@ -248,6 +255,8 @@ interface UsePlayProgressParams {
   detailRef: MutableRefObject<SearchResult | null>;
   currentEpisodeIndexRef: MutableRefObject<number>;
   resumeTimeRef: MutableRefObject<number | null>;
+  resumeModeRef: MutableRefObject<ResumeMode>;
+  allowAutoResumeRef: MutableRefObject<boolean>;
   saveStateRef: MutableRefObject<PlayProgressSaveState>;
   lastSaveTimeRef: MutableRefObject<number>;
   saveIntervalRef: MutableRefObject<NodeJS.Timeout | null>;
@@ -269,6 +278,8 @@ export function usePlayProgress({
   detailRef,
   currentEpisodeIndexRef,
   resumeTimeRef,
+  resumeModeRef,
+  allowAutoResumeRef,
   saveStateRef,
   lastSaveTimeRef,
   saveIntervalRef,
@@ -346,6 +357,7 @@ export function usePlayProgress({
           currentIdRef,
           setCurrentEpisodeIndex,
           resumeTimeRef,
+          resumeModeRef,
         )
       ) {
         return;
@@ -360,10 +372,36 @@ export function usePlayProgress({
           const targetIndex = record.index - 1;
           const targetTime = record.play_time;
 
+          // IndexedDB 读取是异步的，若首帧已经播出一段时间，再把旧进度塞回
+          // resumeTimeRef 会导致后续卡顿恢复触发 canplay 时突然跳转。
+          if (!allowAutoResumeRef.current) {
+            return;
+          }
+
           if (targetIndex !== currentEpisodeIndex) {
             setCurrentEpisodeIndex(targetIndex);
           }
+
+          const player = artPlayerRef.current;
+          if (
+            targetIndex === currentEpisodeIndex &&
+            player &&
+            isWithinAutoResumeWindow(player.currentTime || 0)
+          ) {
+            try {
+              if (applyResumeTime(player, targetTime)) {
+                allowAutoResumeRef.current = false;
+                resumeTimeRef.current = null;
+                resumeModeRef.current = null;
+                return;
+              }
+            } catch (err) {
+              console.warn('延迟恢复播放进度失败:', err);
+            }
+          }
+
           resumeTimeRef.current = targetTime;
+          resumeModeRef.current = 'history';
         }
       } catch (err) {
         console.error('读取播放记录失败:', err);

@@ -31,6 +31,11 @@ import {
 import { shouldDismissLoadingFromCanPlay } from '@/features/play/lib/playerLoading';
 import { WakeLockSentinel } from '@/features/play/lib/playTypes';
 import { filterAdsFromM3U8 } from '@/features/play/lib/playUtils';
+import {
+  applyResumeTime,
+  isWithinAutoResumeWindow,
+} from '@/features/play/lib/resumePlayback';
+import type { ResumeMode } from '@/features/play/lib/resumePlayback';
 
 // ---------------------------------------------------------------------------
 // 类型
@@ -56,6 +61,8 @@ export interface UseArtPlayerParams {
   blockAdEnabledRef: MutableRefObject<boolean>;
   skipConfigRef: MutableRefObject<SkipConfig>;
   resumeTimeRef: MutableRefObject<number | null>;
+  resumeModeRef: MutableRefObject<ResumeMode>;
+  allowAutoResumeRef: MutableRefObject<boolean>;
   lastVolumeRef: MutableRefObject<number>;
   lastPlaybackRateRef: MutableRefObject<number>;
   lastSkipCheckRef: MutableRefObject<number>;
@@ -105,6 +112,8 @@ export function useArtPlayer(params: UseArtPlayerParams) {
     blockAdEnabledRef,
     skipConfigRef,
     resumeTimeRef,
+    resumeModeRef,
+    allowAutoResumeRef,
     lastVolumeRef,
     lastPlaybackRateRef,
     lastSkipCheckRef,
@@ -592,6 +601,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
                   localStorage.setItem('enable_blockad', String(newVal));
                   if (artPlayerRef.current) {
                     resumeTimeRef.current = artPlayerRef.current.currentTime;
+                    resumeModeRef.current = 'forced';
                     const managedVideo = artPlayerRef.current.video;
                     runManagedVideoCleanup(managedVideo);
                     destroyManagedHls(managedVideo);
@@ -752,16 +762,21 @@ export function useArtPlayer(params: UseArtPlayerParams) {
         player.on('video:canplay', () => {
           if (resumeTimeRef.current && resumeTimeRef.current > 0) {
             try {
-              const duration = player.duration || 0;
-              let target = resumeTimeRef.current;
-              if (duration && target >= duration - 2)
-                target = Math.max(0, duration - 5);
-              player.currentTime = target;
+              if (
+                resumeModeRef.current !== 'history' ||
+                allowAutoResumeRef.current
+              ) {
+                applyResumeTime(player, resumeTimeRef.current);
+                if (resumeModeRef.current === 'history') {
+                  allowAutoResumeRef.current = false;
+                }
+              }
             } catch (err) {
               console.warn('恢复播放进度失败:', err);
             }
           }
           resumeTimeRef.current = null;
+          resumeModeRef.current = null;
 
           setTimeout(() => {
             if (Math.abs(player.volume - lastVolumeRef.current) > 0.01) {
@@ -794,6 +809,17 @@ export function useArtPlayer(params: UseArtPlayerParams) {
 
         // 跳过片头片尾
         player.on('video:timeupdate', () => {
+          if (allowAutoResumeRef.current) {
+            if (!isWithinAutoResumeWindow(player.currentTime || 0)) {
+              // 超过起播窗口后关闭自动恢复，避免后续网络抖动再次触发 canplay 时跳回旧进度。
+              allowAutoResumeRef.current = false;
+              if (resumeModeRef.current === 'history') {
+                resumeTimeRef.current = null;
+                resumeModeRef.current = null;
+              }
+            }
+          }
+
           if (!skipConfigRef.current.enable) return;
 
           const currentTime = player.currentTime || 0;
