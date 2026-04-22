@@ -6,6 +6,7 @@ export interface SourceSwitchCleanupTask {
   nextSource: string;
   nextId: string;
   previousSkipConfig: SkipConfig;
+  keepPreviousPlayRecord?: boolean;
 }
 
 interface SourceSwitchCleanupDeps {
@@ -41,10 +42,12 @@ export async function finalizeSourceSwitchCleanup(
   task: SourceSwitchCleanupTask,
   deps: SourceSwitchCleanupDeps,
 ) {
-  try {
-    await deps.deletePlayRecord(task.previousSource, task.previousId);
-  } catch (err) {
-    console.error('清除播放记录失败:', err);
+  if (!task.keepPreviousPlayRecord) {
+    try {
+      await deps.deletePlayRecord(task.previousSource, task.previousId);
+    } catch (err) {
+      console.error('清除播放记录失败:', err);
+    }
   }
 
   try {

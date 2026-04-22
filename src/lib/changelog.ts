@@ -11,21 +11,24 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
-    version: '0.3.5',
+    version: '0.3.6',
     date: '2026-04-21',
     added: ['新增播放恢复安全窗口与安全续播工具'],
     changed: [
-      '优化播放页历史进度恢复链路，区分历史恢复与强制恢复，避免网络抖动后 `canplay` 重入时误跳转',
-      '增强去广告识别：新增 EXTINF 40ms 粗粒度步进指纹，补齐 rycj 样本 6:49-7:10 中插广告场景',
+      '优化播放页历史进度恢复链路，区分历史恢复与强制恢复',
+      '增强去广告识别：新增 EXTINF 40ms 粗粒度步进指纹',
+      '统一播放页“下一集”、连播与选集面板的切集链路',
     ],
     fixed: [
       '修复异步读取播放记录晚到时可能把正在播放的视频跳回旧进度的问题',
       '修复切换去广告开关或恢复检查点后续播状态不一致的问题',
-      '修复部分 rycj 中插广告未被识别和剔除的问题',
+      '修复部分源站中插广告未被识别和剔除的问题',
+      '修复切换下一集后自动换源仍沿用上一集播放进度的问题',
+      '修复切集触发换源后上一集继续观看记录被提前清除的问题',
     ],
   },
   {
-    version: '0.3.4',
+    version: '0.3.5',
     date: '2026-04-18',
     added: ['新增源站失败冷却与会话级代理回退记忆'],
     changed: [
@@ -41,7 +44,7 @@ export const changelog: ChangelogEntry[] = [
     ],
   },
   {
-    version: '0.3.3',
+    version: '0.3.4',
     date: '2026-04-17',
     added: ['新增通用 SWR 服务端缓存、源站 CORS 能力记录与播放预热工具'],
     changed: [
@@ -56,7 +59,7 @@ export const changelog: ChangelogEntry[] = [
     ],
   },
   {
-    version: '0.3.2',
+    version: '0.3.3',
     date: '2026-04-15',
     added: [
       // 无新增内容
@@ -72,7 +75,7 @@ export const changelog: ChangelogEntry[] = [
     ],
   },
   {
-    version: '0.3.1',
+    version: '0.3.2',
     date: '2026-04-15',
     added: [
       // 无新增内容
@@ -92,7 +95,7 @@ export const changelog: ChangelogEntry[] = [
     ],
   },
   {
-    version: '0.2.10',
+    version: '0.2.11',
     date: '2026-04-15',
     added: [
       // 无新增内容
@@ -106,7 +109,7 @@ export const changelog: ChangelogEntry[] = [
     ],
   },
   {
-    version: '0.2.9',
+    version: '0.2.10',
     date: '2026-04-14',
     added: [
       // 无新增内容
@@ -118,7 +121,7 @@ export const changelog: ChangelogEntry[] = [
     ],
   },
   {
-    version: '0.2.8',
+    version: '0.2.9',
     date: '2026-04-13',
     added: [
       // 无新增内容
@@ -133,7 +136,7 @@ export const changelog: ChangelogEntry[] = [
     ],
   },
   {
-    version: '0.2.7',
+    version: '0.2.8',
     date: '2026-04-12',
     added: [
       // 无新增内容
@@ -148,7 +151,7 @@ export const changelog: ChangelogEntry[] = [
     ],
   },
   {
-    version: '0.2.6',
+    version: '0.2.7',
     date: '2026-04-07',
     added: [
       // 无新增内容
@@ -163,7 +166,7 @@ export const changelog: ChangelogEntry[] = [
     ],
   },
   {
-    version: '0.2.5',
+    version: '0.2.6',
     date: '2026-04-07',
     added: [
       // 无新增内容
@@ -178,14 +181,14 @@ export const changelog: ChangelogEntry[] = [
     ],
   },
   {
-    version: '0.2.4',
+    version: '0.2.5',
     date: '2026-03-06',
     added: ['后台新增直播开关入口'],
     changed: ['优化首屏和列表页的加载速度'],
     fixed: ['修复源站加载和检测逻辑'],
   },
   {
-    version: '0.2.3',
+    version: '0.2.4',
     date: '2026-02-27',
     added: [
       // 无新增内容
@@ -194,7 +197,7 @@ export const changelog: ChangelogEntry[] = [
     fixed: ['修复换源面板的测速错误问题'],
   },
   {
-    version: '0.2.2',
+    version: '0.2.3',
     date: '2026-02-26',
     added: [
       // 无新增内容
@@ -205,7 +208,7 @@ export const changelog: ChangelogEntry[] = [
     ],
   },
   {
-    version: '0.2.1',
+    version: '0.2.2',
     date: '2026-02-26',
     added: [
       // 无新增内容
@@ -216,7 +219,7 @@ export const changelog: ChangelogEntry[] = [
     ],
   },
   {
-    version: '0.1.2',
+    version: '0.1.3',
     date: '2026-02-24',
     added: [
       // 无新增内容
@@ -227,7 +230,7 @@ export const changelog: ChangelogEntry[] = [
     fixed: ['修复去广告失效问题', '修复版本日志不显示问题'],
   },
   {
-    version: '0.1.1',
+    version: '0.1.2',
     date: '2026-02-23',
     added: [
       // 无新增内容
@@ -238,7 +241,7 @@ export const changelog: ChangelogEntry[] = [
     ],
   },
   {
-    version: '0.0.4',
+    version: '0.0.5',
     date: '2025-10-27',
     added: [
       // 无新增内容
@@ -249,7 +252,7 @@ export const changelog: ChangelogEntry[] = [
     fixed: ['修复 webkit 下播放器控件的展示 bug'],
   },
   {
-    version: '0.0.3',
+    version: '0.0.4',
     date: '2025-10-23',
     added: [
       // 无新增内容
@@ -260,7 +263,7 @@ export const changelog: ChangelogEntry[] = [
     fixed: ['修复 /api/search/resources 接口越权问题'],
   },
   {
-    version: '0.0.2',
+    version: '0.0.3',
     date: '2025-09-25',
     added: [
       // 无新增内容

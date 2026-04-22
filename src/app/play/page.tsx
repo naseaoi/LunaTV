@@ -34,6 +34,7 @@ import {
 } from '@/features/play/components/PlayStateViews';
 import { usePlayerKeyboard } from '@/hooks/usePlayerKeyboard';
 import { resolveEpisodeTargetIndex } from '@/features/play/lib/episodeMapping';
+import { resolveSourceSwitchResumeState } from '@/features/play/lib/episodeResumePolicy';
 import {
   PlayProgressSaveState,
   usePlayProgress,
@@ -205,6 +206,8 @@ function PlayPageClient() {
   const [precomputedVideoInfo, setPrecomputedVideoInfo] = useState<
     Map<string, { quality: string; loadSpeed: string; pingTime: number }>
   >(new Map());
+  // 切集后到新一集真正起播前，禁止把上一集的时间继续带到目标集。
+  const clearTargetEpisodeProgressRef = useRef(false);
 
   const [isEpisodeSelectorCollapsed, setIsEpisodeSelectorCollapsed] =
     useState(false);
@@ -471,39 +474,48 @@ function PlayPageClient() {
   // 集数切换
   // ---------------------------------------------------------------------------
 
-  const handleEpisodeChange = (episodeNumber: number) => {
-    if (episodeNumber >= 0 && episodeNumber < totalEpisodes) {
-      if (artPlayerRef.current && !artPlayerRef.current.playing) {
-        doSaveCurrentProgress();
+  const switchEpisode = useCallback(
+    (targetEpisodeIndex: number) => {
+      const d = detailRef.current;
+      if (!d?.episodes || targetEpisodeIndex < 0) {
+        return;
       }
+
+      if (targetEpisodeIndex >= d.episodes.length) {
+        return;
+      }
+
+      if (targetEpisodeIndex === currentEpisodeIndexRef.current) {
+        return;
+      }
+
+      doSaveCurrentProgress();
+      clearTargetEpisodeProgressRef.current = true;
+      resumeTimeRef.current = 0;
+      resumeModeRef.current = null;
+
       setIsVideoLoading(true);
       setVideoLoadingStage('sourceChanging');
       setVideoLoadingAttempt((prev) => prev + 1);
-      setCurrentEpisodeIndex(episodeNumber);
-    }
-  };
+      setCurrentEpisodeIndex(targetEpisodeIndex);
+    },
+    [doSaveCurrentProgress],
+  );
+
+  const handleEpisodeChange = useCallback(
+    (episodeNumber: number) => {
+      switchEpisode(episodeNumber);
+    },
+    [switchEpisode],
+  );
 
   const handlePreviousEpisode = useCallback(() => {
-    const d = detailRef.current;
-    const idx = currentEpisodeIndexRef.current;
-    if (d && d.episodes && idx > 0) {
-      if (artPlayerRef.current && artPlayerRef.current.playing) {
-        doSaveCurrentProgress();
-      }
-      setCurrentEpisodeIndex(idx - 1);
-    }
-  }, [doSaveCurrentProgress]);
+    switchEpisode(currentEpisodeIndexRef.current - 1);
+  }, [switchEpisode]);
 
   const handleNextEpisode = useCallback(() => {
-    const d = detailRef.current;
-    const idx = currentEpisodeIndexRef.current;
-    if (d && d.episodes && idx < d.episodes.length - 1) {
-      if (artPlayerRef.current && artPlayerRef.current.playing) {
-        doSaveCurrentProgress();
-      }
-      setCurrentEpisodeIndex(idx + 1);
-    }
-  }, [doSaveCurrentProgress]);
+    switchEpisode(currentEpisodeIndexRef.current + 1);
+  }, [switchEpisode]);
 
   // ---------------------------------------------------------------------------
   // 键盘快捷键 hook
@@ -678,19 +690,20 @@ function PlayPageClient() {
       );
       let targetIndex = resolvedEpisodeTarget.index;
       let preserveProgress = resolvedEpisodeTarget.preserveProgress;
+      const clearTargetEpisodeProgress = clearTargetEpisodeProgressRef.current;
 
       if (!newDetail.episodes || targetIndex >= newDetail.episodes.length) {
         targetIndex = 0;
         preserveProgress = false;
       }
 
-      if (preserveProgress && currentPlayTime > 1) {
-        resumeTimeRef.current = currentPlayTime;
-        resumeModeRef.current = 'forced';
-      } else {
-        resumeTimeRef.current = 0;
-        resumeModeRef.current = null;
-      }
+      const nextResumeState = resolveSourceSwitchResumeState({
+        currentPlayTime,
+        preserveProgress,
+        clearTargetEpisodeProgress,
+      });
+      resumeTimeRef.current = nextResumeState.resumeTime;
+      resumeModeRef.current = nextResumeState.resumeMode;
 
       const newUrl = new URL(window.location.href);
       newUrl.searchParams.set('source', newDetail.source);
@@ -719,6 +732,7 @@ function PlayPageClient() {
           nextSource: newDetail.source,
           nextId: newDetail.id,
           previousSkipConfig,
+          keepPreviousPlayRecord: clearTargetEpisodeProgress,
         };
       }
     } catch (err) {
@@ -830,7 +844,6 @@ function PlayPageClient() {
     setIsPlaying,
     setRealtimeLoadSpeed,
     setBlockAdEnabled,
-    setCurrentEpisodeIndex,
     handleNextEpisode,
     handleSkipConfigChange,
     saveCurrentPlayProgress: doSaveCurrentProgress,
@@ -852,6 +865,7 @@ function PlayPageClient() {
       autoFallbackInProgressRef.current = false;
       failedSourcesRef.current = new Set();
       clearSourceFailure(`${activeSource}-${activeId}`);
+      clearTargetEpisodeProgressRef.current = false;
 
       void finalizePendingSourceSwitchCleanup(activeSource, activeId);
     }, [finalizePendingSourceSwitchCleanup]),

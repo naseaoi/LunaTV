@@ -75,7 +75,6 @@ export interface UseArtPlayerParams {
   setIsPlaying: Dispatch<SetStateAction<boolean>>;
   setRealtimeLoadSpeed: Dispatch<SetStateAction<string>>;
   setBlockAdEnabled: Dispatch<SetStateAction<boolean>>;
-  setCurrentEpisodeIndex: Dispatch<SetStateAction<number>>;
   handleNextEpisode: () => void;
   handleSkipConfigChange: (newConfig: SkipConfig) => Promise<void>;
   saveCurrentPlayProgress: () => void;
@@ -125,7 +124,6 @@ export function useArtPlayer(params: UseArtPlayerParams) {
     setIsPlaying,
     setRealtimeLoadSpeed,
     setBlockAdEnabled,
-    setCurrentEpisodeIndex,
     handleNextEpisode,
     handleSkipConfigChange,
     saveCurrentPlayProgress,
@@ -876,7 +874,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
           const idx = currentEpisodeIndexRef.current;
           if (d && d.episodes && idx < d.episodes.length - 1) {
             setTimeout(() => {
-              setCurrentEpisodeIndex(idx + 1);
+              handleNextEpisode();
             }, 300);
           }
         });
