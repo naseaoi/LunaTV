@@ -1,6 +1,27 @@
-import { resolveSourceSwitchResumeState } from '@/features/play/lib/episodeResumePolicy';
+import {
+  resolveSourceSwitchCurrentPlayTime,
+  resolveSourceSwitchResumeState,
+} from '@/features/play/lib/episodeResumePolicy';
 
 describe('episodeResumePolicy', () => {
+  it('自动换源时优先采用播放器里的稳定进度', () => {
+    expect(
+      resolveSourceSwitchCurrentPlayTime({
+        playerCurrentTime: 12.8,
+        pendingResumeTime: 1320,
+      }),
+    ).toBe(12.8);
+  });
+
+  it('播放器进度只有零点几秒时回退到待恢复进度', () => {
+    expect(
+      resolveSourceSwitchCurrentPlayTime({
+        playerCurrentTime: 0.4,
+        pendingResumeTime: 1320,
+      }),
+    ).toBe(1320);
+  });
+
   it('切集后的自动换源不会继承上一集进度', () => {
     expect(
       resolveSourceSwitchResumeState({

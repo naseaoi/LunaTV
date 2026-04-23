@@ -11,6 +11,26 @@ interface ResolveSourceSwitchResumeStateOptions {
   clearTargetEpisodeProgress: boolean;
 }
 
+interface ResolveSourceSwitchCurrentPlayTimeOptions {
+  playerCurrentTime: number;
+  pendingResumeTime: number | null;
+}
+
+/**
+ * 自动换源优先采用播放器里的稳定进度；
+ * 若当前仅有零点几秒的探测值，则回退到待恢复的有效进度。
+ */
+export function resolveSourceSwitchCurrentPlayTime({
+  playerCurrentTime,
+  pendingResumeTime,
+}: ResolveSourceSwitchCurrentPlayTimeOptions): number {
+  if (playerCurrentTime > 1) {
+    return playerCurrentTime;
+  }
+
+  return pendingResumeTime && pendingResumeTime > 0 ? pendingResumeTime : 0;
+}
+
 /**
  * 切集后的换源只负责对齐目标集数，不继承上一集的播放时间。
  */

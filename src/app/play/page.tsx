@@ -34,7 +34,10 @@ import {
 } from '@/features/play/components/PlayStateViews';
 import { usePlayerKeyboard } from '@/hooks/usePlayerKeyboard';
 import { resolveEpisodeTargetIndex } from '@/features/play/lib/episodeMapping';
-import { resolveSourceSwitchResumeState } from '@/features/play/lib/episodeResumePolicy';
+import {
+  resolveSourceSwitchCurrentPlayTime,
+  resolveSourceSwitchResumeState,
+} from '@/features/play/lib/episodeResumePolicy';
 import {
   PlayProgressSaveState,
   usePlayProgress,
@@ -630,8 +633,10 @@ function PlayPageClient() {
     const previousId = currentIdRef.current;
     const previousDetail = detailRef.current;
     const previousSkipConfig: SkipConfig = { ...skipConfigRef.current };
-    const currentPlayTime =
-      artPlayerRef.current?.currentTime || resumeTimeRef.current || 0;
+    const currentPlayTime = resolveSourceSwitchCurrentPlayTime({
+      playerCurrentTime: artPlayerRef.current?.currentTime || 0,
+      pendingResumeTime: resumeTimeRef.current,
+    });
 
     pendingSourceSwitchCleanupRef.current = null;
 
@@ -886,6 +891,14 @@ function PlayPageClient() {
       [],
     ),
   });
+
+  useEffect(() => {
+    return () => {
+      // SPA 返回时尽量补一笔最终进度，避免最后几秒丢失。
+      doSaveCheckpoint();
+      void doSaveCurrentProgress();
+    };
+  }, [doSaveCheckpoint, doSaveCurrentProgress]);
 
   // ---------------------------------------------------------------------------
   // 渲染

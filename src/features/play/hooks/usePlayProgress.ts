@@ -126,6 +126,56 @@ type PendingPlayProgressSave = {
   fingerprint: string;
 };
 
+interface HistoryRestoreGuardOptions {
+  requestedSource: string;
+  requestedId: string;
+  requestedEpisodeIndex: number;
+  activeSource: string;
+  activeId: string;
+  activeEpisodeIndex: number;
+  allowAutoResume: boolean;
+  pendingResumeTime: number | null;
+  pendingResumeMode: ResumeMode;
+}
+
+/**
+ * 历史记录是异步读取的，应用前必须再次确认当前仍是同一条播放链路，
+ * 并且不能覆盖换源/检查点已经写入的 forced 恢复点。
+ */
+export function shouldApplyHistoryRestore({
+  requestedSource,
+  requestedId,
+  requestedEpisodeIndex,
+  activeSource,
+  activeId,
+  activeEpisodeIndex,
+  allowAutoResume,
+  pendingResumeTime,
+  pendingResumeMode,
+}: HistoryRestoreGuardOptions): boolean {
+  if (!allowAutoResume) {
+    return false;
+  }
+
+  if (!requestedSource || !requestedId) {
+    return false;
+  }
+
+  if (requestedSource !== activeSource || requestedId !== activeId) {
+    return false;
+  }
+
+  if (requestedEpisodeIndex !== activeEpisodeIndex) {
+    return false;
+  }
+
+  if (pendingResumeMode === 'forced' && (pendingResumeTime ?? 0) > 0) {
+    return false;
+  }
+
+  return true;
+}
+
 export interface PlayProgressSaveState {
   inFlight: boolean;
   pending: PendingPlayProgressSave | null;
@@ -315,6 +365,11 @@ export function usePlayProgress({
       reason,
     );
 
+  const persistPlaybackState = () => {
+    doCheckpoint();
+    void doSave();
+  };
+
   const requestWakeLock = async () => {
     try {
       if ('wakeLock' in navigator) {
@@ -348,6 +403,11 @@ export function usePlayProgress({
 
   // 播放记录处理：source/id 就绪后检查恢复点与播放记录
   useEffect(() => {
+    const requestedSource = currentSource;
+    const requestedId = currentId;
+    const requestedEpisodeIndex = currentEpisodeIndexRef.current;
+    let disposed = false;
+
     const initFromHistory = async () => {
       if (!currentSource || !currentId) return;
 
@@ -365,6 +425,10 @@ export function usePlayProgress({
 
       try {
         const allRecords = await getAllPlayRecords();
+        if (disposed) {
+          return;
+        }
+
         const key = generateStorageKey(currentSource, currentId);
         const record = allRecords[key];
 
@@ -372,12 +436,24 @@ export function usePlayProgress({
           const targetIndex = record.index - 1;
           const targetTime = record.play_time;
 
-          // IndexedDB 读取是异步的，若首帧已经播出一段时间，再把旧进度塞回
-          // resumeTimeRef 会导致后续卡顿恢复触发 canplay 时突然跳转。
-          if (!allowAutoResumeRef.current) {
+          if (
+            !shouldApplyHistoryRestore({
+              requestedSource,
+              requestedId,
+              requestedEpisodeIndex,
+              activeSource: currentSourceRef.current,
+              activeId: currentIdRef.current,
+              activeEpisodeIndex: currentEpisodeIndexRef.current,
+              allowAutoResume: allowAutoResumeRef.current,
+              pendingResumeTime: resumeTimeRef.current,
+              pendingResumeMode: resumeModeRef.current,
+            })
+          ) {
             return;
           }
 
+          // IndexedDB 读取是异步的，若首帧已经播出一段时间，再把旧进度塞回
+          // resumeTimeRef 会导致后续卡顿恢复触发 canplay 时突然跳转。
           if (targetIndex !== currentEpisodeIndex) {
             setCurrentEpisodeIndex(targetIndex);
           }
@@ -409,21 +485,23 @@ export function usePlayProgress({
     };
 
     initFromHistory();
+
+    return () => {
+      disposed = true;
+    };
   }, [currentSource, currentId]);
 
   // beforeunload / visibilitychange 事件处理
   useEffect(() => {
     const handleBeforeUnload = () => {
-      doCheckpoint();
-      doSave();
+      persistPlaybackState();
       releaseWakeLock();
       cleanupPlayer();
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        doCheckpoint();
-        doSave();
+        persistPlaybackState();
         releaseWakeLock();
       } else if (document.visibilityState === 'visible') {
         if (artPlayerRef.current && artPlayerRef.current.playing) {
@@ -453,6 +531,7 @@ export function usePlayProgress({
   // 组件卸载时清理定时器、Wake Lock 和播放器资源
   useEffect(() => {
     return () => {
+      persistPlaybackState();
       if (saveIntervalRef.current) {
         clearInterval(saveIntervalRef.current);
       }
