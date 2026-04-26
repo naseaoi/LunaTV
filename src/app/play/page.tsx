@@ -22,6 +22,11 @@ import {
   clearSourceFailure,
   markSourceFailed,
 } from '@/lib/failed-source-cooldown';
+import {
+  AUTO_SWITCH_SOURCE_ON_TIMEOUT_STORAGE_KEY,
+  LOCAL_SETTING_CHANGED_EVENT,
+  readBooleanLocalSetting,
+} from '@/lib/local-settings';
 
 import { PlayMainContent } from '@/features/play/components/PlayMainContent';
 import { useArtPlayer } from '@/features/play/hooks/useArtPlayer';
@@ -166,6 +171,7 @@ function PlayPageClient() {
   const resumeTimeRef = useRef<number | null>(null);
   const resumeModeRef = useRef<ResumeMode>(null);
   const allowAutoResumeRef = useRef(true);
+  const stableCurrentTimeRef = useRef(0);
   const lastVolumeRef = useRef<number>(0.7);
   const lastPlaybackRateRef = useRef<number>(1.0);
 
@@ -173,6 +179,7 @@ function PlayPageClient() {
     // 新的一集/新源开始加载时重新打开自动恢复窗口；
     // 超过前几秒后会由播放器侧主动关闭，避免后续 canplay 再次误套用旧进度。
     allowAutoResumeRef.current = true;
+    stableCurrentTimeRef.current = 0;
   }, [currentSource, currentId, currentEpisodeIndex]);
 
   // 换源相关状态
@@ -205,6 +212,10 @@ function PlayPageClient() {
     }
     return true;
   });
+  const [autoSwitchSourceOnTimeout, setAutoSwitchSourceOnTimeout] =
+    useState<boolean>(() =>
+      readBooleanLocalSetting(AUTO_SWITCH_SOURCE_ON_TIMEOUT_STORAGE_KEY, true),
+    );
 
   const [precomputedVideoInfo, setPrecomputedVideoInfo] = useState<
     Map<string, { quality: string; loadSpeed: string; pingTime: number }>
@@ -460,6 +471,7 @@ function PlayPageClient() {
     resumeTimeRef,
     resumeModeRef,
     allowAutoResumeRef,
+    stableCurrentTimeRef,
     saveStateRef: playProgressSaveStateRef,
     lastSaveTimeRef,
     saveIntervalRef,
@@ -785,6 +797,10 @@ function PlayPageClient() {
   // 2. 在 availableSources 中挑选一个不在失败集合里、已测速成功的最优源；
   // 3. 复用 handleSourceChange（置 autoFallbackInProgressRef 标志，避免清空失败集合）。
   const handleLoadingTimeout = useCallback(() => {
+    if (!autoSwitchSourceOnTimeout) {
+      return;
+    }
+
     const curSource = currentSourceRef.current;
     const curId = currentIdRef.current;
     if (!curSource || !curId) return;
@@ -815,7 +831,45 @@ function PlayPageClient() {
 
     autoFallbackInProgressRef.current = true;
     void handleSourceChange(next.source, next.id, next.title);
-  }, [availableSources, precomputedVideoInfo]);
+  }, [
+    autoSwitchSourceOnTimeout,
+    availableSources,
+    handleSourceChange,
+    precomputedVideoInfo,
+  ]);
+
+  useEffect(() => {
+    const syncAutoSwitchSetting = () => {
+      setAutoSwitchSourceOnTimeout(
+        readBooleanLocalSetting(
+          AUTO_SWITCH_SOURCE_ON_TIMEOUT_STORAGE_KEY,
+          true,
+        ),
+      );
+    };
+
+    const handleLocalSettingChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ key?: string }>).detail;
+      if (detail?.key !== AUTO_SWITCH_SOURCE_ON_TIMEOUT_STORAGE_KEY) {
+        return;
+      }
+      syncAutoSwitchSetting();
+    };
+
+    window.addEventListener('storage', syncAutoSwitchSetting);
+    window.addEventListener(
+      LOCAL_SETTING_CHANGED_EVENT,
+      handleLocalSettingChanged,
+    );
+
+    return () => {
+      window.removeEventListener('storage', syncAutoSwitchSetting);
+      window.removeEventListener(
+        LOCAL_SETTING_CHANGED_EVENT,
+        handleLocalSettingChanged,
+      );
+    };
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Artplayer hook
@@ -837,6 +891,7 @@ function PlayPageClient() {
     resumeTimeRef,
     resumeModeRef,
     allowAutoResumeRef,
+    stableCurrentTimeRef,
     lastVolumeRef,
     lastPlaybackRateRef,
     lastSkipCheckRef,

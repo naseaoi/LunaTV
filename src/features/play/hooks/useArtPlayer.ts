@@ -28,9 +28,13 @@ import {
   pickStartLevelFromStrategy,
 } from '@/lib/player-utils';
 
-import { shouldDismissLoadingFromCanPlay } from '@/features/play/lib/playerLoading';
+import {
+  hasReachedResumeTarget,
+  shouldDismissLoadingFromCanPlay,
+} from '@/features/play/lib/playerLoading';
 import { WakeLockSentinel } from '@/features/play/lib/playTypes';
 import { filterAdsFromM3U8 } from '@/features/play/lib/playUtils';
+import { hasMeaningfulPlaybackTime } from '@/features/play/hooks/usePlayProgress';
 import {
   applyResumeTime,
   isWithinAutoResumeWindow,
@@ -63,6 +67,7 @@ export interface UseArtPlayerParams {
   resumeTimeRef: MutableRefObject<number | null>;
   resumeModeRef: MutableRefObject<ResumeMode>;
   allowAutoResumeRef: MutableRefObject<boolean>;
+  stableCurrentTimeRef: MutableRefObject<number>;
   lastVolumeRef: MutableRefObject<number>;
   lastPlaybackRateRef: MutableRefObject<number>;
   lastSkipCheckRef: MutableRefObject<number>;
@@ -113,6 +118,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
     resumeTimeRef,
     resumeModeRef,
     allowAutoResumeRef,
+    stableCurrentTimeRef,
     lastVolumeRef,
     lastPlaybackRateRef,
     lastSkipCheckRef,
@@ -700,6 +706,21 @@ export function useArtPlayer(params: UseArtPlayerParams) {
           return;
         }
 
+        const updateStableCurrentTime = (time: number) => {
+          if (!Number.isFinite(time) || time < 0) {
+            return;
+          }
+
+          if (hasMeaningfulPlaybackTime(time)) {
+            stableCurrentTimeRef.current = Math.floor(time);
+            return;
+          }
+
+          if (!hasMeaningfulPlaybackTime(stableCurrentTimeRef.current)) {
+            stableCurrentTimeRef.current = Math.max(0, Math.floor(time));
+          }
+        };
+
         const notifyPlayerPlaybackStarted = () => {
           const activeVideo = player.video as HTMLVideoElement | undefined;
           const activeSourceKey = detailRef.current?.source || '';
@@ -710,6 +731,35 @@ export function useArtPlayer(params: UseArtPlayerParams) {
             }
           }
           onPlaybackStarted?.();
+        };
+
+        let pendingInitialResumeTarget: number | null = null;
+        let playbackStartNotified = false;
+
+        const finishInitialLoading = () => {
+          if (playbackStartNotified) {
+            return;
+          }
+
+          playbackStartNotified = true;
+          setIsVideoLoading(false);
+          setRealtimeLoadSpeed('');
+          notifyPlayerPlaybackStarted();
+        };
+
+        const completePendingResumeIfReady = () => {
+          if (
+            !hasReachedResumeTarget(
+              player.currentTime || 0,
+              pendingInitialResumeTarget,
+            )
+          ) {
+            return false;
+          }
+
+          pendingInitialResumeTarget = null;
+          finishInitialLoading();
+          return true;
         };
 
         // --- 播放器事件 ---
@@ -729,9 +779,12 @@ export function useArtPlayer(params: UseArtPlayerParams) {
         // 备用：playing 事件表示视频已真正开始渲染帧，
         // 某些 HLS 流 canplay 可能不触发，用 playing 兜底清除 loading
         player.on('video:playing', () => {
-          setIsVideoLoading(false);
-          setRealtimeLoadSpeed('');
-          notifyPlayerPlaybackStarted();
+          if (pendingInitialResumeTarget !== null) {
+            completePendingResumeIfReady();
+            return;
+          }
+
+          finishInitialLoading();
         });
 
         player.on('pause', () => {
@@ -758,13 +811,18 @@ export function useArtPlayer(params: UseArtPlayerParams) {
         });
 
         player.on('video:canplay', () => {
+          let appliedResumeTarget: number | null = null;
+
           if (resumeTimeRef.current && resumeTimeRef.current > 0) {
             try {
               if (
                 resumeModeRef.current !== 'history' ||
                 allowAutoResumeRef.current
               ) {
-                applyResumeTime(player, resumeTimeRef.current);
+                if (applyResumeTime(player, resumeTimeRef.current)) {
+                  appliedResumeTarget =
+                    player.currentTime || resumeTimeRef.current;
+                }
                 if (resumeModeRef.current === 'history') {
                   allowAutoResumeRef.current = false;
                 }
@@ -772,9 +830,26 @@ export function useArtPlayer(params: UseArtPlayerParams) {
             } catch (err) {
               console.warn('恢复播放进度失败:', err);
             }
+          } else if (
+            hasMeaningfulPlaybackTime(stableCurrentTimeRef.current) &&
+            isWithinAutoResumeWindow(player.currentTime || 0) &&
+            stableCurrentTimeRef.current - (player.currentTime || 0) > 3
+          ) {
+            try {
+              if (applyResumeTime(player, stableCurrentTimeRef.current)) {
+                appliedResumeTarget =
+                  player.currentTime || stableCurrentTimeRef.current;
+                allowAutoResumeRef.current = false;
+              }
+            } catch (err) {
+              console.warn('恢复最近稳定进度失败:', err);
+            }
           }
+
+          pendingInitialResumeTarget = appliedResumeTarget;
           resumeTimeRef.current = null;
           resumeModeRef.current = null;
+          updateStableCurrentTime(player.currentTime || 0);
 
           setTimeout(() => {
             if (Math.abs(player.volume - lastVolumeRef.current) > 0.01) {
@@ -798,15 +873,22 @@ export function useArtPlayer(params: UseArtPlayerParams) {
             player.notice.show = '';
           }, 0);
 
-          if (shouldDismissLoadingFromCanPlay(player.video)) {
-            setIsVideoLoading(false);
-            setRealtimeLoadSpeed('');
-            notifyPlayerPlaybackStarted();
+          if (
+            pendingInitialResumeTarget === null &&
+            shouldDismissLoadingFromCanPlay(player.video)
+          ) {
+            finishInitialLoading();
           }
         });
 
         // 跳过片头片尾
         player.on('video:timeupdate', () => {
+          updateStableCurrentTime(player.currentTime || 0);
+
+          if (pendingInitialResumeTarget !== null) {
+            completePendingResumeIfReady();
+          }
+
           if (allowAutoResumeRef.current) {
             if (!isWithinAutoResumeWindow(player.currentTime || 0)) {
               // 超过起播窗口后关闭自动恢复，避免后续网络抖动再次触发 canplay 时跳回旧进度。
@@ -884,6 +966,17 @@ export function useArtPlayer(params: UseArtPlayerParams) {
           const now = Date.now();
           if (now - lastSaveTimeRef.current > 5000) {
             saveCurrentPlayProgress();
+          }
+        });
+
+        player.on('video:seeking', () => {
+          updateStableCurrentTime(player.currentTime || 0);
+        });
+
+        player.on('video:seeked', () => {
+          updateStableCurrentTime(player.currentTime || 0);
+          if (pendingInitialResumeTarget !== null) {
+            completePendingResumeIfReady();
           }
         });
 

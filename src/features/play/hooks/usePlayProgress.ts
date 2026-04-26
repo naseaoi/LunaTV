@@ -34,12 +34,16 @@ export function savePlaybackCheckpoint(
   currentEpisodeIndexRef: MutableRefObject<number>,
   videoTitleRef: MutableRefObject<string>,
   artPlayerRef: MutableRefObject<Artplayer | null>,
+  stableCurrentTimeRef: MutableRefObject<number>,
   reason?: SessionLostReason,
 ) {
   if (typeof window === 'undefined') return;
   if (!currentSourceRef.current || !currentIdRef.current) return;
 
-  const currentTime = artPlayerRef.current?.currentTime || 0;
+  const currentTime = resolveProtectedPlaybackTime(
+    artPlayerRef.current?.currentTime || 0,
+    stableCurrentTimeRef.current,
+  );
   const checkpoint: PlayCheckpoint = {
     source: currentSourceRef.current,
     id: currentIdRef.current,
@@ -58,6 +62,29 @@ export function savePlaybackCheckpoint(
   } catch (error) {
     console.warn('保存播放恢复点失败:', error);
   }
+}
+
+export function hasMeaningfulPlaybackTime(time: number): boolean {
+  return Number.isFinite(time) && time > 1;
+}
+
+export function resolveProtectedPlaybackTime(
+  playerCurrentTime: number,
+  stableCurrentTime: number,
+): number {
+  if (hasMeaningfulPlaybackTime(playerCurrentTime)) {
+    return Math.floor(playerCurrentTime);
+  }
+
+  if (hasMeaningfulPlaybackTime(stableCurrentTime)) {
+    return Math.floor(stableCurrentTime);
+  }
+
+  if (Number.isFinite(playerCurrentTime) && playerCurrentTime > 0) {
+    return Math.floor(playerCurrentTime);
+  }
+
+  return 0;
 }
 
 function clearPlaybackCheckpointStorage() {
@@ -177,9 +204,14 @@ export function resolvePlaybackRestoreCandidate({
 
   const selectedCandidate =
     historyCandidate && checkpointCandidate
-      ? checkpointCandidate.updatedAt > historyCandidate.updatedAt
-        ? checkpointCandidate
-        : historyCandidate
+      ? hasMeaningfulPlaybackTime(historyCandidate.resumeTime) !==
+        hasMeaningfulPlaybackTime(checkpointCandidate.resumeTime)
+        ? hasMeaningfulPlaybackTime(checkpointCandidate.resumeTime)
+          ? checkpointCandidate
+          : historyCandidate
+        : checkpointCandidate.updatedAt > historyCandidate.updatedAt
+          ? checkpointCandidate
+          : historyCandidate
       : historyCandidate || checkpointCandidate;
 
   if (!selectedCandidate) {
@@ -331,6 +363,7 @@ export async function saveCurrentPlayProgress(
   videoTitleRef: MutableRefObject<string>,
   detailRef: MutableRefObject<SearchResult | null>,
   currentEpisodeIndexRef: MutableRefObject<number>,
+  stableCurrentTimeRef: MutableRefObject<number>,
   saveStateRef: MutableRefObject<PlayProgressSaveState>,
   lastSaveTimeRef: MutableRefObject<number>,
   searchTitle: string,
@@ -346,11 +379,14 @@ export async function saveCurrentPlayProgress(
   }
 
   const player = artPlayerRef.current;
-  const currentTime = player.currentTime || 0;
+  const currentTime = resolveProtectedPlaybackTime(
+    player.currentTime || 0,
+    stableCurrentTimeRef.current,
+  );
   const duration = player.duration || 0;
 
   // 播放时间太短或视频时长无效，不保存
-  if (currentTime < 1 || !duration) {
+  if (!hasMeaningfulPlaybackTime(currentTime) || !duration) {
     return;
   }
 
@@ -413,6 +449,7 @@ interface UsePlayProgressParams {
   resumeTimeRef: MutableRefObject<number | null>;
   resumeModeRef: MutableRefObject<ResumeMode>;
   allowAutoResumeRef: MutableRefObject<boolean>;
+  stableCurrentTimeRef: MutableRefObject<number>;
   saveStateRef: MutableRefObject<PlayProgressSaveState>;
   lastSaveTimeRef: MutableRefObject<number>;
   saveIntervalRef: MutableRefObject<NodeJS.Timeout | null>;
@@ -436,6 +473,7 @@ export function usePlayProgress({
   resumeTimeRef,
   resumeModeRef,
   allowAutoResumeRef,
+  stableCurrentTimeRef,
   saveStateRef,
   lastSaveTimeRef,
   saveIntervalRef,
@@ -456,6 +494,7 @@ export function usePlayProgress({
       videoTitleRef,
       detailRef,
       currentEpisodeIndexRef,
+      stableCurrentTimeRef,
       saveStateRef,
       lastSaveTimeRef,
       searchTitle,
@@ -468,6 +507,7 @@ export function usePlayProgress({
       currentEpisodeIndexRef,
       videoTitleRef,
       artPlayerRef,
+      stableCurrentTimeRef,
       reason,
     );
 

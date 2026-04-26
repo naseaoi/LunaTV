@@ -1,4 +1,5 @@
 import {
+  resolveProtectedPlaybackTime,
   resolvePlaybackRestoreCandidate,
   shouldApplyHistoryRestore,
 } from '@/features/play/hooks/usePlayProgress';
@@ -116,6 +117,38 @@ describe('usePlayProgress helpers', () => {
     });
   });
 
+  it('零进度 checkpoint 不会覆盖首页已有进度', () => {
+    expect(
+      resolvePlaybackRestoreCandidate({
+        checkpoint: {
+          source: 'source-a',
+          id: 'id-a',
+          episodeIndex: 7,
+          currentTime: 0,
+          title: '番剧A',
+          saveTime: 3000,
+        },
+        record: {
+          title: '番剧A',
+          source_name: '源A',
+          year: '2024',
+          cover: '',
+          index: 8,
+          total_episodes: 12,
+          play_time: 180,
+          total_time: 1500,
+          save_time: 2000,
+        },
+        episodeCount: 12,
+      }),
+    ).toEqual({
+      source: 'history',
+      episodeIndex: 7,
+      resumeTime: 180,
+      resumeMode: 'history',
+    });
+  });
+
   it('历史记录集数越界时会裁剪到当前可播放范围', () => {
     expect(
       resolvePlaybackRestoreCandidate({
@@ -139,5 +172,11 @@ describe('usePlayProgress helpers', () => {
       resumeTime: 180,
       resumeMode: 'history',
     });
+  });
+
+  it('保存进度时会优先使用播放器时间，否则回退到最近稳定进度', () => {
+    expect(resolveProtectedPlaybackTime(331.8, 180)).toBe(331);
+    expect(resolveProtectedPlaybackTime(0.2, 330)).toBe(330);
+    expect(resolveProtectedPlaybackTime(0, 0)).toBe(0);
   });
 });

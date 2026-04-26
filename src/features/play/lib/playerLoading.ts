@@ -11,3 +11,21 @@ export function shouldDismissLoadingFromCanPlay(
 
   return !video.paused && !video.ended;
 }
+
+/**
+ * 恢复进度时允许 1 秒误差，避免 HLS 分片边界或浏览器取整造成永远等不到完全相等。
+ */
+export function hasReachedResumeTarget(
+  currentTime: number,
+  targetTime: number | null | undefined,
+): boolean {
+  if (!Number.isFinite(currentTime) || !Number.isFinite(targetTime)) {
+    return false;
+  }
+
+  if ((targetTime as number) <= 0) {
+    return true;
+  }
+
+  return currentTime >= (targetTime as number) - 1;
+}

@@ -30,6 +30,11 @@ import {
   doubanImageProxyTypeOptions,
   getThanksInfo,
 } from '@/lib/douban-options';
+import {
+  AUTO_SWITCH_SOURCE_ON_TIMEOUT_STORAGE_KEY,
+  readBooleanLocalSetting,
+  writeBooleanLocalSetting,
+} from '@/lib/local-settings';
 import { getClientAuthRuntimeConfig } from '@/lib/runtime-config';
 import { CURRENT_VERSION } from '@/lib/version';
 import { checkForUpdates, UpdateStatus } from '@/lib/version_check';
@@ -88,6 +93,8 @@ export const UserMenu: React.FC<UserMenuProps> = ({
   const [defaultAggregateSearch, setDefaultAggregateSearch] = useState(true);
   const [doubanProxyUrl, setDoubanProxyUrl] = useState('');
   const [enableOptimization, setEnableOptimization] = useState(true);
+  const [autoSwitchSourceOnTimeout, setAutoSwitchSourceOnTimeout] =
+    useState(true);
   const [fluidSearch, setFluidSearch] = useState(true);
   const [liveDirectConnect, setLiveDirectConnect] = useState(false);
   const [doubanDataSource, setDoubanDataSource] = useState('direct');
@@ -176,6 +183,13 @@ export const UserMenu: React.FC<UserMenuProps> = ({
         if (savedEnableOptimization !== null) {
           setEnableOptimization(JSON.parse(savedEnableOptimization));
         }
+
+        setAutoSwitchSourceOnTimeout(
+          readBooleanLocalSetting(
+            AUTO_SWITCH_SOURCE_ON_TIMEOUT_STORAGE_KEY,
+            true,
+          ),
+        );
 
         const savedFluidSearch = localStorage.getItem('fluidSearch');
         const defaultFluidSearch =
@@ -399,6 +413,11 @@ export const UserMenu: React.FC<UserMenuProps> = ({
     }
   };
 
+  const handleAutoSwitchSourceOnTimeoutToggle = (value: boolean) => {
+    setAutoSwitchSourceOnTimeout(value);
+    writeBooleanLocalSetting(AUTO_SWITCH_SOURCE_ON_TIMEOUT_STORAGE_KEY, value);
+  };
+
   const handleFluidSearchToggle = (value: boolean) => {
     setFluidSearch(value);
     if (typeof window !== 'undefined') {
@@ -457,6 +476,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
 
     setDefaultAggregateSearch(true);
     setEnableOptimization(true);
+    setAutoSwitchSourceOnTimeout(true);
     setFluidSearch(defaultFluidSearch);
     setLiveDirectConnect(false);
     setDoubanProxyUrl(defaultDoubanProxy);
@@ -467,6 +487,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
     if (typeof window !== 'undefined') {
       localStorage.setItem('defaultAggregateSearch', JSON.stringify(true));
       localStorage.setItem('enableOptimization', JSON.stringify(true));
+      writeBooleanLocalSetting(AUTO_SWITCH_SOURCE_ON_TIMEOUT_STORAGE_KEY, true);
       localStorage.setItem('fluidSearch', JSON.stringify(defaultFluidSearch));
       localStorage.setItem('liveDirectConnect', JSON.stringify(false));
       localStorage.setItem('doubanProxyUrl', defaultDoubanProxy);
@@ -853,6 +874,32 @@ export const UserMenu: React.FC<UserMenuProps> = ({
                     className='peer sr-only'
                     checked={enableOptimization}
                     onChange={(e) => handleOptimizationToggle(e.target.checked)}
+                  />
+                  <div className='h-6 w-11 rounded-full bg-gray-300 transition-colors peer-checked:bg-green-500 dark:bg-gray-600'></div>
+                  <div className='absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform peer-checked:translate-x-5'></div>
+                </div>
+              </label>
+            </div>
+
+            {/* 源站超时自动换源 */}
+            <div className='flex items-center justify-between'>
+              <div>
+                <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>
+                  源站超时自动换源
+                </h4>
+                <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+                  播放源加载超时后，自动切换到下一个候选源
+                </p>
+              </div>
+              <label className='flex cursor-pointer items-center'>
+                <div className='relative'>
+                  <input
+                    type='checkbox'
+                    className='peer sr-only'
+                    checked={autoSwitchSourceOnTimeout}
+                    onChange={(e) =>
+                      handleAutoSwitchSourceOnTimeoutToggle(e.target.checked)
+                    }
                   />
                   <div className='h-6 w-11 rounded-full bg-gray-300 transition-colors peer-checked:bg-green-500 dark:bg-gray-600'></div>
                   <div className='absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform peer-checked:translate-x-5'></div>
