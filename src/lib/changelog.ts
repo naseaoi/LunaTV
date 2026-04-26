@@ -11,6 +11,20 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '0.3.5',
+    date: '2026-04-26',
+    added: [
+      // 无新增内容
+    ],
+    changed: [
+      // 无变更内容
+    ],
+    fixed: [
+      '修复继续观看进入播放页时被旧 checkpoint 覆盖为错误进度的问题',
+      '修复继续观看恢复集数越界时导致播放地址失效的问题',
+    ],
+  },
+  {
     version: '0.3.4',
     date: '2026-04-21',
     added: ['新增播放恢复安全窗口与安全续播工具'],

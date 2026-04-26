@@ -1,4 +1,7 @@
-import { shouldApplyHistoryRestore } from '@/features/play/hooks/usePlayProgress';
+import {
+  resolvePlaybackRestoreCandidate,
+  shouldApplyHistoryRestore,
+} from '@/features/play/hooks/usePlayProgress';
 
 describe('usePlayProgress helpers', () => {
   it('异步历史读取不会覆盖已存在的 forced 恢复点', () => {
@@ -47,5 +50,94 @@ describe('usePlayProgress helpers', () => {
         pendingResumeMode: 'history',
       }),
     ).toBe(true);
+  });
+
+  it('首页记录比 checkpoint 更新时优先使用首页记录', () => {
+    expect(
+      resolvePlaybackRestoreCandidate({
+        checkpoint: {
+          source: 'source-a',
+          id: 'id-a',
+          episodeIndex: 7,
+          currentTime: 1320,
+          title: '番剧A',
+          saveTime: 1000,
+        },
+        record: {
+          title: '番剧A',
+          source_name: '源A',
+          year: '2024',
+          cover: '',
+          index: 8,
+          total_episodes: 12,
+          play_time: 180,
+          total_time: 1500,
+          save_time: 2000,
+        },
+        episodeCount: 12,
+      }),
+    ).toEqual({
+      source: 'history',
+      episodeIndex: 7,
+      resumeTime: 180,
+      resumeMode: 'history',
+    });
+  });
+
+  it('checkpoint 更新时比首页记录更新时优先使用 checkpoint', () => {
+    expect(
+      resolvePlaybackRestoreCandidate({
+        checkpoint: {
+          source: 'source-a',
+          id: 'id-a',
+          episodeIndex: 7,
+          currentTime: 240,
+          title: '番剧A',
+          saveTime: 3000,
+        },
+        record: {
+          title: '番剧A',
+          source_name: '源A',
+          year: '2024',
+          cover: '',
+          index: 8,
+          total_episodes: 12,
+          play_time: 180,
+          total_time: 1500,
+          save_time: 2000,
+        },
+        episodeCount: 12,
+      }),
+    ).toEqual({
+      source: 'checkpoint',
+      episodeIndex: 7,
+      resumeTime: 240,
+      resumeMode: 'forced',
+    });
+  });
+
+  it('历史记录集数越界时会裁剪到当前可播放范围', () => {
+    expect(
+      resolvePlaybackRestoreCandidate({
+        checkpoint: null,
+        record: {
+          title: '番剧A',
+          source_name: '源A',
+          year: '2024',
+          cover: '',
+          index: 99,
+          total_episodes: 99,
+          play_time: 180,
+          total_time: 1500,
+          save_time: 2000,
+        },
+        episodeCount: 12,
+      }),
+    ).toEqual({
+      source: 'history',
+      episodeIndex: 11,
+      resumeTime: 180,
+      resumeMode: 'history',
+    });
   });
 });

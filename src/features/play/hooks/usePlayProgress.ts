@@ -60,6 +60,140 @@ export function savePlaybackCheckpoint(
   }
 }
 
+function clearPlaybackCheckpointStorage() {
+  if (typeof window === 'undefined') return;
+  sessionStorage.removeItem(PLAY_CHECKPOINT_KEY);
+  sessionStorage.removeItem(LEGACY_PLAY_CHECKPOINT_KEY);
+}
+
+function readPlaybackCheckpoint(): PlayCheckpoint | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const raw =
+      sessionStorage.getItem(PLAY_CHECKPOINT_KEY) ||
+      sessionStorage.getItem(LEGACY_PLAY_CHECKPOINT_KEY);
+    if (!raw) return null;
+
+    const checkpoint = JSON.parse(raw) as PlayCheckpoint;
+    if (!checkpoint?.source || !checkpoint?.id) {
+      clearPlaybackCheckpointStorage();
+      return null;
+    }
+
+    // 仅恢复 4 小时内的检查点
+    if (Date.now() - checkpoint.saveTime > 4 * 60 * 60 * 1000) {
+      clearPlaybackCheckpointStorage();
+      return null;
+    }
+
+    return checkpoint;
+  } catch (error) {
+    console.warn('读取播放恢复点失败:', error);
+    clearPlaybackCheckpointStorage();
+    return null;
+  }
+}
+
+function readMatchingPlaybackCheckpoint(
+  currentSourceRef: MutableRefObject<string>,
+  currentIdRef: MutableRefObject<string>,
+): PlayCheckpoint | null {
+  const checkpoint = readPlaybackCheckpoint();
+  if (!checkpoint) {
+    return null;
+  }
+
+  if (
+    checkpoint.source !== currentSourceRef.current ||
+    checkpoint.id !== currentIdRef.current
+  ) {
+    return null;
+  }
+
+  return checkpoint;
+}
+
+function clampRestoreEpisodeIndex(
+  episodeIndex: number,
+  episodeCount: number,
+): number {
+  const safeIndex = Math.max(0, episodeIndex);
+  if (!Number.isFinite(episodeCount) || episodeCount <= 0) {
+    return safeIndex;
+  }
+
+  return Math.min(safeIndex, episodeCount - 1);
+}
+
+type PlaybackRestoreSource = 'history' | 'checkpoint';
+
+interface PlaybackRestoreCandidate {
+  source: PlaybackRestoreSource;
+  episodeIndex: number;
+  resumeTime: number;
+  resumeMode: ResumeMode;
+}
+
+interface ResolvePlaybackRestoreCandidateOptions {
+  checkpoint: PlayCheckpoint | null;
+  record?: PlayRecord;
+  episodeCount: number;
+}
+
+/**
+ * 同一条播放链路里，继续观看记录与检查点同时存在时，优先采用更新时间更晚的那一份。
+ * 这样首页看到的最新进度不会再被旧 checkpoint 反向覆盖。
+ */
+export function resolvePlaybackRestoreCandidate({
+  checkpoint,
+  record,
+  episodeCount,
+}: ResolvePlaybackRestoreCandidateOptions): PlaybackRestoreCandidate | null {
+  const historyCandidate = record
+    ? {
+        source: 'history' as const,
+        episodeIndex: clampRestoreEpisodeIndex(record.index - 1, episodeCount),
+        resumeTime: Math.max(0, Math.floor(record.play_time || 0)),
+        resumeMode: (record.play_time > 0 ? 'history' : null) as ResumeMode,
+        updatedAt: record.save_time || 0,
+      }
+    : null;
+
+  const checkpointCandidate = checkpoint
+    ? {
+        source: 'checkpoint' as const,
+        episodeIndex: clampRestoreEpisodeIndex(
+          checkpoint.episodeIndex,
+          episodeCount,
+        ),
+        resumeTime: Math.max(0, Math.floor(checkpoint.currentTime || 0)),
+        resumeMode: (checkpoint.currentTime > 0
+          ? 'forced'
+          : null) as ResumeMode,
+        updatedAt: checkpoint.saveTime || 0,
+      }
+    : null;
+
+  const selectedCandidate =
+    historyCandidate && checkpointCandidate
+      ? checkpointCandidate.updatedAt > historyCandidate.updatedAt
+        ? checkpointCandidate
+        : historyCandidate
+      : historyCandidate || checkpointCandidate;
+
+  if (!selectedCandidate) {
+    return null;
+  }
+
+  return {
+    source: selectedCandidate.source,
+    episodeIndex: selectedCandidate.episodeIndex,
+    resumeTime: selectedCandidate.resumeTime,
+    resumeMode: selectedCandidate.resumeMode,
+  };
+}
+
 export function restorePlaybackCheckpoint(
   currentSourceRef: MutableRefObject<string>,
   currentIdRef: MutableRefObject<string>,
@@ -67,52 +201,24 @@ export function restorePlaybackCheckpoint(
   resumeTimeRef: MutableRefObject<number | null>,
   resumeModeRef: MutableRefObject<ResumeMode>,
 ): boolean {
-  if (typeof window === 'undefined') return false;
-
-  try {
-    const raw =
-      sessionStorage.getItem(PLAY_CHECKPOINT_KEY) ||
-      sessionStorage.getItem(LEGACY_PLAY_CHECKPOINT_KEY);
-    if (!raw) return false;
-
-    const checkpoint = JSON.parse(raw) as PlayCheckpoint;
-    if (!checkpoint?.source || !checkpoint?.id) {
-      sessionStorage.removeItem(PLAY_CHECKPOINT_KEY);
-      sessionStorage.removeItem(LEGACY_PLAY_CHECKPOINT_KEY);
-      return false;
-    }
-
-    // 仅恢复 4 小时内的检查点
-    if (Date.now() - checkpoint.saveTime > 4 * 60 * 60 * 1000) {
-      sessionStorage.removeItem(PLAY_CHECKPOINT_KEY);
-      sessionStorage.removeItem(LEGACY_PLAY_CHECKPOINT_KEY);
-      return false;
-    }
-
-    if (
-      checkpoint.source !== currentSourceRef.current ||
-      checkpoint.id !== currentIdRef.current
-    ) {
-      return false;
-    }
-
-    if (checkpoint.episodeIndex >= 0) {
-      setCurrentEpisodeIndex(checkpoint.episodeIndex);
-    }
-    if (checkpoint.currentTime > 0) {
-      resumeTimeRef.current = checkpoint.currentTime;
-      resumeModeRef.current = 'forced';
-    }
-
-    sessionStorage.removeItem(PLAY_CHECKPOINT_KEY);
-    sessionStorage.removeItem(LEGACY_PLAY_CHECKPOINT_KEY);
-    return true;
-  } catch (error) {
-    console.warn('恢复播放恢复点失败:', error);
-    sessionStorage.removeItem(PLAY_CHECKPOINT_KEY);
-    sessionStorage.removeItem(LEGACY_PLAY_CHECKPOINT_KEY);
+  const checkpoint = readMatchingPlaybackCheckpoint(
+    currentSourceRef,
+    currentIdRef,
+  );
+  if (!checkpoint) {
     return false;
   }
+
+  if (checkpoint.episodeIndex >= 0) {
+    setCurrentEpisodeIndex(checkpoint.episodeIndex);
+  }
+  if (checkpoint.currentTime > 0) {
+    resumeTimeRef.current = checkpoint.currentTime;
+    resumeModeRef.current = 'forced';
+  }
+
+  clearPlaybackCheckpointStorage();
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -411,17 +517,10 @@ export function usePlayProgress({
     const initFromHistory = async () => {
       if (!currentSource || !currentId) return;
 
-      if (
-        restorePlaybackCheckpoint(
-          currentSourceRef,
-          currentIdRef,
-          setCurrentEpisodeIndex,
-          resumeTimeRef,
-          resumeModeRef,
-        )
-      ) {
-        return;
-      }
+      const checkpoint = readMatchingPlaybackCheckpoint(
+        currentSourceRef,
+        currentIdRef,
+      );
 
       try {
         const allRecords = await getAllPlayRecords();
@@ -431,54 +530,78 @@ export function usePlayProgress({
 
         const key = generateStorageKey(currentSource, currentId);
         const record = allRecords[key];
+        const restoreCandidate = resolvePlaybackRestoreCandidate({
+          checkpoint,
+          record,
+          episodeCount: detailRef.current?.episodes.length || 0,
+        });
 
-        if (record) {
-          const targetIndex = record.index - 1;
-          const targetTime = record.play_time;
-
-          if (
-            !shouldApplyHistoryRestore({
-              requestedSource,
-              requestedId,
-              requestedEpisodeIndex,
-              activeSource: currentSourceRef.current,
-              activeId: currentIdRef.current,
-              activeEpisodeIndex: currentEpisodeIndexRef.current,
-              allowAutoResume: allowAutoResumeRef.current,
-              pendingResumeTime: resumeTimeRef.current,
-              pendingResumeMode: resumeModeRef.current,
-            })
-          ) {
-            return;
-          }
-
-          // IndexedDB 读取是异步的，若首帧已经播出一段时间，再把旧进度塞回
-          // resumeTimeRef 会导致后续卡顿恢复触发 canplay 时突然跳转。
-          if (targetIndex !== currentEpisodeIndex) {
-            setCurrentEpisodeIndex(targetIndex);
-          }
-
-          const player = artPlayerRef.current;
-          if (
-            targetIndex === currentEpisodeIndex &&
-            player &&
-            isWithinAutoResumeWindow(player.currentTime || 0)
-          ) {
-            try {
-              if (applyResumeTime(player, targetTime)) {
-                allowAutoResumeRef.current = false;
-                resumeTimeRef.current = null;
-                resumeModeRef.current = null;
-                return;
-              }
-            } catch (err) {
-              console.warn('延迟恢复播放进度失败:', err);
-            }
-          }
-
-          resumeTimeRef.current = targetTime;
-          resumeModeRef.current = 'history';
+        if (checkpoint) {
+          clearPlaybackCheckpointStorage();
         }
+
+        if (!restoreCandidate) {
+          return;
+        }
+
+        const targetIndex = restoreCandidate.episodeIndex;
+        const targetTime = restoreCandidate.resumeTime;
+        const targetMode = restoreCandidate.resumeMode;
+        const targetSource = restoreCandidate.source;
+
+        if (
+          requestedSource !== currentSourceRef.current ||
+          requestedId !== currentIdRef.current ||
+          requestedEpisodeIndex !== currentEpisodeIndexRef.current
+        ) {
+          return;
+        }
+
+        if (
+          targetSource === 'history' &&
+          !shouldApplyHistoryRestore({
+            requestedSource,
+            requestedId,
+            requestedEpisodeIndex,
+            activeSource: currentSourceRef.current,
+            activeId: currentIdRef.current,
+            activeEpisodeIndex: currentEpisodeIndexRef.current,
+            allowAutoResume: allowAutoResumeRef.current,
+            pendingResumeTime: resumeTimeRef.current,
+            pendingResumeMode: resumeModeRef.current,
+          })
+        ) {
+          return;
+        }
+
+        const activeEpisodeIndex = currentEpisodeIndexRef.current;
+        if (targetIndex !== activeEpisodeIndex) {
+          setCurrentEpisodeIndex(targetIndex);
+        }
+
+        const player = artPlayerRef.current;
+        const canApplyImmediately =
+          targetTime > 0 &&
+          targetIndex === activeEpisodeIndex &&
+          player &&
+          (targetSource === 'checkpoint' ||
+            isWithinAutoResumeWindow(player.currentTime || 0));
+
+        if (canApplyImmediately) {
+          try {
+            if (applyResumeTime(player, targetTime)) {
+              allowAutoResumeRef.current = false;
+              resumeTimeRef.current = null;
+              resumeModeRef.current = null;
+              return;
+            }
+          } catch (err) {
+            console.warn('延迟恢复播放进度失败:', err);
+          }
+        }
+
+        resumeTimeRef.current = targetTime;
+        resumeModeRef.current = targetMode;
       } catch (err) {
         console.error('读取播放记录失败:', err);
       }
