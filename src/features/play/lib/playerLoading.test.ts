@@ -1,5 +1,7 @@
 import {
   hasReachedResumeTarget,
+  markPlayerLoadingSessionStarted,
+  resetPlayerLoadingSessionState,
   shouldDismissLoadingFromCanPlay,
   shouldDismissLoadingFromPlaybackProgress,
 } from '@/features/play/lib/playerLoading';
@@ -26,5 +28,18 @@ describe('playerLoading', () => {
   it('恢复进度达到目标附近后即可关闭遮罩', () => {
     expect(hasReachedResumeTarget(299.4, 300)).toBe(true);
     expect(hasReachedResumeTarget(120, 300)).toBe(false);
+  });
+
+  it('新一轮切集加载会重置关闭遮罩的会话状态', () => {
+    const state = {
+      pendingInitialResumeTarget: 180,
+      playbackStartNotified: true,
+    };
+
+    resetPlayerLoadingSessionState(state);
+
+    expect(state.pendingInitialResumeTarget).toBeNull();
+    expect(markPlayerLoadingSessionStarted(state)).toBe(true);
+    expect(markPlayerLoadingSessionStarted(state)).toBe(false);
   });
 });

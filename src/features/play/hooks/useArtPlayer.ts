@@ -1,4 +1,10 @@
-import { Dispatch, MutableRefObject, SetStateAction, useEffect } from 'react';
+import {
+  Dispatch,
+  MutableRefObject,
+  SetStateAction,
+  useEffect,
+  useRef,
+} from 'react';
 
 import { SearchResult } from '@/lib/types';
 import {
@@ -30,6 +36,9 @@ import {
 
 import {
   hasReachedResumeTarget,
+  markPlayerLoadingSessionStarted,
+  PlayerLoadingSessionState,
+  resetPlayerLoadingSessionState,
   shouldDismissLoadingFromCanPlay,
   shouldDismissLoadingFromPlaybackProgress,
 } from '@/features/play/lib/playerLoading';
@@ -141,6 +150,10 @@ export function useArtPlayer(params: UseArtPlayerParams) {
     onSourceProxyFallbackStarted,
     onCurrentSourceVideoInfo,
   } = params;
+  const loadingSessionRef = useRef<PlayerLoadingSessionState>({
+    pendingInitialResumeTarget: null,
+    playbackStartNotified: false,
+  });
 
   // --- 主 useEffect ---
 
@@ -215,6 +228,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
 
         // 非WebKit浏览器且播放器已存在，使用switch方法切换
         if (!isWebkit && artPlayerRef.current) {
+          resetPlayerLoadingSessionState(loadingSessionRef.current);
           artPlayerRef.current.switch = videoUrl;
           artPlayerRef.current.title = `${videoTitle} - 第${currentEpisodeIndex + 1}集`;
           if (artPlayerRef.current?.video) {
@@ -230,6 +244,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
         if (artPlayerRef.current) {
           cleanupPlayer();
         }
+        resetPlayerLoadingSessionState(loadingSessionRef.current);
 
         const AdBlockingHlsLoader = createHlsLoaderClass(
           Hls.DefaultConfig.loader as unknown as new (config: unknown) => {
@@ -734,15 +749,11 @@ export function useArtPlayer(params: UseArtPlayerParams) {
           onPlaybackStarted?.();
         };
 
-        let pendingInitialResumeTarget: number | null = null;
-        let playbackStartNotified = false;
-
         const finishInitialLoading = () => {
-          if (playbackStartNotified) {
+          if (!markPlayerLoadingSessionStarted(loadingSessionRef.current)) {
             return;
           }
 
-          playbackStartNotified = true;
           setIsVideoLoading(false);
           setRealtimeLoadSpeed('');
           notifyPlayerPlaybackStarted();
@@ -752,13 +763,13 @@ export function useArtPlayer(params: UseArtPlayerParams) {
           if (
             !hasReachedResumeTarget(
               player.currentTime || 0,
-              pendingInitialResumeTarget,
+              loadingSessionRef.current.pendingInitialResumeTarget,
             )
           ) {
             return false;
           }
 
-          pendingInitialResumeTarget = null;
+          loadingSessionRef.current.pendingInitialResumeTarget = null;
           finishInitialLoading();
           return true;
         };
@@ -780,7 +791,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
         // 备用：playing 事件表示视频已真正开始渲染帧，
         // 某些 HLS 流 canplay 可能不触发，用 playing 兜底清除 loading
         player.on('video:playing', () => {
-          if (pendingInitialResumeTarget !== null) {
+          if (loadingSessionRef.current.pendingInitialResumeTarget !== null) {
             completePendingResumeIfReady();
             return;
           }
@@ -847,7 +858,8 @@ export function useArtPlayer(params: UseArtPlayerParams) {
             }
           }
 
-          pendingInitialResumeTarget = appliedResumeTarget;
+          loadingSessionRef.current.pendingInitialResumeTarget =
+            appliedResumeTarget;
           resumeTimeRef.current = null;
           resumeModeRef.current = null;
           updateStableCurrentTime(player.currentTime || 0);
@@ -875,7 +887,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
           }, 0);
 
           if (
-            pendingInitialResumeTarget === null &&
+            loadingSessionRef.current.pendingInitialResumeTarget === null &&
             shouldDismissLoadingFromCanPlay(player.video)
           ) {
             finishInitialLoading();
@@ -886,7 +898,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
         player.on('video:timeupdate', () => {
           updateStableCurrentTime(player.currentTime || 0);
 
-          if (pendingInitialResumeTarget !== null) {
+          if (loadingSessionRef.current.pendingInitialResumeTarget !== null) {
             completePendingResumeIfReady();
           } else if (
             shouldDismissLoadingFromPlaybackProgress(player.currentTime || 0)
@@ -980,7 +992,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
 
         player.on('video:seeked', () => {
           updateStableCurrentTime(player.currentTime || 0);
-          if (pendingInitialResumeTarget !== null) {
+          if (loadingSessionRef.current.pendingInitialResumeTarget !== null) {
             completePendingResumeIfReady();
           }
         });

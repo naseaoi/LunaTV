@@ -1,3 +1,8 @@
+export interface PlayerLoadingSessionState {
+  pendingInitialResumeTarget: number | null;
+  playbackStartNotified: boolean;
+}
+
 /**
  * canplay 只能说明媒体已具备继续播放的能力，
  * 但不代表用户已经看到首帧，因此仍需确认视频处于实际播放态。
@@ -20,6 +25,30 @@ export function shouldDismissLoadingFromPlaybackProgress(
   currentTime: number,
 ): boolean {
   return Number.isFinite(currentTime) && currentTime > 1;
+}
+
+/**
+ * 切集或换源开始新一轮加载时，必须重置本轮的 loading 会话状态。
+ */
+export function resetPlayerLoadingSessionState(
+  state: PlayerLoadingSessionState,
+): void {
+  state.pendingInitialResumeTarget = null;
+  state.playbackStartNotified = false;
+}
+
+/**
+ * loading 关闭只允许执行一次；同一轮后续重复事件应直接忽略。
+ */
+export function markPlayerLoadingSessionStarted(
+  state: PlayerLoadingSessionState,
+): boolean {
+  if (state.playbackStartNotified) {
+    return false;
+  }
+
+  state.playbackStartNotified = true;
+  return true;
 }
 
 /**
