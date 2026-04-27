@@ -13,6 +13,16 @@ export function shouldDismissLoadingFromCanPlay(
 }
 
 /**
+ * 某些浏览器/内核在切集后会先更新 currentTime，再补发 playing；
+ * 只要已离开起播零点区间，就说明新视频已实际推进，可以安全收起遮罩。
+ */
+export function shouldDismissLoadingFromPlaybackProgress(
+  currentTime: number,
+): boolean {
+  return Number.isFinite(currentTime) && currentTime > 1;
+}
+
+/**
  * 恢复进度时允许 1 秒误差，避免 HLS 分片边界或浏览器取整造成永远等不到完全相等。
  */
 export function hasReachedResumeTarget(

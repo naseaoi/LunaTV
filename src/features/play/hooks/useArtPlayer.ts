@@ -31,6 +31,7 @@ import {
 import {
   hasReachedResumeTarget,
   shouldDismissLoadingFromCanPlay,
+  shouldDismissLoadingFromPlaybackProgress,
 } from '@/features/play/lib/playerLoading';
 import { WakeLockSentinel } from '@/features/play/lib/playTypes';
 import { filterAdsFromM3U8 } from '@/features/play/lib/playUtils';
@@ -887,6 +888,10 @@ export function useArtPlayer(params: UseArtPlayerParams) {
 
           if (pendingInitialResumeTarget !== null) {
             completePendingResumeIfReady();
+          } else if (
+            shouldDismissLoadingFromPlaybackProgress(player.currentTime || 0)
+          ) {
+            finishInitialLoading();
           }
 
           if (allowAutoResumeRef.current) {

@@ -1,6 +1,7 @@
 import {
   hasReachedResumeTarget,
   shouldDismissLoadingFromCanPlay,
+  shouldDismissLoadingFromPlaybackProgress,
 } from '@/features/play/lib/playerLoading';
 
 describe('playerLoading', () => {
@@ -14,6 +15,12 @@ describe('playerLoading', () => {
     expect(
       shouldDismissLoadingFromCanPlay({ paused: false, ended: false }),
     ).toBe(true);
+  });
+
+  it('播放时间已明显推进时，可以判定新视频已经起播', () => {
+    expect(shouldDismissLoadingFromPlaybackProgress(1.01)).toBe(true);
+    expect(shouldDismissLoadingFromPlaybackProgress(1)).toBe(false);
+    expect(shouldDismissLoadingFromPlaybackProgress(0.3)).toBe(false);
   });
 
   it('恢复进度达到目标附近后即可关闭遮罩', () => {
