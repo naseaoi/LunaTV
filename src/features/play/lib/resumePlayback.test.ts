@@ -2,6 +2,7 @@ import {
   applyResumeTime,
   AUTO_RESUME_WINDOW_SECONDS,
   isWithinAutoResumeWindow,
+  resolvePendingResumeTime,
   resolveResumeTimeTarget,
 } from '@/features/play/lib/resumePlayback';
 
@@ -24,5 +25,39 @@ describe('resumePlayback', () => {
 
     expect(applyResumeTime(player, 118)).toBe(true);
     expect(player.currentTime).toBe(115);
+  });
+
+  it('起播时只允许使用显式恢复点', () => {
+    expect(
+      resolvePendingResumeTime({
+        resumeTime: 180,
+        resumeMode: 'forced',
+        allowAutoResume: false,
+      }),
+    ).toBe(180);
+
+    expect(
+      resolvePendingResumeTime({
+        resumeTime: 180,
+        resumeMode: 'history',
+        allowAutoResume: true,
+      }),
+    ).toBe(180);
+
+    expect(
+      resolvePendingResumeTime({
+        resumeTime: 180,
+        resumeMode: 'history',
+        allowAutoResume: false,
+      }),
+    ).toBeNull();
+
+    expect(
+      resolvePendingResumeTime({
+        resumeTime: null,
+        resumeMode: null,
+        allowAutoResume: true,
+      }),
+    ).toBeNull();
   });
 });

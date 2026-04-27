@@ -11,6 +11,20 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '0.3.6',
+    date: '2026-04-27',
+    added: [
+      // 无新增内容
+    ],
+    changed: [
+      // 无变更内容
+    ],
+    fixed: [
+      '修复播放器切集后“切换中”遮罩残留，导致新一集已起播仍无法操作的问题',
+      '修复打开新视频时误沿用上一条播放链路进度并跳到接近片尾的问题',
+    ],
+  },
+  {
     version: '0.3.5',
     date: '2026-04-26',
     added: [

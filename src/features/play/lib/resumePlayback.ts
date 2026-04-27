@@ -2,6 +2,12 @@ export const AUTO_RESUME_WINDOW_SECONDS = 5;
 
 export type ResumeMode = 'history' | 'forced' | null;
 
+interface ResolvePendingResumeTimeOptions {
+  resumeTime: number | null;
+  resumeMode: ResumeMode;
+  allowAutoResume: boolean;
+}
+
 type ResumePlayerLike = {
   currentTime: number;
   duration?: number;
@@ -14,6 +20,25 @@ export function isWithinAutoResumeWindow(currentTime: number): boolean {
   return (
     Number.isFinite(currentTime) && currentTime <= AUTO_RESUME_WINDOW_SECONDS
   );
+}
+
+/**
+ * 起播阶段只允许使用显式写入的恢复点，避免把上一条播放链路的内存进度误带到新视频。
+ */
+export function resolvePendingResumeTime({
+  resumeTime,
+  resumeMode,
+  allowAutoResume,
+}: ResolvePendingResumeTimeOptions): number | null {
+  if (!Number.isFinite(resumeTime) || (resumeTime ?? 0) <= 0) {
+    return null;
+  }
+
+  if (resumeMode === 'history' && !allowAutoResume) {
+    return null;
+  }
+
+  return resumeTime;
 }
 
 /**

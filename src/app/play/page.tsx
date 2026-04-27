@@ -1020,6 +1020,14 @@ function PlayPageClient() {
   );
 }
 
+function PlayPageContent() {
+  const searchParams = useSearchParams();
+
+  // 同一路由下仅查询参数变化时，强制重建播放页状态，
+  // 避免上一条播放链路的 ref/state 残留到新视频。
+  return <PlayPageClient key={searchParams.toString()} />;
+}
+
 // 内部辅助函数（非 export，仅用于 handleSkipConfigChange 回调）
 function formatTimeSimple(seconds: number): string {
   if (seconds === 0) return '00:00';
@@ -1043,7 +1051,7 @@ export default function PlayPage() {
         />
       }
     >
-      <PlayPageClient />
+      <PlayPageContent />
     </Suspense>
   );
 }

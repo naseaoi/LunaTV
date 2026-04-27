@@ -40,7 +40,6 @@ import {
   PlayerLoadingSessionState,
   resetPlayerLoadingSessionState,
   shouldDismissLoadingFromCanPlay,
-  shouldDismissLoadingFromPlaybackProgress,
 } from '@/features/play/lib/playerLoading';
 import { WakeLockSentinel } from '@/features/play/lib/playTypes';
 import { filterAdsFromM3U8 } from '@/features/play/lib/playUtils';
@@ -48,6 +47,7 @@ import { hasMeaningfulPlaybackTime } from '@/features/play/hooks/usePlayProgress
 import {
   applyResumeTime,
   isWithinAutoResumeWindow,
+  resolvePendingResumeTime,
 } from '@/features/play/lib/resumePlayback';
 import type { ResumeMode } from '@/features/play/lib/resumePlayback';
 
@@ -824,37 +824,22 @@ export function useArtPlayer(params: UseArtPlayerParams) {
 
         player.on('video:canplay', () => {
           let appliedResumeTarget: number | null = null;
+          const pendingResumeTime = resolvePendingResumeTime({
+            resumeTime: resumeTimeRef.current,
+            resumeMode: resumeModeRef.current,
+            allowAutoResume: allowAutoResumeRef.current,
+          });
 
-          if (resumeTimeRef.current && resumeTimeRef.current > 0) {
+          if (pendingResumeTime !== null) {
             try {
-              if (
-                resumeModeRef.current !== 'history' ||
-                allowAutoResumeRef.current
-              ) {
-                if (applyResumeTime(player, resumeTimeRef.current)) {
-                  appliedResumeTarget =
-                    player.currentTime || resumeTimeRef.current;
-                }
-                if (resumeModeRef.current === 'history') {
-                  allowAutoResumeRef.current = false;
-                }
+              if (applyResumeTime(player, pendingResumeTime)) {
+                appliedResumeTarget = player.currentTime || pendingResumeTime;
               }
-            } catch (err) {
-              console.warn('恢复播放进度失败:', err);
-            }
-          } else if (
-            hasMeaningfulPlaybackTime(stableCurrentTimeRef.current) &&
-            isWithinAutoResumeWindow(player.currentTime || 0) &&
-            stableCurrentTimeRef.current - (player.currentTime || 0) > 3
-          ) {
-            try {
-              if (applyResumeTime(player, stableCurrentTimeRef.current)) {
-                appliedResumeTarget =
-                  player.currentTime || stableCurrentTimeRef.current;
+              if (resumeModeRef.current === 'history') {
                 allowAutoResumeRef.current = false;
               }
             } catch (err) {
-              console.warn('恢复最近稳定进度失败:', err);
+              console.warn('恢复播放进度失败:', err);
             }
           }
 
@@ -900,10 +885,6 @@ export function useArtPlayer(params: UseArtPlayerParams) {
 
           if (loadingSessionRef.current.pendingInitialResumeTarget !== null) {
             completePendingResumeIfReady();
-          } else if (
-            shouldDismissLoadingFromPlaybackProgress(player.currentTime || 0)
-          ) {
-            finishInitialLoading();
           }
 
           if (allowAutoResumeRef.current) {
