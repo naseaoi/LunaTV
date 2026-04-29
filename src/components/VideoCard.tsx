@@ -28,6 +28,7 @@ import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 import { SearchResult } from '@/lib/types';
 import { warmupForPlayback } from '@/lib/video-prefetch';
 import { useLongPress } from '@/hooks/useLongPress';
+import { savePlayIntent } from '@/features/play/lib/playIntent';
 
 import {
   useCardInteractionManager,
@@ -59,6 +60,7 @@ export interface VideoCardProps {
   source_name?: string;
   source_names?: string[];
   progress?: number;
+  resumeTime?: number;
   year?: string;
   from: 'playrecord' | 'favorite' | 'search' | 'douban';
   currentEpisode?: number;
@@ -137,6 +139,7 @@ function areVideoCardPropsEqual(
     prev.source_name === next.source_name &&
     isSameStringArray(prev.source_names, next.source_names) &&
     prev.progress === next.progress &&
+    prev.resumeTime === next.resumeTime &&
     prev.year === next.year &&
     prev.from === next.from &&
     prev.currentEpisode === next.currentEpisode &&
@@ -163,6 +166,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
       source_name,
       source_names,
       progress = 0,
+      resumeTime,
       year,
       from,
       currentEpisode,
@@ -403,9 +407,34 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
         router.push(getLoginRedirectUrl());
         return;
       }
+
+      if (
+        from === 'playrecord' &&
+        actualSource &&
+        actualId &&
+        currentEpisode &&
+        Number.isFinite(resumeTime) &&
+        (resumeTime || 0) > 0
+      ) {
+        savePlayIntent({
+          source: actualSource,
+          id: actualId,
+          episodeIndex: Math.max(0, currentEpisode - 1),
+          resumeTime: resumeTime || 0,
+        });
+      }
+
       const url = buildPlayUrl();
       if (url) router.push(url);
-    }, [router, buildPlayUrl]);
+    }, [
+      router,
+      buildPlayUrl,
+      from,
+      actualSource,
+      actualId,
+      currentEpisode,
+      resumeTime,
+    ]);
 
     // hover / focus 预热：提前加载 detail 与播放器模块，进入播放页几乎无等待
     // 仅对拥有 source+id 的普通卡片生效（聚合卡、豆瓣卡跳转路径不同，跳过）

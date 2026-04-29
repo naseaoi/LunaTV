@@ -18,6 +18,7 @@ import {
   SessionLostReason,
   WakeLockSentinel,
 } from '@/features/play/lib/playTypes';
+import { consumeMatchingPlayIntent } from '@/features/play/lib/playIntent';
 import {
   applyResumeTime,
   isWithinAutoResumeWindow,
@@ -583,7 +584,7 @@ export function usePlayProgress({
     saveStateRef.current.lastSavedFingerprint = null;
   }, [currentSource, currentId]);
 
-  // 播放记录处理：source/id 就绪后检查恢复点与播放记录
+  // 播放记录处理：source/id 就绪后优先消费显式播放意图，再检查恢复点与播放记录
   useEffect(() => {
     const requestedSource = currentSource;
     const requestedId = currentId;
@@ -592,6 +593,37 @@ export function usePlayProgress({
 
     const initFromHistory = async () => {
       if (!currentSource || !currentId) return;
+
+      const applyRestoreState = ({
+        episodeIndex,
+        resumeTime,
+        resumeMode,
+      }: {
+        episodeIndex: number;
+        resumeTime: number;
+        resumeMode: ResumeMode;
+      }) => {
+        const activeEpisodeIndex = currentEpisodeIndexRef.current;
+        if (episodeIndex !== activeEpisodeIndex) {
+          // 显式恢复到其它集时，同样先阻断旧播放器残留进度回写。
+          clearTargetEpisodeProgressRef.current = true;
+          stableCurrentTimeRef.current = 0;
+          setCurrentEpisodeIndex(episodeIndex);
+        }
+
+        resumeTimeRef.current = resumeTime;
+        resumeModeRef.current = resumeMode;
+      };
+
+      const playIntent = consumeMatchingPlayIntent({
+        source: currentSource,
+        id: currentId,
+        episodeCount: detailRef.current?.episodes.length || 0,
+      });
+      if (playIntent) {
+        applyRestoreState(playIntent);
+        return;
+      }
 
       const checkpoint = readMatchingPlaybackCheckpoint(
         currentSourceRef,
@@ -651,13 +683,6 @@ export function usePlayProgress({
         }
 
         const activeEpisodeIndex = currentEpisodeIndexRef.current;
-        if (targetIndex !== activeEpisodeIndex) {
-          // 首页继续观看恢复到其它集时，也要走与手动切集相同的进度保护。
-          clearTargetEpisodeProgressRef.current = true;
-          stableCurrentTimeRef.current = 0;
-          setCurrentEpisodeIndex(targetIndex);
-        }
-
         const player = artPlayerRef.current;
         const canApplyImmediately =
           targetTime > 0 &&
@@ -679,8 +704,11 @@ export function usePlayProgress({
           }
         }
 
-        resumeTimeRef.current = targetTime;
-        resumeModeRef.current = targetMode;
+        applyRestoreState({
+          episodeIndex: targetIndex,
+          resumeTime: targetTime,
+          resumeMode: targetMode,
+        });
       } catch (err) {
         console.error('读取播放记录失败:', err);
       }

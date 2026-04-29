@@ -11,6 +11,7 @@ import {
   getAllPlayRecords,
   subscribeToDataUpdates,
 } from '@/lib/db.client';
+import { parseStorageKey } from '@/lib/utils';
 
 import ScrollableRow from '@/components/ScrollableRow';
 import VideoCard from '@/components/VideoCard';
@@ -113,8 +114,7 @@ export default function ContinueWatching({ className }: ContinueWatchingProps) {
 
   // 从 key 中解析 source 和 id
   const parseKey = (key: string) => {
-    const [source, id] = key.split('+');
-    return { source, id };
+    return parseStorageKey(key);
   };
 
   return (
@@ -151,7 +151,12 @@ export default function ContinueWatching({ className }: ContinueWatchingProps) {
               ))
             : // 显示真实数据
               playRecords.map((record, index) => {
-                const { source, id } = parseKey(record.key);
+                const parsedKey = parseKey(record.key);
+                if (!parsedKey) {
+                  return null;
+                }
+
+                const { source, id } = parsedKey;
                 return (
                   <div
                     key={record.key}
@@ -167,6 +172,10 @@ export default function ContinueWatching({ className }: ContinueWatchingProps) {
                       progress={getProgress(record)}
                       episodes={record.total_episodes}
                       currentEpisode={record.index}
+                      resumeTime={Math.max(
+                        0,
+                        Math.floor(record.play_time || 0),
+                      )}
                       query={record.search_title}
                       from='playrecord'
                       onDelete={() =>
