@@ -43,7 +43,7 @@ import {
 } from '@/features/play/lib/playerLoading';
 import { WakeLockSentinel } from '@/features/play/lib/playTypes';
 import { filterAdsFromM3U8 } from '@/features/play/lib/playUtils';
-import { hasMeaningfulPlaybackTime } from '@/features/play/hooks/usePlayProgress';
+import { resolveNextStablePlaybackTime } from '@/features/play/hooks/usePlayProgress';
 import {
   applyResumeTime,
   isWithinAutoResumeWindow,
@@ -78,6 +78,7 @@ export interface UseArtPlayerParams {
   resumeModeRef: MutableRefObject<ResumeMode>;
   allowAutoResumeRef: MutableRefObject<boolean>;
   stableCurrentTimeRef: MutableRefObject<number>;
+  clearTargetEpisodeProgressRef: MutableRefObject<boolean>;
   lastVolumeRef: MutableRefObject<number>;
   lastPlaybackRateRef: MutableRefObject<number>;
   lastSkipCheckRef: MutableRefObject<number>;
@@ -129,6 +130,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
     resumeModeRef,
     allowAutoResumeRef,
     stableCurrentTimeRef,
+    clearTargetEpisodeProgressRef,
     lastVolumeRef,
     lastPlaybackRateRef,
     lastSkipCheckRef,
@@ -723,18 +725,12 @@ export function useArtPlayer(params: UseArtPlayerParams) {
         }
 
         const updateStableCurrentTime = (time: number) => {
-          if (!Number.isFinite(time) || time < 0) {
-            return;
-          }
-
-          if (hasMeaningfulPlaybackTime(time)) {
-            stableCurrentTimeRef.current = Math.floor(time);
-            return;
-          }
-
-          if (!hasMeaningfulPlaybackTime(stableCurrentTimeRef.current)) {
-            stableCurrentTimeRef.current = Math.max(0, Math.floor(time));
-          }
+          // 切到目标集但尚未真正起播前，忽略旧播放器残留的时间回写。
+          stableCurrentTimeRef.current = resolveNextStablePlaybackTime(
+            time,
+            stableCurrentTimeRef.current,
+            clearTargetEpisodeProgressRef.current,
+          );
         };
 
         const notifyPlayerPlaybackStarted = () => {

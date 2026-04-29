@@ -1,10 +1,33 @@
 import {
+  resolveNextStablePlaybackTime,
   resolveProtectedPlaybackTime,
   resolvePlaybackRestoreCandidate,
+  saveCurrentPlayProgress,
+  savePlaybackCheckpoint,
   shouldApplyHistoryRestore,
 } from '@/features/play/hooks/usePlayProgress';
+import { PLAY_CHECKPOINT_KEY } from '@/features/play/lib/playTypes';
+import { savePlayRecord } from '@/lib/db.client';
+
+jest.mock('@/lib/db.client', () => ({
+  deletePlayRecord: jest.fn(),
+  generateStorageKey: jest.fn(
+    (source: string, id: string) => `${source}+${id}`,
+  ),
+  getAllPlayRecords: jest.fn(),
+  savePlayRecord: jest.fn(),
+}));
 
 describe('usePlayProgress helpers', () => {
+  const mockedSavePlayRecord = savePlayRecord as jest.MockedFunction<
+    typeof savePlayRecord
+  >;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    sessionStorage.clear();
+  });
+
   it('异步历史读取不会覆盖已存在的 forced 恢复点', () => {
     expect(
       shouldApplyHistoryRestore({
@@ -178,5 +201,64 @@ describe('usePlayProgress helpers', () => {
     expect(resolveProtectedPlaybackTime(331.8, 180)).toBe(331);
     expect(resolveProtectedPlaybackTime(0.2, 330)).toBe(330);
     expect(resolveProtectedPlaybackTime(0, 0)).toBe(0);
+  });
+
+  it('目标集尚未真正起播前不会回写旧稳定进度', () => {
+    expect(resolveNextStablePlaybackTime(1320.8, 0, true)).toBe(0);
+    expect(resolveNextStablePlaybackTime(1320.8, 0, false)).toBe(1320);
+  });
+
+  it('切到目标集但尚未起播前不会把旧集进度保存到记录', async () => {
+    await saveCurrentPlayProgress(
+      {
+        current: {
+          currentTime: 1320.8,
+          duration: 1500,
+        },
+      } as any,
+      { current: 'source-a' },
+      { current: 'id-a' },
+      { current: '番剧A' },
+      {
+        current: {
+          source_name: '源A',
+          year: '2024',
+          poster: '',
+          episodes: Array.from({ length: 12 }, (_, index) => `${index + 1}`),
+        },
+      } as any,
+      { current: 8 },
+      { current: 1320 },
+      { current: true },
+      {
+        current: {
+          inFlight: false,
+          pending: null,
+          lastSavedFingerprint: null,
+        },
+      },
+      { current: 0 },
+      '番剧A',
+    );
+
+    expect(mockedSavePlayRecord).not.toHaveBeenCalled();
+  });
+
+  it('切到目标集但尚未起播前不会写入错误 checkpoint', () => {
+    savePlaybackCheckpoint(
+      { current: 'source-a' },
+      { current: 'id-a' },
+      { current: 8 },
+      { current: '番剧A' },
+      {
+        current: {
+          currentTime: 1320.8,
+        },
+      } as any,
+      { current: 1320 },
+      { current: true },
+    );
+
+    expect(sessionStorage.getItem(PLAY_CHECKPOINT_KEY)).toBeNull();
   });
 });

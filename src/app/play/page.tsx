@@ -472,6 +472,7 @@ function PlayPageClient() {
     resumeModeRef,
     allowAutoResumeRef,
     stableCurrentTimeRef,
+    clearTargetEpisodeProgressRef,
     saveStateRef: playProgressSaveStateRef,
     lastSaveTimeRef,
     saveIntervalRef,
@@ -506,6 +507,7 @@ function PlayPageClient() {
 
       doSaveCurrentProgress();
       clearTargetEpisodeProgressRef.current = true;
+      stableCurrentTimeRef.current = 0;
       resumeTimeRef.current = 0;
       resumeModeRef.current = null;
 
@@ -892,6 +894,7 @@ function PlayPageClient() {
     resumeModeRef,
     allowAutoResumeRef,
     stableCurrentTimeRef,
+    clearTargetEpisodeProgressRef,
     lastVolumeRef,
     lastPlaybackRateRef,
     lastSkipCheckRef,

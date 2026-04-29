@@ -35,10 +35,12 @@ export function savePlaybackCheckpoint(
   videoTitleRef: MutableRefObject<string>,
   artPlayerRef: MutableRefObject<Artplayer | null>,
   stableCurrentTimeRef: MutableRefObject<number>,
+  clearTargetEpisodeProgressRef: MutableRefObject<boolean>,
   reason?: SessionLostReason,
 ) {
   if (typeof window === 'undefined') return;
   if (!currentSourceRef.current || !currentIdRef.current) return;
+  if (clearTargetEpisodeProgressRef.current) return;
 
   const currentTime = resolveProtectedPlaybackTime(
     artPlayerRef.current?.currentTime || 0,
@@ -85,6 +87,30 @@ export function resolveProtectedPlaybackTime(
   }
 
   return 0;
+}
+
+export function resolveNextStablePlaybackTime(
+  nextTime: number,
+  stableCurrentTime: number,
+  blockProgressCarryover: boolean,
+): number {
+  if (blockProgressCarryover) {
+    return stableCurrentTime;
+  }
+
+  if (!Number.isFinite(nextTime) || nextTime < 0) {
+    return stableCurrentTime;
+  }
+
+  if (hasMeaningfulPlaybackTime(nextTime)) {
+    return Math.floor(nextTime);
+  }
+
+  if (!hasMeaningfulPlaybackTime(stableCurrentTime)) {
+    return Math.max(0, Math.floor(nextTime));
+  }
+
+  return stableCurrentTime;
 }
 
 function clearPlaybackCheckpointStorage() {
@@ -364,6 +390,7 @@ export async function saveCurrentPlayProgress(
   detailRef: MutableRefObject<SearchResult | null>,
   currentEpisodeIndexRef: MutableRefObject<number>,
   stableCurrentTimeRef: MutableRefObject<number>,
+  clearTargetEpisodeProgressRef: MutableRefObject<boolean>,
   saveStateRef: MutableRefObject<PlayProgressSaveState>,
   lastSaveTimeRef: MutableRefObject<number>,
   searchTitle: string,
@@ -375,6 +402,11 @@ export async function saveCurrentPlayProgress(
     !videoTitleRef.current ||
     !detailRef.current?.source_name
   ) {
+    return;
+  }
+
+  // 目标集尚未真正起播前，禁止把上一集的时间写进当前集记录。
+  if (clearTargetEpisodeProgressRef.current) {
     return;
   }
 
@@ -450,6 +482,7 @@ interface UsePlayProgressParams {
   resumeModeRef: MutableRefObject<ResumeMode>;
   allowAutoResumeRef: MutableRefObject<boolean>;
   stableCurrentTimeRef: MutableRefObject<number>;
+  clearTargetEpisodeProgressRef: MutableRefObject<boolean>;
   saveStateRef: MutableRefObject<PlayProgressSaveState>;
   lastSaveTimeRef: MutableRefObject<number>;
   saveIntervalRef: MutableRefObject<NodeJS.Timeout | null>;
@@ -474,6 +507,7 @@ export function usePlayProgress({
   resumeModeRef,
   allowAutoResumeRef,
   stableCurrentTimeRef,
+  clearTargetEpisodeProgressRef,
   saveStateRef,
   lastSaveTimeRef,
   saveIntervalRef,
@@ -495,6 +529,7 @@ export function usePlayProgress({
       detailRef,
       currentEpisodeIndexRef,
       stableCurrentTimeRef,
+      clearTargetEpisodeProgressRef,
       saveStateRef,
       lastSaveTimeRef,
       searchTitle,
@@ -508,6 +543,7 @@ export function usePlayProgress({
       videoTitleRef,
       artPlayerRef,
       stableCurrentTimeRef,
+      clearTargetEpisodeProgressRef,
       reason,
     );
 
@@ -616,6 +652,9 @@ export function usePlayProgress({
 
         const activeEpisodeIndex = currentEpisodeIndexRef.current;
         if (targetIndex !== activeEpisodeIndex) {
+          // 首页继续观看恢复到其它集时，也要走与手动切集相同的进度保护。
+          clearTargetEpisodeProgressRef.current = true;
+          stableCurrentTimeRef.current = 0;
           setCurrentEpisodeIndex(targetIndex);
         }
 
