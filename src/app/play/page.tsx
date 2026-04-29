@@ -650,6 +650,7 @@ function PlayPageClient() {
     const currentPlayTime = resolveSourceSwitchCurrentPlayTime({
       playerCurrentTime: artPlayerRef.current?.currentTime || 0,
       pendingResumeTime: resumeTimeRef.current,
+      stableCurrentTime: stableCurrentTimeRef.current,
     });
 
     pendingSourceSwitchCleanupRef.current = null;

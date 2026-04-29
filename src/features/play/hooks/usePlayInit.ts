@@ -10,6 +10,37 @@ import { getProxyModes, shouldUseServerProxy } from '@/lib/proxy-modes';
 import { calculateSourceScore } from '@/features/play/lib/playUtils';
 
 // ---------------------------------------------------------------------------
+// 客户端 detail 内存缓存 — 短时间退出重进时避免重复请求
+// ---------------------------------------------------------------------------
+
+const DETAIL_CACHE_TTL_MS = 3 * 60 * 1000;
+const detailCache = new Map<
+  string,
+  { data: SearchResult; expiresAt: number }
+>();
+
+function getCachedDetail(source: string, id: string): SearchResult | null {
+  const key = `${source}::${id}`;
+  const entry = detailCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    detailCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function setCachedDetail(source: string, id: string, data: SearchResult) {
+  const key = `${source}::${id}`;
+  detailCache.set(key, { data, expiresAt: Date.now() + DETAIL_CACHE_TTL_MS });
+  // 防止无限膨胀
+  if (detailCache.size > 100) {
+    const oldest = detailCache.keys().next().value;
+    if (oldest) detailCache.delete(oldest);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // resolveHarvestWindow — 根据首个测速结果自适应调整收割窗口
 // ---------------------------------------------------------------------------
 
@@ -315,6 +346,11 @@ export function usePlayInit({
       id: string,
     ): Promise<SearchResult | null> => {
       try {
+        const cached = getCachedDetail(source, id);
+        if (cached) {
+          if (!signal.aborted) setSourceSearchLoading(false);
+          return cached;
+        }
         const detailResponse = await fetch(
           `/api/detail?source=${source}&id=${id}`,
           { signal },
@@ -323,6 +359,7 @@ export function usePlayInit({
           throw new Error('获取视频详情失败');
         }
         const detailData = (await detailResponse.json()) as SearchResult;
+        setCachedDetail(source, id, detailData);
         return detailData;
       } catch (err) {
         if (signal.aborted) return null;

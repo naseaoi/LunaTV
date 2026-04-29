@@ -794,6 +794,42 @@ export function useArtPlayer(params: UseArtPlayerParams) {
           return true;
         };
 
+        const ensureInitialPlaybackPosition = () => {
+          if (loadingSessionRef.current.pendingInitialResumeTarget !== null) {
+            return loadingSessionRef.current.pendingInitialResumeTarget;
+          }
+
+          let appliedResumeTarget: number | null = null;
+          const pendingResumeTime = resolvePendingResumeTime({
+            resumeTime: resumeTimeRef.current,
+            resumeMode: resumeModeRef.current,
+            allowAutoResume: allowAutoResumeRef.current,
+          });
+
+          if (pendingResumeTime !== null) {
+            try {
+              if (applyResumeTime(player, pendingResumeTime)) {
+                appliedResumeTarget = player.currentTime || pendingResumeTime;
+              }
+              if (resumeModeRef.current === 'history') {
+                allowAutoResumeRef.current = false;
+              }
+            } catch (err) {
+              console.warn('恢复播放进度失败:', err);
+            }
+          } else if (resetPlaybackToStartIfNeeded()) {
+            appliedResumeTarget = 0;
+          }
+
+          loadingSessionRef.current.pendingInitialResumeTarget =
+            appliedResumeTarget;
+          resumeTimeRef.current = null;
+          resumeModeRef.current = null;
+          updateStableCurrentTime(player.currentTime || 0);
+
+          return appliedResumeTarget;
+        };
+
         // --- 播放器事件 ---
 
         player.on('ready', () => {
@@ -809,9 +845,9 @@ export function useArtPlayer(params: UseArtPlayerParams) {
         });
 
         // 备用：playing 事件表示视频已真正开始渲染帧，
-        // 某些 HLS 流 canplay 可能不触发，用 playing 兜底清除 loading
+        // 某些 HLS 流 canplay 可能不触发，因此这里也要兜底套用初始恢复进度。
         player.on('video:playing', () => {
-          resetPlaybackToStartIfNeeded();
+          ensureInitialPlaybackPosition();
 
           if (loadingSessionRef.current.pendingInitialResumeTarget !== null) {
             completePendingResumeIfReady();
@@ -845,33 +881,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
         });
 
         player.on('video:canplay', () => {
-          let appliedResumeTarget: number | null = null;
-          const pendingResumeTime = resolvePendingResumeTime({
-            resumeTime: resumeTimeRef.current,
-            resumeMode: resumeModeRef.current,
-            allowAutoResume: allowAutoResumeRef.current,
-          });
-
-          if (pendingResumeTime !== null) {
-            try {
-              if (applyResumeTime(player, pendingResumeTime)) {
-                appliedResumeTarget = player.currentTime || pendingResumeTime;
-              }
-              if (resumeModeRef.current === 'history') {
-                allowAutoResumeRef.current = false;
-              }
-            } catch (err) {
-              console.warn('恢复播放进度失败:', err);
-            }
-          } else if (resetPlaybackToStartIfNeeded()) {
-            appliedResumeTarget = 0;
-          }
-
-          loadingSessionRef.current.pendingInitialResumeTarget =
-            appliedResumeTarget;
-          resumeTimeRef.current = null;
-          resumeModeRef.current = null;
-          updateStableCurrentTime(player.currentTime || 0);
+          ensureInitialPlaybackPosition();
 
           setTimeout(() => {
             if (Math.abs(player.volume - lastVolumeRef.current) > 0.01) {

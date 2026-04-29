@@ -9,6 +9,7 @@ describe('episodeResumePolicy', () => {
       resolveSourceSwitchCurrentPlayTime({
         playerCurrentTime: 12.8,
         pendingResumeTime: 1320,
+        stableCurrentTime: 10,
       }),
     ).toBe(12.8);
   });
@@ -18,8 +19,29 @@ describe('episodeResumePolicy', () => {
       resolveSourceSwitchCurrentPlayTime({
         playerCurrentTime: 0.4,
         pendingResumeTime: 1320,
+        stableCurrentTime: 0,
       }),
     ).toBe(1320);
+  });
+
+  it('播放器和待恢复进度都无效时回退到 stableCurrentTime', () => {
+    expect(
+      resolveSourceSwitchCurrentPlayTime({
+        playerCurrentTime: 0.2,
+        pendingResumeTime: null,
+        stableCurrentTime: 900,
+      }),
+    ).toBe(900);
+  });
+
+  it('三者都无效时返回 0', () => {
+    expect(
+      resolveSourceSwitchCurrentPlayTime({
+        playerCurrentTime: 0,
+        pendingResumeTime: null,
+        stableCurrentTime: 0,
+      }),
+    ).toBe(0);
   });
 
   it('切集后的自动换源不会继承上一集进度', () => {

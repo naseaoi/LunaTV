@@ -14,21 +14,28 @@ interface ResolveSourceSwitchResumeStateOptions {
 interface ResolveSourceSwitchCurrentPlayTimeOptions {
   playerCurrentTime: number;
   pendingResumeTime: number | null;
+  stableCurrentTime: number;
 }
 
 /**
  * 自动换源优先采用播放器里的稳定进度；
- * 若当前仅有零点几秒的探测值，则回退到待恢复的有效进度。
+ * 若当前仅有零点几秒的探测值，则回退到待恢复的有效进度；
+ * 最后回退到 stableCurrentTime（seek/timeupdate 记录的最后有效时间点）。
  */
 export function resolveSourceSwitchCurrentPlayTime({
   playerCurrentTime,
   pendingResumeTime,
+  stableCurrentTime,
 }: ResolveSourceSwitchCurrentPlayTimeOptions): number {
   if (playerCurrentTime > 1) {
     return playerCurrentTime;
   }
 
-  return pendingResumeTime && pendingResumeTime > 0 ? pendingResumeTime : 0;
+  if (pendingResumeTime && pendingResumeTime > 0) {
+    return pendingResumeTime;
+  }
+
+  return stableCurrentTime > 1 ? stableCurrentTime : 0;
 }
 
 /**
