@@ -304,7 +304,7 @@ interface HistoryRestoreGuardOptions {
 
 /**
  * 历史记录是异步读取的，应用前必须再次确认当前仍是同一条播放链路，
- * 并且不能覆盖换源/检查点已经写入的 forced 恢复点。
+ * 并且不能覆盖换源、手动切集或检查点已经写入的显式恢复意图。
  */
 export function shouldApplyHistoryRestore({
   requestedSource,
@@ -333,7 +333,7 @@ export function shouldApplyHistoryRestore({
     return false;
   }
 
-  if (pendingResumeMode === 'forced' && (pendingResumeTime ?? 0) > 0) {
+  if (pendingResumeMode === 'forced') {
     return false;
   }
 

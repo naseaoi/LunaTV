@@ -32,7 +32,9 @@ export function resolveSourceSwitchCurrentPlayTime({
 }
 
 /**
- * 切集后的换源只负责对齐目标集数，不继承上一集的播放时间。
+ * 换源本身就是一次显式的目标集选择：
+ * - 有有效进度时沿用当前集进度
+ * - 否则强制从目标集开头起播，并阻止目标源旧历史反向覆盖
  */
 export function resolveSourceSwitchResumeState({
   currentPlayTime,
@@ -40,7 +42,7 @@ export function resolveSourceSwitchResumeState({
   clearTargetEpisodeProgress,
 }: ResolveSourceSwitchResumeStateOptions): SourceSwitchResumeState {
   if (clearTargetEpisodeProgress) {
-    return { resumeTime: 0, resumeMode: null };
+    return { resumeTime: 0, resumeMode: 'forced' };
   }
 
   if (preserveProgress && currentPlayTime > 1) {
@@ -50,5 +52,5 @@ export function resolveSourceSwitchResumeState({
     };
   }
 
-  return { resumeTime: 0, resumeMode: null };
+  return { resumeTime: 0, resumeMode: 'forced' };
 }

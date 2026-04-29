@@ -76,6 +76,22 @@ describe('usePlayProgress helpers', () => {
     ).toBe(true);
   });
 
+  it('即使 forced 恢复点没有时间，也不能再让历史覆盖显式切集选择', () => {
+    expect(
+      shouldApplyHistoryRestore({
+        requestedSource: 'source-a',
+        requestedId: 'id-a',
+        requestedEpisodeIndex: 8,
+        activeSource: 'source-a',
+        activeId: 'id-a',
+        activeEpisodeIndex: 8,
+        allowAutoResume: true,
+        pendingResumeTime: 0,
+        pendingResumeMode: 'forced',
+      }),
+    ).toBe(false);
+  });
+
   it('首页记录比 checkpoint 更新时优先使用首页记录', () => {
     expect(
       resolvePlaybackRestoreCandidate({

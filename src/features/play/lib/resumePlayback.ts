@@ -8,6 +8,11 @@ interface ResolvePendingResumeTimeOptions {
   allowAutoResume: boolean;
 }
 
+interface ResolveStartFromHeadOptions {
+  resumeTime: number | null;
+  resumeMode: ResumeMode;
+}
+
 type ResumePlayerLike = {
   currentTime: number;
   duration?: number;
@@ -39,6 +44,20 @@ export function resolvePendingResumeTime({
   }
 
   return resumeTime;
+}
+
+/**
+ * 某些切集/换源场景不会带恢复时间，但用户已经显式选择了“从头播放目标集”。
+ * 这时要主动把播放器归零，避免复用 video/HLS 时残留上一集 currentTime。
+ */
+export function shouldForcePlaybackStartFromHead({
+  resumeTime,
+  resumeMode,
+}: ResolveStartFromHeadOptions): boolean {
+  return (
+    resumeMode === 'forced' &&
+    (!Number.isFinite(resumeTime) || (resumeTime ?? 0) <= 0)
+  );
 }
 
 /**

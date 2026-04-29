@@ -48,6 +48,7 @@ import {
   applyResumeTime,
   isWithinAutoResumeWindow,
   resolvePendingResumeTime,
+  shouldForcePlaybackStartFromHead,
 } from '@/features/play/lib/resumePlayback';
 import type { ResumeMode } from '@/features/play/lib/resumePlayback';
 
@@ -733,6 +734,29 @@ export function useArtPlayer(params: UseArtPlayerParams) {
           );
         };
 
+        const resetPlaybackToStartIfNeeded = () => {
+          const shouldResetToStart =
+            clearTargetEpisodeProgressRef.current ||
+            shouldForcePlaybackStartFromHead({
+              resumeTime: resumeTimeRef.current,
+              resumeMode: resumeModeRef.current,
+            });
+
+          if (!shouldResetToStart) {
+            return false;
+          }
+
+          try {
+            player.currentTime = 0;
+          } catch (err) {
+            console.warn('重置目标集起播位置失败:', err);
+          }
+
+          stableCurrentTimeRef.current = 0;
+          loadingSessionRef.current.pendingInitialResumeTarget = 0;
+          return true;
+        };
+
         const notifyPlayerPlaybackStarted = () => {
           const activeVideo = player.video as HTMLVideoElement | undefined;
           const activeSourceKey = detailRef.current?.source || '';
@@ -787,6 +811,8 @@ export function useArtPlayer(params: UseArtPlayerParams) {
         // 备用：playing 事件表示视频已真正开始渲染帧，
         // 某些 HLS 流 canplay 可能不触发，用 playing 兜底清除 loading
         player.on('video:playing', () => {
+          resetPlaybackToStartIfNeeded();
+
           if (loadingSessionRef.current.pendingInitialResumeTarget !== null) {
             completePendingResumeIfReady();
             return;
@@ -837,6 +863,8 @@ export function useArtPlayer(params: UseArtPlayerParams) {
             } catch (err) {
               console.warn('恢复播放进度失败:', err);
             }
+          } else if (resetPlaybackToStartIfNeeded()) {
+            appliedResumeTarget = 0;
           }
 
           loadingSessionRef.current.pendingInitialResumeTarget =

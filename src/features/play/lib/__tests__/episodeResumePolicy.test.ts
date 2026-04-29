@@ -31,7 +31,7 @@ describe('episodeResumePolicy', () => {
       }),
     ).toEqual({
       resumeTime: 0,
-      resumeMode: null,
+      resumeMode: 'forced',
     });
   });
 
@@ -48,7 +48,7 @@ describe('episodeResumePolicy', () => {
     });
   });
 
-  it('无有效进度时不会触发恢复', () => {
+  it('无有效进度时会强制从目标集开头起播', () => {
     expect(
       resolveSourceSwitchResumeState({
         currentPlayTime: 1,
@@ -57,7 +57,7 @@ describe('episodeResumePolicy', () => {
       }),
     ).toEqual({
       resumeTime: 0,
-      resumeMode: null,
+      resumeMode: 'forced',
     });
   });
 });

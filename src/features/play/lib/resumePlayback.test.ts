@@ -4,6 +4,7 @@ import {
   isWithinAutoResumeWindow,
   resolvePendingResumeTime,
   resolveResumeTimeTarget,
+  shouldForcePlaybackStartFromHead,
 } from '@/features/play/lib/resumePlayback';
 
 describe('resumePlayback', () => {
@@ -59,5 +60,28 @@ describe('resumePlayback', () => {
         allowAutoResume: true,
       }),
     ).toBeNull();
+  });
+
+  it('显式从头播放目标集时会要求播放器把 currentTime 归零', () => {
+    expect(
+      shouldForcePlaybackStartFromHead({
+        resumeTime: 0,
+        resumeMode: 'forced',
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldForcePlaybackStartFromHead({
+        resumeTime: 180,
+        resumeMode: 'forced',
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldForcePlaybackStartFromHead({
+        resumeTime: 0,
+        resumeMode: 'history',
+      }),
+    ).toBe(false);
   });
 });
