@@ -157,6 +157,10 @@ export function useArtPlayer(params: UseArtPlayerParams) {
     pendingInitialResumeTarget: null,
     playbackStartNotified: false,
   });
+  // 新一集真正起播前，不允许再次触发自动切集，避免旧媒体尾部事件串到新一集。
+  const autoAdvanceArmedRef = useRef<boolean>(false);
+  // 当前集是否已触发过自动切下一集，避免 ended/timeupdate/跳片尾 多通道重复点
+  const autoAdvancedRef = useRef<boolean>(false);
 
   // --- 主 useEffect ---
 
@@ -186,6 +190,10 @@ export function useArtPlayer(params: UseArtPlayerParams) {
     }
 
     let cancelled = false;
+    // 每次主 effect 重新跑（含切集触发的 videoUrl 变化）都先关闭自动切集，
+    // 等新一集真正起播后再放行，避免同一个播放器实例补发上一集的 ended/timeupdate。
+    autoAdvanceArmedRef.current = false;
+    autoAdvancedRef.current = false;
 
     const initPlayer = async () => {
       try {
@@ -725,6 +733,19 @@ export function useArtPlayer(params: UseArtPlayerParams) {
           return;
         }
 
+        // 共用切换集数逻辑：幂等地触发自动切下一集，
+        // 让 ended / 跳片尾 / 临近片尾兜底 三条通道复用同一个出口，避免重复点
+        const tryAutoAdvanceEpisode = (): boolean => {
+          if (!autoAdvanceArmedRef.current) return false;
+          if (autoAdvancedRef.current) return false;
+          const d = detailRef.current;
+          const idx = currentEpisodeIndexRef.current;
+          if (!d?.episodes || idx >= d.episodes.length - 1) return false;
+          autoAdvancedRef.current = true;
+          handleNextEpisode();
+          return true;
+        };
+
         const updateStableCurrentTime = (time: number) => {
           // 切到目标集但尚未真正起播前，忽略旧播放器残留的时间回写。
           stableCurrentTimeRef.current = resolveNextStablePlaybackTime(
@@ -774,6 +795,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
             return;
           }
 
+          autoAdvanceArmedRef.current = true;
           setIsVideoLoading(false);
           setRealtimeLoadSpeed('');
           notifyPlayerPlaybackStarted();
@@ -866,6 +888,8 @@ export function useArtPlayer(params: UseArtPlayerParams) {
         player.on('video:ended', () => {
           releaseWakeLock();
           setIsPlaying(false);
+          // 自动播放下一集（共用切换集数逻辑）
+          tryAutoAdvanceEpisode();
         });
 
         if (player.playing) {
@@ -921,6 +945,21 @@ export function useArtPlayer(params: UseArtPlayerParams) {
             completePendingResumeIfReady();
           }
 
+          // HLS 兜底：部分源不会在播放结束时派发 ended 事件，
+          // 用接近 duration 作为兜底信号触发自动切下一集（共用切换集数逻辑）
+          {
+            const dur = player.duration || 0;
+            const cur = player.currentTime || 0;
+            if (
+              dur > 0 &&
+              cur > 0 &&
+              dur - cur <= 0.4 &&
+              loadingSessionRef.current.pendingInitialResumeTarget === null
+            ) {
+              if (tryAutoAdvanceEpisode()) return;
+            }
+          }
+
           if (allowAutoResumeRef.current) {
             if (!isWithinAutoResumeWindow(player.currentTime || 0)) {
               // 超过起播窗口后关闭自动恢复，避免后续网络抖动再次触发 canplay 时跳回旧进度。
@@ -954,12 +993,8 @@ export function useArtPlayer(params: UseArtPlayerParams) {
             duration > 0 &&
             currentTime > player.duration + skipConfigRef.current.outro_time
           ) {
-            if (
-              currentEpisodeIndexRef.current <
-              (detailRef.current?.episodes?.length || 1) - 1
-            ) {
-              handleNextEpisode();
-            } else {
+            // 共用 helper：内部已做幂等保护与"最后一集则不切"判断
+            if (!tryAutoAdvanceEpisode()) {
               player.pause();
             }
             player.notice.show = `已跳过片尾 (${formatTime(skipConfigRef.current.outro_time)})`;
@@ -979,17 +1014,6 @@ export function useArtPlayer(params: UseArtPlayerParams) {
             )
           ) {
             return;
-          }
-        });
-
-        // 自动播放下一集
-        player.on('video:ended', () => {
-          const d = detailRef.current;
-          const idx = currentEpisodeIndexRef.current;
-          if (d && d.episodes && idx < d.episodes.length - 1) {
-            setTimeout(() => {
-              handleNextEpisode();
-            }, 300);
           }
         });
 

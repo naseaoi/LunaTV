@@ -510,6 +510,9 @@ function PlayPageClient() {
       stableCurrentTimeRef.current = 0;
       resumeTimeRef.current = 0;
       resumeModeRef.current = null;
+      // 自动切集后若新一集尚未起播就触发自动换源，相关逻辑会先读 ref。
+      // 这里提前同步目标集索引，避免仍按上一集做换源映射。
+      currentEpisodeIndexRef.current = targetEpisodeIndex;
 
       setIsVideoLoading(true);
       setVideoLoadingStage('sourceChanging');
@@ -738,6 +741,8 @@ function PlayPageClient() {
       setCurrentSource(newDetail.source);
       setCurrentId(newDetail.id);
       setDetail(newDetail);
+      // 同一轮换源后若再次触发自动降级，后续逻辑应继续以当前目标集为准。
+      currentEpisodeIndexRef.current = targetIndex;
       setCurrentEpisodeIndex(targetIndex);
 
       if (
