@@ -69,11 +69,6 @@ export function savePlayIntent({
   if (!source || !id) return;
 
   const normalizedResumeTime = Math.max(0, Math.floor(resumeTime));
-  if (normalizedResumeTime <= 0) {
-    clearPlayIntentStorage();
-    return;
-  }
-
   const payload: PlayIntentPayload = {
     source,
     id,
@@ -125,15 +120,11 @@ export function consumeMatchingPlayIntent({
     }
 
     const resumeTime = Math.max(0, payloadResumeTime);
-    if (resumeTime <= 0) {
-      clearPlayIntentStorage();
-      return null;
-    }
 
     const restoreState: PlayIntentRestoreState = {
       episodeIndex: clampEpisodeIndex(payloadEpisodeIndex, episodeCount),
       resumeTime,
-      resumeMode: 'forced',
+      resumeMode: resumeTime > 0 ? 'forced' : null,
     };
 
     clearPlayIntentStorage();

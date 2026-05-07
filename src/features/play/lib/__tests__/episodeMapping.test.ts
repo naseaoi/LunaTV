@@ -63,4 +63,22 @@ describe('episodeMapping', () => {
       preserveProgress: false,
     });
   });
+
+  it('当前不是首集时，目标源若只能回退到第1集，应视为无法继承当前集', () => {
+    const currentDetail = createSearchResult({
+      episodes: ['a1', 'a2', 'a3', 'a4'],
+      episodes_titles: ['01', '02', '03', '04'],
+    });
+    const targetDetail = createSearchResult({
+      source: 'source-b',
+      source_name: 'Source B',
+      episodes: ['b1'],
+      episodes_titles: ['第1集'],
+    });
+
+    expect(resolveEpisodeTargetIndex(currentDetail, 3, targetDetail)).toEqual({
+      index: 0,
+      preserveProgress: false,
+    });
+  });
 });

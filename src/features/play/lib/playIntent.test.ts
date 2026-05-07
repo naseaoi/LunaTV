@@ -91,4 +91,25 @@ describe('playIntent', () => {
       resumeMode: 'forced',
     });
   });
+
+  it('resumeTime 为 0 时仍会保留目标集意图', () => {
+    savePlayIntent({
+      source: 'source-a',
+      id: 'id-a',
+      episodeIndex: 10,
+      resumeTime: 0,
+    });
+
+    expect(
+      consumeMatchingPlayIntent({
+        source: 'source-a',
+        id: 'id-a',
+        episodeCount: 12,
+      }),
+    ).toEqual({
+      episodeIndex: 10,
+      resumeTime: 0,
+      resumeMode: null,
+    });
+  });
 });

@@ -43,6 +43,7 @@ import {
   resolveSourceSwitchCurrentPlayTime,
   resolveSourceSwitchResumeState,
 } from '@/features/play/lib/episodeResumePolicy';
+import { savePlayIntent } from '@/features/play/lib/playIntent';
 import {
   PlayProgressSaveState,
   usePlayProgress,
@@ -214,7 +215,7 @@ function PlayPageClient() {
   });
   const [autoSwitchSourceOnTimeout, setAutoSwitchSourceOnTimeout] =
     useState<boolean>(() =>
-      readBooleanLocalSetting(AUTO_SWITCH_SOURCE_ON_TIMEOUT_STORAGE_KEY, true),
+      readBooleanLocalSetting(AUTO_SWITCH_SOURCE_ON_TIMEOUT_STORAGE_KEY, false),
     );
 
   const [precomputedVideoInfo, setPrecomputedVideoInfo] = useState<
@@ -618,6 +619,7 @@ function PlayPageClient() {
     newSource: string,
     newId: string,
     newTitle: string,
+    options?: { isAutoFallback?: boolean },
   ) => {
     if (
       newSource === currentSourceRef.current &&
@@ -626,16 +628,16 @@ function PlayPageClient() {
       return;
     }
 
+    const isAutoFallback = options?.isAutoFallback === true;
+
     // 用户主动换源时清空失败记录，让之前 15s 超时被降级掉的源可以重新尝试。
-    // 自动降级自己调用本函数时会先置位 autoFallbackInProgressRef，跳过这步。
-    if (!autoFallbackInProgressRef.current) {
+    // 自动降级链路内不能清空，否则连续超时后会重新选回刚失败过的源。
+    if (!isAutoFallback) {
       failedSourcesRef.current = new Set();
       // 用户手动选择该源 = 明确想再试一次，同步清掉 sessionStorage 冷却记录
       clearSourceFailure(`${newSource}-${newId}`);
     }
-    // 置位仅用于一次 handleSourceChange 调用，消费后立即复位，
-    // 保证后续任何 **用户主动** 点击都能正确清空失败记录。
-    autoFallbackInProgressRef.current = false;
+    autoFallbackInProgressRef.current = isAutoFallback;
 
     const targetSource = availableSources.find(
       (source) => source.source === newSource && source.id === newId,
@@ -713,7 +715,10 @@ function PlayPageClient() {
       );
       let targetIndex = resolvedEpisodeTarget.index;
       let preserveProgress = resolvedEpisodeTarget.preserveProgress;
-      const clearTargetEpisodeProgress = clearTargetEpisodeProgressRef.current;
+      // 自动换源的目标仍是“当前这集”，不应继承切集时写下的“从头播放新集”意图。
+      const clearTargetEpisodeProgress = isAutoFallback
+        ? false
+        : clearTargetEpisodeProgressRef.current;
 
       if (!newDetail.episodes || targetIndex >= newDetail.episodes.length) {
         targetIndex = 0;
@@ -725,6 +730,15 @@ function PlayPageClient() {
         preserveProgress,
         clearTargetEpisodeProgress,
       });
+
+      // 写入一次性播放意图，阻止目标源自己的历史记录把刚映射出的目标集覆盖回旧集数。
+      savePlayIntent({
+        source: newDetail.source,
+        id: newDetail.id,
+        episodeIndex: targetIndex,
+        resumeTime: nextResumeState.resumeTime,
+      });
+
       resumeTimeRef.current = nextResumeState.resumeTime;
       resumeModeRef.current = nextResumeState.resumeMode;
 
@@ -811,6 +825,8 @@ function PlayPageClient() {
 
     const curSource = currentSourceRef.current;
     const curId = currentIdRef.current;
+    const curDetail = detailRef.current;
+    const curEpisodeIndex = currentEpisodeIndexRef.current;
     if (!curSource || !curId) return;
 
     const curKey = `${curSource}-${curId}`;
@@ -822,6 +838,18 @@ function PlayPageClient() {
       const key = `${s.source}-${s.id}`;
       if (key === curKey) return false;
       if (failedSourcesRef.current.has(key)) return false;
+      // 自动换源的目标应始终保持在当前逻辑集数；
+      // 目标源若连当前集都映射不到，就不要浪费一次 15s 超时窗口去试第 1 集。
+      if (curDetail && curEpisodeIndex > 0) {
+        const resolved = resolveEpisodeTargetIndex(
+          curDetail,
+          curEpisodeIndex,
+          s,
+        );
+        if (!resolved.preserveProgress) {
+          return false;
+        }
+      }
       return true;
     });
     if (candidates.length === 0) return;
@@ -838,7 +866,9 @@ function PlayPageClient() {
     if (!next) return;
 
     autoFallbackInProgressRef.current = true;
-    void handleSourceChange(next.source, next.id, next.title);
+    void handleSourceChange(next.source, next.id, next.title, {
+      isAutoFallback: true,
+    });
   }, [
     autoSwitchSourceOnTimeout,
     availableSources,
@@ -851,7 +881,7 @@ function PlayPageClient() {
       setAutoSwitchSourceOnTimeout(
         readBooleanLocalSetting(
           AUTO_SWITCH_SOURCE_ON_TIMEOUT_STORAGE_KEY,
-          true,
+          false,
         ),
       );
     };

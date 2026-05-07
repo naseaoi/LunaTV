@@ -94,7 +94,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
   const [doubanProxyUrl, setDoubanProxyUrl] = useState('');
   const [enableOptimization, setEnableOptimization] = useState(true);
   const [autoSwitchSourceOnTimeout, setAutoSwitchSourceOnTimeout] =
-    useState(true);
+    useState(false);
   const [fluidSearch, setFluidSearch] = useState(true);
   const [liveDirectConnect, setLiveDirectConnect] = useState(false);
   const [doubanDataSource, setDoubanDataSource] = useState('direct');
@@ -187,7 +187,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
         setAutoSwitchSourceOnTimeout(
           readBooleanLocalSetting(
             AUTO_SWITCH_SOURCE_ON_TIMEOUT_STORAGE_KEY,
-            true,
+            false,
           ),
         );
 
@@ -476,7 +476,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
 
     setDefaultAggregateSearch(true);
     setEnableOptimization(true);
-    setAutoSwitchSourceOnTimeout(true);
+    setAutoSwitchSourceOnTimeout(false);
     setFluidSearch(defaultFluidSearch);
     setLiveDirectConnect(false);
     setDoubanProxyUrl(defaultDoubanProxy);
@@ -487,7 +487,10 @@ export const UserMenu: React.FC<UserMenuProps> = ({
     if (typeof window !== 'undefined') {
       localStorage.setItem('defaultAggregateSearch', JSON.stringify(true));
       localStorage.setItem('enableOptimization', JSON.stringify(true));
-      writeBooleanLocalSetting(AUTO_SWITCH_SOURCE_ON_TIMEOUT_STORAGE_KEY, true);
+      writeBooleanLocalSetting(
+        AUTO_SWITCH_SOURCE_ON_TIMEOUT_STORAGE_KEY,
+        false,
+      );
       localStorage.setItem('fluidSearch', JSON.stringify(defaultFluidSearch));
       localStorage.setItem('liveDirectConnect', JSON.stringify(false));
       localStorage.setItem('doubanProxyUrl', defaultDoubanProxy);
@@ -885,7 +888,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
             <div className='flex items-center justify-between'>
               <div>
                 <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>
-                  源站超时自动换源
+                  源站超时自动换源(实验性)
                 </h4>
                 <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
                   播放源加载超时后，自动切换到下一个候选源
