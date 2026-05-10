@@ -44,6 +44,7 @@ import {
 import { WakeLockSentinel } from '@/features/play/lib/playTypes';
 import { filterAdsFromM3U8 } from '@/features/play/lib/playUtils';
 import { resolveNextStablePlaybackTime } from '@/features/play/hooks/usePlayProgress';
+import { resolveSourceSwitchCurrentPlayTime } from '@/features/play/lib/episodeResumePolicy';
 import {
   applyResumeTime,
   isWithinAutoResumeWindow,
@@ -372,6 +373,21 @@ export function useArtPlayer(params: UseArtPlayerParams) {
 
               let lastStallRecoveryAt = 0;
 
+              const preservePlaybackPositionBeforeReload = () => {
+                const resumeTime = resolveSourceSwitchCurrentPlayTime({
+                  playerCurrentTime: video.currentTime || 0,
+                  pendingResumeTime: resumeTimeRef.current,
+                  stableCurrentTime: stableCurrentTimeRef.current,
+                });
+                if (resumeTime <= 1) {
+                  return;
+                }
+                // 同源重载/代理回退会重新装填 manifest，先记住当前位置，避免恢复后从头开始。
+                resumeTimeRef.current = resumeTime;
+                resumeModeRef.current = 'forced';
+                loadingSessionRef.current.pendingInitialResumeTarget = null;
+              };
+
               const switchToServerProxy = (reason: string) => {
                 if (currentUseServerProxy) {
                   return false;
@@ -396,6 +412,7 @@ export function useArtPlayer(params: UseArtPlayerParams) {
                   fragLoadStart = performance.now();
                   setRealtimeLoadSpeed('测速中...');
                   resetSpeedFallbackTimer();
+                  preservePlaybackPositionBeforeReload();
                   onSourceProxyFallbackStarted?.();
                   if (typeof hls.stopLoad === 'function') {
                     hls.stopLoad();

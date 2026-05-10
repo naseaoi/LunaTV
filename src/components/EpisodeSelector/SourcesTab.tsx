@@ -137,6 +137,17 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
     );
   };
 
+  const getSortStatusRank = (videoInfo?: VideoInfo): number => {
+    if (isSortingReadyVideoInfo(videoInfo)) {
+      return 0;
+    }
+    if (videoInfo?.hasError) {
+      return 2;
+    }
+    // 未知代表源仍可访问，只是暂时拿不到可信测速/分辨率；应排在失败前面。
+    return 1;
+  };
+
   // 后台测速：进入/刷新 Tab 时，对未测过的源分批 probe。
   // 当前播放源跳过 probe（播放器会通过 writePlayerInfo 回填真实带宽）。
   useEffect(() => {
@@ -233,6 +244,7 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
         return {
           source,
           index,
+          sortStatusRank: getSortStatusRank(videoInfo),
           qualityRank: measuredVideoInfo
             ? getQualityRank(measuredVideoInfo.quality)
             : 0,
@@ -251,8 +263,8 @@ export const SourcesTab: React.FC<SourcesTabProps> = ({
         if (a.coolingDown !== b.coolingDown) {
           return a.coolingDown ? 1 : -1;
         }
-        if (a.hasMeasuredInfo !== b.hasMeasuredInfo) {
-          return a.hasMeasuredInfo ? -1 : 1;
+        if (a.sortStatusRank !== b.sortStatusRank) {
+          return a.sortStatusRank - b.sortStatusRank;
         }
         if (a.hasMeasuredInfo && b.hasMeasuredInfo) {
           if (a.speedKBps !== b.speedKBps) {
